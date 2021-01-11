@@ -2,7 +2,7 @@
   <!-- ROS BAG -->
   <rosparam param="/use_sim_time">true</rosparam>
   <node pkg="rosbag" type="play" name="play" output="screen" required="true"
-    args="/Monster/dataset/event_camera/esvo/rpg_monitor_edited.bag -r 0.5 --clock">
+    args="/Monster/dataset/event_camera/esvo/rpg_monitor_edited.bag -r 1 --clock">
     <!-- MODIFY THE ABOVE DIRECTORY -->
   </node>
 

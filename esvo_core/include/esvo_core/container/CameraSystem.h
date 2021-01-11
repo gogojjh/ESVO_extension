@@ -35,6 +35,8 @@ class PerspectiveCamera
 
   void world2Cam(const Eigen::Vector3d &p, Eigen::Vector2d &x);
 
+  bool isValidPixel(const Eigen::Vector2d &p);
+
   public:
   size_t width_, height_;
   std::string cameraName_;

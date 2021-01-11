@@ -154,7 +154,7 @@ namespace esvo_time_surface
 			time_surface_pub_.publish(cv_image2.toImageMsg());
 
 			// jjiao modify
-			cv::Mat TS_negative = cv::Mat(time_surface_map.size(), CV_8U, cv::Scalar(255));
+			// cv::Mat TS_negative = cv::Mat(time_surface_map.size(), CV_8U, cv::Scalar(255));
 			// int kernelSize = 5;
 			// if (kernelSize > 0)
 			// {
@@ -166,9 +166,9 @@ namespace esvo_time_surface
 			// else
 			// {
 			// }
-			TS_negative = TS_negative - time_surface_map;
-			cv_image.image = TS_negative.clone();
-			time_surface_negative_pub_.publish(cv_image.toImageMsg());
+			// TS_negative = TS_negative - time_surface_map;
+			// cv_image.image = TS_negative.clone();
+			// time_surface_negative_pub_.publish(cv_image.toImageMsg());
 		}
 	}
 
