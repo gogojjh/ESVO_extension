@@ -90,7 +90,7 @@ void RegProblemLM::setStochasticSampling(size_t offset, size_t N)
 
 int RegProblemLM::operator()(const Eigen::Matrix<double,6,1>& x, Eigen::VectorXd& fvec) const
 {
-  // calculate the warping transformation (T_cur_ref))
+  // calculate the warping transformation (T_cur_ref)) (update the wrap function)
   Eigen::Matrix4d T_warping = Eigen::Matrix4d::Identity();
   getWarpingTransformation(T_warping, x);
 

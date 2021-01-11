@@ -47,6 +47,7 @@ You may need `autoreconf` to compile glog_catkin. To install `autoreconf`, run
 
 	$ cd ~/catkin_ws/src 
 	$ git clone https://github.com/jbeder/yaml-cpp.git
+	$ or download from https://github.com/jbeder/yaml-cpp/releases/tag/release-0.5.1
 	$ cd yaml-cpp
 	$ mkdir build && cd build && cmake -DYAML_BUILD_SHARED_LIBS=ON ..
 	$ make -j

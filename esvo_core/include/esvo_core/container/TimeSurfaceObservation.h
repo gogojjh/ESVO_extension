@@ -115,6 +115,7 @@ struct TimeSurfaceObservation
     cv::cv2eigen(mat_right_, TS_right_);
   }
 
+  // return the negative time_surface
   inline void getTimeSurfaceNegative(size_t kernelSize)
   {
     Eigen::MatrixXd ceilMat(TS_left_.rows(), TS_left_.cols());

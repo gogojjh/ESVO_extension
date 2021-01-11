@@ -2,6 +2,6 @@
     <!-- ROS BAG -->
     <rosparam param="/use_sim_time">true</rosparam>
     <node pkg="rosbag" type="play" name="play" output="screen" required="true"
-    	args="/home/zhouyi/workspace/dataset/DVS/upenn/edited_version/indoor_flying1_edited.bag -r 0.5 --clock" />
+    	args="/Monster/dataset/event_camera/esvo/indoor_flying1_edited.bag -r 0.5 --clock" />
       <!-- MODIFY THE ABOVE DIRECTORY -->
 </launch>

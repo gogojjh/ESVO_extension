@@ -138,6 +138,7 @@ private:
   ros::Subscriber camera_info_sub_;
   ros::Subscriber sync_topic_;
   image_transport::Publisher time_surface_pub_;
+  image_transport::Publisher time_surface_negative_pub_;
 
   // online parameters
   bool bCamInfoAvailable_;
