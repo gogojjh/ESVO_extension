@@ -299,7 +299,29 @@ namespace esvo_core
     clearEventQueue();
   }
 
-  void esvo_Tracking::clearEventQueue()
+void esvo_Tracking::eventsCallback(
+  const dvs_msgs::EventArray::ConstPtr &msg)
+{
+  std::lock_guard<std::mutex> lock(data_mutex_);
+  // add new ones and remove old ones
+  for(const dvs_msgs::Event& e : msg->events)
+  {
+    events_left_.push_back(e);
+    int i = events_left_.size() - 2;
+    while(i >= 0 && events_left_[i].ts > e.ts) // we may have to sort the queue, just in case the raw event messages do not come in a chronological order.
+    {
+      events_left_[i+1] = events_left_[i];
+      i--;
+    }
+    events_left_[i+1] = e;
+  }
+  clearEventQueue();
+}
+
+void esvo_Tracking::clearEventQueue()
+{
+  static constexpr size_t MAX_EVENT_QUEUE_LENGTH = 5000000;
+  if (events_left_.size() > MAX_EVENT_QUEUE_LENGTH)
   {
     static constexpr size_t MAX_EVENT_QUEUE_LENGTH = 5000000;
     if (events_left_.size() > MAX_EVENT_QUEUE_LENGTH)
