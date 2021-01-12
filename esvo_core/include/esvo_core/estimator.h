@@ -1,5 +1,5 @@
-#ifndef ESVO_CORE_MAPPING_H
-#define ESVO_CORE_MAPPING_H
+#ifndef ESTIMATOR_H
+#define ESTIMATOR_H
 
 #include <ros/ros.h>
 #include <image_transport/image_transport.h>
@@ -37,7 +37,7 @@
 #include <pcl/point_types.h>
 #include <pcl_ros/point_cloud.h>
 
-// #define MONOCULAR_DEBUG
+#define ESTIMATOR_DEBUG
 
 const double VAR_RANDOM_INIT_INITIAL_ = 0.2;
 const double INIT_DP_NUM_Threshold_ = 500;
@@ -55,6 +55,7 @@ namespace esvo_core
 
     // mapping
     void MappingLoop(std::promise<void> prom_mapping, std::future<void> future_reset);
+    void Process(std::promise<void> prom_mapping, std::future<void> future_reset);
     void MappingAtTime(const ros::Time &t);
     bool InitializationAtTime(const ros::Time &t);
     bool MonoInitializationAtTime(const ros::Time &t);
@@ -87,6 +88,8 @@ namespace esvo_core
         const ros::Time &t,
         image_transport::Publisher &pub,
         std::string encoding = "bgr8");
+
+    void publishEventFrame(const ros::Time &t);
 
     /*** event processing ***/
     void createEdgeMask(
@@ -190,6 +193,7 @@ namespace esvo_core
     size_t PROCESS_EVENT_NUM_;
     size_t TS_HISTORY_LENGTH_;
     size_t mapping_rate_hz_;
+    size_t process_rate_hz_;
     // options
     bool changed_frame_rate_;
     bool bRegularization_;
@@ -222,6 +226,7 @@ namespace esvo_core
     /******************** For test & debug ********************/
     /**********************************************************/
     image_transport::Publisher invDepthMap_pub_, stdVarMap_pub_, ageMap_pub_, costMap_pub_;
+    image_transport::Publisher eventFrame_pub_;
 
     // For counting the total number of fusion
     size_t TotalNumFusion_;
@@ -231,4 +236,4 @@ namespace esvo_core
   };
 } // namespace esvo_core
 
-#endif //ESVO_CORE_MAPPING_H
+#endif //ESTIMATOR_H

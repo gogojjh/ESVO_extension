@@ -202,6 +202,9 @@ namespace esvo_core
     }
   }
 
+  /**
+   * @brief extract reference map
+   **/
   bool
   esvo_Tracking::refDataTransferring()
   {
@@ -236,6 +239,9 @@ namespace esvo_core
     return true;
   }
 
+  /**
+   * @brief extract current events
+   **/
   bool
   esvo_Tracking::curDataTransferring()
   {
