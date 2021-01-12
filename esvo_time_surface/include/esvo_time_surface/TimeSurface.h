@@ -22,6 +22,7 @@
 
 namespace esvo_time_surface
 {
+  
 #define NUM_THREAD_TS 1
 using EventQueue = std::deque<dvs_msgs::Event>;
 
@@ -92,7 +93,7 @@ public:
   size_t width_;
   size_t height_;
   size_t queueLen_;
-  std::vector<EventQueue> eqMat_;
+  std::vector<EventQueue> eqMat_; // each pixel stores the accumulated events
 };
 
 class TimeSurface
@@ -159,7 +160,7 @@ private:
 
   // containers
   EventQueue events_;
-  std::shared_ptr<EventQueueMat> pEventQueueMat_;
+  std::shared_ptr<EventQueueMat> pEventQueueMat_; // the main container to operate events
 
   // thread mutex
   std::mutex data_mutex_;

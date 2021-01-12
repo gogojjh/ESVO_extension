@@ -179,7 +179,6 @@ namespace esvo_core
       std::future<void> future_reset)
   {
     ros::Rate r(mapping_rate_hz_);
-
     while (ros::ok())
     {
       // reset mapping rate
@@ -197,7 +196,7 @@ namespace esvo_core
         LOG(INFO) << "The Mapping node is terminated manually...";
         break;
       }
-      //
+
       if (TS_history_.size() >= 10) /* To assure the esvo_time_surface node has been working. */
       {
         while (true)
@@ -217,6 +216,7 @@ namespace esvo_core
             }
           }
         }
+
         // To check if the most current TS observation has been loaded by dataTransferring()
         if (TS_obs_.second.isEmpty())
         {
@@ -303,20 +303,20 @@ namespace esvo_core
           vDenoisedEventsPtr_left_.end(), vCloseEventsPtr_left_.begin(),
           vCloseEventsPtr_left_.begin() + min(vCloseEventsPtr_left_.size(), PROCESS_EVENT_NUM_));
     }
-    LOG(INFO) << "Denosing succeeds";
+    // LOG(INFO) << "Denosing succeeds";
 
     // block matching
     tt_mapping.tic();
     ebm_.createMatchProblem(&TS_obs_, &st_map_, &vDenoisedEventsPtr_left_);
-    // ebm_.match_all_HyperThread(vEMP);
-    ebm_.match_all_SingleThread(vEMP);
+    ebm_.match_all_HyperThread(vEMP);
+    // ebm_.match_all_SingleThread(vEMP);
 #ifdef ESVO_CORE_MAPPING_DEBUG
     LOG(INFO) << "++++ Block Matching (BM) generates " << vEMP.size() << " candidates.";
 #endif
     t_BM = tt_mapping.toc();
     t_overall_count += t_BM_denoising;
     t_overall_count += t_BM;
-    LOG(INFO) << "Block matching succeeds";
+    // LOG(INFO) << "Block matching succeeds";
 
     /**************************************************************/
     /*************  Nonlinear Optimization & Fusion ***************/
@@ -335,8 +335,9 @@ namespace esvo_core
 #ifdef ESVO_CORE_MAPPING_DEBUG
     LOG(INFO) << "Nonlinear optimization returns: " << vdp.size() << " estimates.";
 #endif
+    // culling points by checking its std, cost, inverse depth
     dpSolver_.pointCulling(vdp, stdVar_vis_threshold_, cost_vis_threshold_,
-                           invDepth_min_range_, invDepth_max_range_);
+                           invDepth_min_range_, invDepth_max_range_); 
 #ifdef ESVO_CORE_MAPPING_DEBUG
     LOG(INFO) << "After culling, vdp.size: " << vdp.size();
 #endif
@@ -377,7 +378,7 @@ namespace esvo_core
     numFusionCount = 0;
     for (auto it = dqvDepthPoints_.rbegin(); it != dqvDepthPoints_.rend(); it++)
     {
-      numFusionCount += dFusor_.update(*it, depthFramePtr_, fusion_radius_);
+      numFusionCount += dFusor_.update(*it, depthFramePtr_, fusion_radius_); // fusing new points to update the depthmap
       //    LOG(INFO) << "numFusionCount: " << numFusionCount;
     }
 
@@ -484,6 +485,7 @@ namespace esvo_core
     // push the "masked" SGM results to the depthFrame
     dqvDepthPoints_.push_back(vdp_sgm);
     dFusor_.naive_propagation(vdp_sgm, depthFramePtr_);
+
     // publish the invDepth map
     std::thread tPublishMappingResult(&esvo_Mapping::publishMappingResults, this,
                                       depthFramePtr_->dMap_, depthFramePtr_->T_world_frame_, t);
@@ -510,8 +512,8 @@ namespace esvo_core
         tr.setIdentity();
         it_end->second.setTransformation(tr);
         TS_obs_ = *it_end;
-      }
-      if (ESVO_System_Status_ == "WORKING")
+      } 
+      else if (ESVO_System_Status_ == "WORKING")
       {
         if (getPoseAt(it_end->first, tr, dvs_frame_id_))
         {
@@ -539,7 +541,7 @@ namespace esvo_core
     {
       vEventsPtr_left_SGM_.clear();
       ros::Time t_end = TS_obs_.first;
-      ros::Time t_begin(std::max(0.0, t_end.toSec() - 2 * BM_half_slice_thickness_));
+      ros::Time t_begin(std::max(0.0, t_end.toSec() - 2 * BM_half_slice_thickness_)); // 2ms
       auto ev_end_it = tools::EventBuffer_lower_bound(events_left_, t_end);
       auto ev_begin_it = tools::EventBuffer_lower_bound(events_left_, t_begin);
       const size_t MAX_NUM_Event_INVOLVED = 30000;
@@ -560,7 +562,7 @@ namespace esvo_core
 
       // load allEvent
       ros::Time t_end = TS_obs_.first;
-      ros::Time t_begin(std::max(0.0, t_end.toSec() - 10 * BM_half_slice_thickness_));
+      ros::Time t_begin(std::max(0.0, t_end.toSec() - 10 * BM_half_slice_thickness_)); // 10ms
       auto ev_end_it = tools::EventBuffer_lower_bound(events_left_, t_end);
       auto ev_begin_it = tools::EventBuffer_lower_bound(events_left_, t_begin);
       const size_t MAX_NUM_Event_INVOLVED = 10000;
@@ -964,6 +966,7 @@ namespace esvo_core
         size_t pc_length = pc_filtered->size();
         size_t numAddedPC = min(pc_length, numAddedPC_threshold_) - 1;
         pc_global_->insert(pc_global_->end(), pc_filtered->end() - numAddedPC, pc_filtered->end());
+        
         // publish point cloud
         pcl::toROSMsg(*pc_global_, *pc_to_publish);
         pc_to_publish->header.stamp = t;

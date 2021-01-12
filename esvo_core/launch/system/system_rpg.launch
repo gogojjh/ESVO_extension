@@ -21,7 +21,7 @@
   </node>
 
 	<!-- Synchronize both Time Surfaces using the rosbag timer -->
-  <node name="global_timer" pkg="rostopic" type="rostopic" args="pub -s -r 50 /sync std_msgs/Time 'now' ">
+  <node name="global_timer" pkg="rostopic" type="rostopic" args="pub -s -r 70 /sync std_msgs/Time 'now' ">
     <!-- Modify the rate according to the speed that the bag is played-->
 	</node>
 

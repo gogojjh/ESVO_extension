@@ -86,6 +86,7 @@ namespace esvo_core
         r.sleep();
         continue;
       }
+      
       // Reset
       nh_.getParam("/ESVO_SYSTEM_STATUS", ESVO_System_Status_);
       if (ESVO_System_Status_ == "INITIALIZATION" && ets_ == WORKING) // This is true when the system is reset from dynamic reconfigure

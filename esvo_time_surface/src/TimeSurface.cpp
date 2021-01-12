@@ -73,7 +73,7 @@ namespace esvo_time_surface
 				if (pEventQueueMat_->getMostRecentEventBeforeT(x, y, external_sync_time, &most_recent_event_at_coordXY_before_T))
 				{
 					const ros::Time &most_recent_stamp_at_coordXY = most_recent_event_at_coordXY_before_T.ts;
-					if (most_recent_stamp_at_coordXY.toSec() > 0)
+					if (most_recent_stamp_at_coordXY.toSec() > 0) // check if negative timestamp
 					{
 						const double dt = (external_sync_time - most_recent_stamp_at_coordXY).toSec();
 						double polarity = (most_recent_event_at_coordXY_before_T.polarity) ? 1.0 : -1.0;
@@ -152,23 +152,6 @@ namespace esvo_time_surface
 			cv_image2.header.stamp = external_sync_time;
 			cv::remap(cv_image.image, cv_image2.image, undistort_map1_, undistort_map2_, CV_INTER_LINEAR);
 			time_surface_pub_.publish(cv_image2.toImageMsg());
-
-			// jjiao modify
-			// cv::Mat TS_negative = cv::Mat(time_surface_map.size(), CV_8U, cv::Scalar(255));
-			// int kernelSize = 5;
-			// if (kernelSize > 0)
-			// {
-			//   cv::Mat mat_left_;
-			//   cv::GaussianBlur(time_surface_map, tmp_mat, cv::Size(kernelSize, kernelSize), 0.0);
-			//   cv::cv2eigen(mat_left_, TS_blurred_left_);
-			//   TS_negative_left_ = ceilMat - TS_blurred_left_;
-			// }
-			// else
-			// {
-			// }
-			// TS_negative = TS_negative - time_surface_map;
-			// cv_image.image = TS_negative.clone();
-			// time_surface_negative_pub_.publish(cv_image.toImageMsg());
 		}
 	}
 

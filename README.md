@@ -179,11 +179,11 @@ Remember to keep you computer cool!
 * If the initialization does not look reasonably good, reset the system by clicking the checkbox `resetButton` in the dynamic reconfigure. This checker box is used as a button. Sorry for the bad GUI design.  
 * If you use a PC with limited computational resources, you could slow down the playback of the rosbag by a factor, e.g.
     
-    `$ rosbag play xxx.bag -r 0.5 --clock`
+    `$ rosbag play xxx.bag -r 0.7 --clock --pause`
     
 and modify the rate of the external clock (usd for synchronizing the stereo time surfaces) accordingly, e.g.
     
-    `<node name="global_timer" pkg="rostopic" type="rostopic" args="pub -s -r 50 /sync std_msgs/Time 'now' ">`
+    `<node name="global_timer" pkg="rostopic" type="rostopic" args="pub -s -r 70 /sync std_msgs/Time 'now' ">`
     
 In this example, the bag file is played at a factor of 0.5, and thus, the synchronization signal is set to 50 Hz accordingly. These modifications must be made accordingly such that the time surface is updated (refreshed) at 100 Hz in simulation time. You can check this by running,
    
