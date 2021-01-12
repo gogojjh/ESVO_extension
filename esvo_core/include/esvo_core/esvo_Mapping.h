@@ -37,8 +37,6 @@
 #include <pcl/point_types.h>
 #include <pcl_ros/point_cloud.h>
 
-// #define MONOCULAR_DEBUG
-
 const double VAR_RANDOM_INIT_INITIAL_ = 0.2;
 const double INIT_DP_NUM_Threshold_ = 500;
 
@@ -57,7 +55,6 @@ namespace esvo_core
     void MappingLoop(std::promise<void> prom_mapping, std::future<void> future_reset);
     void MappingAtTime(const ros::Time &t);
     bool InitializationAtTime(const ros::Time &t);
-    bool MonoInitializationAtTime(const ros::Time &t);
     bool dataTransferring();
 
     // callback functions

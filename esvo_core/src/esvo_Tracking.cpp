@@ -143,6 +143,7 @@ namespace esvo_core
           rpSolver_.solve_numerical();
         if (rpType_ == REG_ANALYTICAL)
           rpSolver_.solve_analytical();
+
 #ifdef ESVO_CORE_TRACKING_DEBUG
         t_solve = tt.toc();
         tt.tic();
@@ -203,15 +204,15 @@ namespace esvo_core
   }
 
   /**
-   * @brief extract reference map
+   * @brief reload the current point cloud map
    **/
   bool
   esvo_Tracking::refDataTransferring()
   {
     // load reference info
     ref_.t_ = refPCMap_.rbegin()->first;
-
     nh_.getParam("/ESVO_SYSTEM_STATUS", ESVO_System_Status_);
+
     //  LOG(INFO) << "SYSTEM STATUS(T"
     if (ESVO_System_Status_ == "INITIALIZATION" && ets_ == IDLE)
       ref_.tr_.setIdentity();
@@ -292,7 +293,7 @@ namespace esvo_core
     PointCloud::Ptr PC_ptr(new PointCloud());
     pcl::fromPCLPointCloud2(pcl_pc, *PC_ptr);
     refPCMap_.emplace(msg->header.stamp, PC_ptr);
-    while (refPCMap_.size() > REF_HISTORY_LENGTH_)
+    while (refPCMap_.size() > REF_HISTORY_LENGTH_) // 10
     {
       auto it = refPCMap_.begin();
       refPCMap_.erase(it);

@@ -10,6 +10,8 @@
 
 #include <tf2_ros/transform_broadcaster.h>
 
+#include <nav_msgs/Path.h>
+
 #include <esvo_core/container/CameraSystem.h>
 #include <esvo_core/container/DepthMap.h>
 #include <esvo_core/container/EventMatchPair.h>
@@ -20,6 +22,9 @@
 #include <esvo_core/core/EventBM.h>
 #include <esvo_core/tools/utils.h>
 #include <esvo_core/tools/Visualization.h>
+
+#include <esvo_core/core/RegProblemLM.h>
+#include <esvo_core/core/RegProblemSolverLM.h>
 
 #include <dynamic_reconfigure/server.h>
 #include <esvo_core/DVS_MappingStereoConfig.h>
@@ -38,6 +43,7 @@
 #include <pcl_ros/point_cloud.h>
 
 #define ESTIMATOR_DEBUG
+// #define MONOCULAR_DEBUG
 
 const double VAR_RANDOM_INIT_INITIAL_ = 0.2;
 const double INIT_DP_NUM_Threshold_ = 500;
@@ -60,6 +66,7 @@ namespace esvo_core
     bool InitializationAtTime(const ros::Time &t);
     bool MonoInitializationAtTime(const ros::Time &t);
     bool dataTransferring();
+    bool setTrackingData();
 
     // callback functions
     void stampedPoseCallback(const geometry_msgs::PoseStampedConstPtr &ps_msg);
@@ -110,6 +117,11 @@ namespace esvo_core
         std::vector<dvs_msgs::Event *> &vEdgeEventsPtr,
         cv::Mat &mask,
         size_t maxNum = 5000);
+
+    // results
+    void publishPose(const ros::Time &t, Transformation &tr);
+    void publishPath(const ros::Time &t, Transformation &tr);
+    void saveTrajectory(const std::string &resultDir);
 
     /************************ member variables ************************/
   private:
@@ -226,13 +238,33 @@ namespace esvo_core
     /******************** For test & debug ********************/
     /**********************************************************/
     image_transport::Publisher invDepthMap_pub_, stdVarMap_pub_, ageMap_pub_, costMap_pub_;
-    image_transport::Publisher eventFrame_pub_;
 
     // For counting the total number of fusion
     size_t TotalNumFusion_;
 
     /**** other parameters defined by jjiao testing ***/
+    image_transport::Publisher eventFrame_pub_, reprojMap_pub_left_;
+    // publishers
+    ros::Publisher pose_pub_, path_pub_;
+    
+    nav_msgs::Path path_;
+    std::list<Eigen::Matrix<double, 4, 4>, Eigen::aligned_allocator<Eigen::Matrix<double, 4, 4>>> lPose_;
+    std::list<std::string> lTimestamp_;
+
     double invDepth_INIT_;
+
+    RefFrame ref_;
+    CurFrame cur_;
+
+    Eigen::Matrix<double, 4, 4> T_world_ref_;
+    Eigen::Matrix<double, 4, 4> T_world_cur_;
+
+    /*** system objects ***/
+    RegProblemType rpType_;
+    RegProblemConfig::Ptr rpConfigPtr_;
+    RegProblemSolverLM rpSolver_;
+
+    bool bVisualizeTrajectory_;
   };
 } // namespace esvo_core
 
