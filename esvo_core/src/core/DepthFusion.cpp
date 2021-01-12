@@ -242,6 +242,7 @@ DepthFusion::naive_propagation(
     DepthPoint dp_prop;
     if (!propagate_one_point(dp_obs[i], dp_prop, T_frame_obs))
       continue;
+      
     // determine the four neighbouring pixels
     std::vector<std::pair<size_t, size_t> > vpCoordinate;
     const size_t patchSize = 4;

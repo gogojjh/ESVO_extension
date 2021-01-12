@@ -10,7 +10,7 @@ namespace esvo_core
 using namespace tools;
 namespace container
 {
-using DepthMap = SmartGrid<DepthPoint>;
+using DepthMap = SmartGrid<DepthPoint>; // map points are stored in a grid
 
 struct DepthFrame
 {

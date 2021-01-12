@@ -163,6 +163,8 @@ namespace esvo_core
     dynamic_reconfigure_callback_ = boost::bind(&esvo_Mapping::onlineParameterChangeCallback, this, _1, _2);
     server_.reset(new dynamic_reconfigure::Server<DVS_MappingStereoConfig>(nh_private));
     server_->setCallback(dynamic_reconfigure_callback_);
+
+    invDepth_INIT_ = 1.0;
   }
 
   esvo_Mapping::~esvo_Mapping()
@@ -224,6 +226,7 @@ namespace esvo_core
           continue;
         }
 
+#ifndef MONOCULAR_DEBUG
         // Do initialization (State Machine)
         if (ESVO_System_Status_ == "INITIALIZATION" || ESVO_System_Status_ == "RESET")
         {
@@ -246,6 +249,18 @@ namespace esvo_core
         // Do mapping
         if (ESVO_System_Status_ == "WORKING")
           MappingAtTime(TS_obs_.first);
+#else
+        if (ESVO_System_Status_ == "INITIALIZATION" || ESVO_System_Status_ == "RESET")
+        {
+          if (MonoInitializationAtTime(TS_obs_.first))
+          {
+            LOG(INFO) << "Initialization is successfully done!"; 
+          }
+          else
+            LOG(INFO) << "Initialization fails once.";
+        }
+#endif
+
       }
       else
       {
@@ -430,6 +445,61 @@ namespace esvo_core
 #endif
   }
 
+  // follow LSD-SLAM to initialize the map
+  bool esvo_Mapping::MonoInitializationAtTime(const ros::Time &t)
+  {
+    cv::Mat edgeMap;
+    std::vector<std::pair<size_t, size_t>> vEdgeletCoordinates;
+    createEdgeMask(vEventsPtr_left_SGM_, camSysPtr_->cam_left_ptr_,
+                   edgeMap, vEdgeletCoordinates, true, 0);
+
+    std::vector<DepthPoint> vdp;
+    vdp.reserve(vEdgeletCoordinates.size());
+    double var_SGM = VAR_RANDOM_INIT_INITIAL_;
+    for (size_t i = 0; i < vEdgeletCoordinates.size(); i++)
+    {
+      size_t x = vEdgeletCoordinates[i].first;
+      size_t y = vEdgeletCoordinates[i].second;
+      DepthPoint dp(x, y);
+      Eigen::Vector2d p_img(x * 1.0, y * 1.0);
+      dp.update_x(p_img);
+      double invDepth = 1.0 / (0.5 + 1.0 * ((rand() % 100001) / 100000.0));
+
+      Eigen::Vector3d p_cam;
+      camSysPtr_->cam_left_ptr_->cam2World(p_img, invDepth, p_cam);
+      dp.update_p_cam(p_cam);
+      dp.update(invDepth, var_SGM);
+      dp.residual() = 0.0;
+      dp.age() = age_vis_threshold_;
+      Eigen::Matrix<double, 4, 4> T_world_cam = TS_obs_.second.tr_.getTransformationMatrix();
+      dp.updatePose(T_world_cam);
+      vdp.push_back(dp);
+    }
+    LOG(INFO) << "********** Initialization (SGM) returns " << vdp.size() << " points.";
+    if (vdp.size() < INIT_DP_NUM_Threshold_)
+      return false;
+
+    // push the "masked" SGM results to the depthFrame
+    dqvDepthPoints_.push_back(vdp);
+    dFusor_.naive_propagation(vdp, depthFramePtr_);
+
+    // publish the invDepth map
+#ifdef MONOCULAR_DEBUG
+    while (true)
+    {
+      std::thread tPublishMappingResult(&esvo_Mapping::publishMappingResults, this,
+                                        depthFramePtr_->dMap_, depthFramePtr_->T_world_frame_, t);
+      tPublishMappingResult.detach();
+      std::chrono::milliseconds dura(200);
+      std::this_thread::sleep_for(dura);
+    }
+#endif
+    return true;
+  }
+
+  /**
+   * @brief: block matching along epipolar lines of the stereo observation (TS)
+   **/
   bool esvo_Mapping::InitializationAtTime(const ros::Time &t)
   {
     // create a new depth frame
@@ -440,6 +510,7 @@ namespace esvo_core
     depthFramePtr_ = depthFramePtr_new;
 
     // call SGM on the current Time Surface observation pair.
+    // for the later usage of the disparity map
     cv::Mat dispMap, dispMap8;
     sgbm_->compute(TS_obs_.second.cvImagePtr_left_->image, TS_obs_.second.cvImagePtr_right_->image, dispMap);
     dispMap.convertTo(dispMap8, CV_8U, 255 / (num_disparities_ * 16.));
@@ -459,7 +530,8 @@ namespace esvo_core
       size_t x = vEdgeletCoordinates[i].first;
       size_t y = vEdgeletCoordinates[i].second;
 
-      double disp = dispMap.at<short>(y, x) / 16.0;
+      // disparity: disp = k(baseline) / z(depth) or 1 / z = disp / k
+      double disp = dispMap.at<short>(y, x) / 16.0; 
       if (disp < 0)
         continue;
       DepthPoint dp(x, y);
@@ -468,6 +540,7 @@ namespace esvo_core
       double invDepth = disp / (camSysPtr_->cam_left_ptr_->P_(0, 0) * camSysPtr_->baseline_);
       if (invDepth < invDepth_min_range_ || invDepth > invDepth_max_range_)
         continue;
+
       Eigen::Vector3d p_cam;
       camSysPtr_->cam_left_ptr_->cam2World(p_img, invDepth, p_cam);
       dp.update_p_cam(p_cam);
@@ -606,8 +679,7 @@ namespace esvo_core
     return true;
   }
 
-  void esvo_Mapping::stampedPoseCallback(
-      const geometry_msgs::PoseStampedConstPtr &ps_msg)
+  void esvo_Mapping::stampedPoseCallback(const geometry_msgs::PoseStampedConstPtr &ps_msg)
   {
     std::lock_guard<std::mutex> lock(data_mutex_);
     // To check inconsistent timestamps and reset.
@@ -874,22 +946,27 @@ namespace esvo_core
   {
     cv::Mat invDepthImage, stdVarImage, ageImage, costImage, eventImage, confidenceMap;
 
+    // invDepthImage
     visualizor_.plot_map(depthMapPtr, tools::InvDepthMap, invDepthImage,
                          invDepth_max_range_, invDepth_min_range_, stdVar_vis_threshold_, age_vis_threshold_);
     publishImage(invDepthImage, t, invDepthMap_pub_);
 
+    // stdVarImage
     visualizor_.plot_map(depthMapPtr, tools::StdVarMap, stdVarImage,
                          stdVar_vis_threshold_, 0.0, stdVar_vis_threshold_);
     publishImage(stdVarImage, t, stdVarMap_pub_);
 
+    // ageImage
     visualizor_.plot_map(depthMapPtr, tools::AgeMap, ageImage, age_max_range_, 0, age_vis_threshold_);
     publishImage(ageImage, t, ageMap_pub_);
 
+    // costImage
     visualizor_.plot_map(depthMapPtr, tools::CostMap, costImage, cost_vis_threshold_, 0.0, cost_vis_threshold_);
     publishImage(costImage, t, costMap_pub_);
 
     if (ESVO_System_Status_ == "INITIALIZATION")
       publishPointCloud(depthMapPtr, tr, t);
+
     if (ESVO_System_Status_ == "WORKING")
     {
       if (FusionStrategy_ == "CONST_FRAMES")

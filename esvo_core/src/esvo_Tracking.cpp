@@ -55,10 +55,11 @@ namespace esvo_core
         "events_left", 0, &esvo_Tracking::eventsCallback, this);
     TS_sync_.registerCallback(boost::bind(&esvo_Tracking::timeSurfaceCallback, this, _1, _2));
     tf_ = std::make_shared<tf::Transformer>(true, ros::Duration(100.0));
-    pose_pub_ = nh_.advertise<geometry_msgs::PoseStamped>("/esvo_tracking/pose_pub", 1);
-    path_pub_ = nh_.advertise<nav_msgs::Path>("/esvo_tracking/trajectory", 1);
     map_sub_ = nh_.subscribe("pointcloud", 0, &esvo_Tracking::refMapCallback, this);                // local map in the ref view.
     stampedPose_sub_ = nh_.subscribe("stamped_pose", 0, &esvo_Tracking::stampedPoseCallback, this); // for accessing the pose of the ref view.
+
+    pose_pub_ = nh_.advertise<geometry_msgs::PoseStamped>("/esvo_tracking/pose_pub", 1);
+    path_pub_ = nh_.advertise<nav_msgs::Path>("/esvo_tracking/trajectory", 1);
 
     /*** For Visualization and Test ***/
     reprojMap_pub_left_ = it_.advertise("Reproj_Map_Left", 1);
@@ -86,7 +87,7 @@ namespace esvo_core
         r.sleep();
         continue;
       }
-      
+
       // Reset
       nh_.getParam("/ESVO_SYSTEM_STATUS", ESVO_System_Status_);
       if (ESVO_System_Status_ == "INITIALIZATION" && ets_ == WORKING) // This is true when the system is reset from dynamic reconfigure
@@ -95,6 +96,7 @@ namespace esvo_core
         r.sleep();
         continue;
       }
+      
       if (ESVO_System_Status_ == "TERMINATE")
       {
         LOG(INFO) << "The tracking node is terminated manually...";
@@ -135,7 +137,8 @@ namespace esvo_core
         if (ets_ == IDLE)
           ets_ = WORKING;
         if (ESVO_System_Status_ != "WORKING")
-          nh_.setParam("/ESVO_SYSTEM_STATUS", "WORKING");
+          nh_.setParam("/ESVO_SYSTEM_STATUS", "WORKING"); // trigger the main mapping process
+
         if (rpType_ == REG_NUMERICAL)
           rpSolver_.solve_numerical();
         if (rpType_ == REG_ANALYTICAL)
