@@ -108,6 +108,7 @@ namespace esvo_core
 
     // inter-thread management
     std::mutex data_mutex_;
+    std::mutex m_buf_;
 
     // online data
     EventQueue events_left_;
@@ -117,6 +118,9 @@ namespace esvo_core
     RefPointCloudMap refPCMap_;
     RefFrame ref_;
     CurFrame cur_;
+
+    std::deque<std::pair<ros::Time, TimeSurfaceObservation>> TS_buf_;
+    std::deque<std::pair<ros::Time, PointCloud::Ptr>> refPCMap_buf_;
 
     /**** offline parameters ***/
     size_t tracking_rate_hz_;
