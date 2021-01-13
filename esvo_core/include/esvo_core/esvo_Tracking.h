@@ -11,6 +11,7 @@
 #include <message_filters/sync_policies/exact_time.h>
 
 #include <tf2_ros/transform_broadcaster.h>
+#include <std_msgs/Int16.h>
 
 #include <esvo_core/container/CameraSystem.h>
 #include <esvo_core/core/RegProblemLM.h>
@@ -63,6 +64,7 @@ namespace esvo_core
     void publishPose(const ros::Time &t, Transformation &tr);
     void publishPath(const ros::Time &t, Transformation &tr);
     void saveTrajectory(const std::string &resultDir);
+    void publishTimeSurface();
 
     // utils
     void reset();
@@ -83,9 +85,11 @@ namespace esvo_core
     message_filters::Subscriber<sensor_msgs::Image> TS_left_sub_, TS_right_sub_;
     ros::Subscriber stampedPose_sub_;
     image_transport::Publisher reprojMap_pub_left_;
+    image_transport::Publisher time_surface_left_pub_, time_surface_right_pub_;
 
     // publishers
     ros::Publisher pose_pub_, path_pub_;
+    ros::Publisher keyFrame_pub_;
 
     // results
     nav_msgs::Path path_;

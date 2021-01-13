@@ -69,6 +69,9 @@ namespace esvo_core
     T_world_cur_ = Eigen::Matrix<double, 4, 4>::Identity();
     std::thread TrackingThread(&esvo_Tracking::TrackingLoop, this);
     TrackingThread.detach();
+
+    time_surface_left_pub_ = it_.advertise("/esvo_tracking/TS_left", 1);
+    time_surface_right_pub_ = it_.advertise("/esvo_tracking/TS_right", 1);
   }
 
   esvo_Tracking::~esvo_Tracking()
@@ -82,21 +85,29 @@ namespace esvo_core
     while (ros::ok())
     {
       // Keep Idling
-      if (refPCMap_.size() < 1 || TS_history_.size() < 1)
+      // if (refPCMap_.size() < 1 || TS_history_.size() < 1)
+      // {
+      //   r.sleep();
+      //   continue;
+      // }
+
+      // Reset
+      // if (ESVO_System_Status_ == "INITIALIZATION" && ets_ == WORKING) // This is true when the system is reset from dynamic reconfigure
+      // {
+      //   publishTimeSurface();
+      //   reset();
+      //   r.sleep();
+      //   continue;
+      // }
+      
+      nh_.getParam("/ESVO_SYSTEM_STATUS", ESVO_System_Status_);
+
+      if (TS_history_.size() < 1)
       {
         r.sleep();
         continue;
       }
 
-      // Reset
-      nh_.getParam("/ESVO_SYSTEM_STATUS", ESVO_System_Status_);
-      if (ESVO_System_Status_ == "INITIALIZATION" && ets_ == WORKING) // This is true when the system is reset from dynamic reconfigure
-      {
-        reset();
-        r.sleep();
-        continue;
-      }
-      
       if (ESVO_System_Status_ == "TERMINATE")
       {
         LOG(INFO) << "The tracking node is terminated manually...";
@@ -106,8 +117,10 @@ namespace esvo_core
       // Data Transfer (If mapping node had published refPC.)
       {
         std::lock_guard<std::mutex> lock(data_mutex_);
-        if (ref_.t_.toSec() < refPCMap_.rbegin()->first.toSec()) // new reference map arrived
+        
+        if (refPCMap_.size() != 0 && ref_.t_.toSec() < refPCMap_.rbegin()->first.toSec()) // new reference map arrived
           refDataTransferring();
+          
         if (cur_.t_.toSec() < TS_history_.rbegin()->first.toSec()) // new observation arrived
         {
           if (ref_.t_.toSec() >= TS_history_.rbegin()->first.toSec())
@@ -125,15 +138,8 @@ namespace esvo_core
       // create new regProblem
       TicToc tt;
       double t_resetRegProblem, t_solve, t_pub_result, t_pub_gt;
-#ifdef ESVO_CORE_TRACKING_DEBUG
-      tt.tic();
-#endif
       if (rpSolver_.resetRegProblem(&ref_, &cur_))
       {
-#ifdef ESVO_CORE_TRACKING_DEBUG
-        t_resetRegProblem = tt.toc();
-        tt.tic();
-#endif
         if (ets_ == IDLE)
           ets_ = WORKING;
         if (ESVO_System_Status_ != "WORKING")
@@ -144,17 +150,11 @@ namespace esvo_core
         if (rpType_ == REG_ANALYTICAL)
           rpSolver_.solve_analytical();
 
-#ifdef ESVO_CORE_TRACKING_DEBUG
-        t_solve = tt.toc();
-        tt.tic();
-#endif
         T_world_cur_ = cur_.tr_.getTransformationMatrix();
         publishPose(cur_.t_, cur_.tr_);
         if (bVisualizeTrajectory_)
           publishPath(cur_.t_, cur_.tr_);
-#ifdef ESVO_CORE_TRACKING_DEBUG
-        t_pub_result = tt.toc();
-#endif
+
         // save result and gt if available.
         if (bSaveTrajectory_)
         {
@@ -169,6 +169,7 @@ namespace esvo_core
         ets_ = IDLE;
         //      LOG(INFO) << "Tracking thread is IDLE";
       }
+      publishTimeSurface();
 
 #ifdef ESVO_CORE_TRACKING_LOG
       double t_overall_count = 0;
@@ -205,8 +206,7 @@ namespace esvo_core
   /**
    * @brief reload the current point cloud
    **/
-  bool
-  esvo_Tracking::refDataTransferring()
+  bool esvo_Tracking::refDataTransferring()
   {
     // load reference info
     ref_.t_ = refPCMap_.rbegin()->first;
@@ -242,8 +242,7 @@ namespace esvo_core
   /**
    * @brief extract current events
    **/
-  bool
-  esvo_Tracking::curDataTransferring()
+  bool esvo_Tracking::curDataTransferring()
   {
     // load current observation
     auto ev_last_it = EventBuffer_lower_bound(events_left_, cur_.t_);
@@ -299,8 +298,7 @@ namespace esvo_core
     }
   }
 
-  void esvo_Tracking::eventsCallback(
-      const dvs_msgs::EventArray::ConstPtr &msg)
+  void esvo_Tracking::eventsCallback(const dvs_msgs::EventArray::ConstPtr &msg)
   {
     std::lock_guard<std::mutex> lock(data_mutex_);
     // add new ones and remove old ones
@@ -332,10 +330,8 @@ namespace esvo_core
     }
   }
 
-  void
-  esvo_Tracking::timeSurfaceCallback(
-      const sensor_msgs::ImageConstPtr &time_surface_left,
-      const sensor_msgs::ImageConstPtr &time_surface_right)
+  void esvo_Tracking::timeSurfaceCallback(const sensor_msgs::ImageConstPtr &time_surface_left,
+                                          const sensor_msgs::ImageConstPtr &time_surface_right)
   {
     std::lock_guard<std::mutex> lock(data_mutex_);
     cv_bridge::CvImagePtr cv_ptr_left, cv_ptr_right;
@@ -361,6 +357,17 @@ namespace esvo_core
       auto it = TS_history_.begin();
       TS_history_.erase(it);
     }
+  }
+
+  void esvo_Tracking::publishTimeSurface()
+  {
+    if (TS_history_.size() == 0)
+      return;
+    cv_bridge::CvImagePtr cv_ptr_left, cv_ptr_right;
+    cv_ptr_left = TS_history_.rbegin()->second.cvImagePtr_left_;
+    cv_ptr_right = TS_history_.rbegin()->second.cvImagePtr_right_;
+    time_surface_left_pub_.publish(cv_ptr_left->toImageMsg());
+    time_surface_right_pub_.publish(cv_ptr_right->toImageMsg());
   }
 
   void esvo_Tracking::stampedPoseCallback(const geometry_msgs::PoseStampedConstPtr &msg)

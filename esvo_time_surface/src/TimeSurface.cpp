@@ -18,7 +18,6 @@ namespace esvo_time_surface
 		sync_topic_ = nh_.subscribe("sync", 1, &TimeSurface::syncCallback, this);
 		image_transport::ImageTransport it_(nh_);
 		time_surface_pub_ = it_.advertise("time_surface", 1);
-		time_surface_negative_pub_ = it_.advertise("time_surface_negative", 1);
 
 		// parameters
 		nh_private.param<bool>("use_sim_time", bUse_Sim_Time_, true);
@@ -41,7 +40,6 @@ namespace esvo_time_surface
 	TimeSurface::~TimeSurface()
 	{
 		time_surface_pub_.shutdown();
-		time_surface_negative_pub_.shutdown();
 	}
 
 	void TimeSurface::init(int width, int height)

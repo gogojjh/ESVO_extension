@@ -150,6 +150,7 @@ namespace esvo_core
 		events_right_sub_ = nh_.subscribe<dvs_msgs::EventArray>("events_right", 0, boost::bind(&esvo_Mapping::eventsCallback, this, _1, boost::ref(events_right_)));
 		stampedPose_sub_ = nh_.subscribe("stamped_pose", 0, &esvo_Mapping::stampedPoseCallback, this);
 		TS_sync_.registerCallback(boost::bind(&esvo_Mapping::timeSurfaceCallback, this, _1, _2));
+		// keyFrame_pub_ = nh_.subscribe("keyframe", 1, &esvo_Mapping::keyFrameCallback, this);
 		// TF
 		tf_ = std::make_shared<tf::Transformer>(true, ros::Duration(100.0));
 

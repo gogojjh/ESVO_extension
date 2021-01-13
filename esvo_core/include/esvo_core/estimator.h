@@ -9,6 +9,7 @@
 #include <message_filters/sync_policies/exact_time.h>
 
 #include <tf/transform_broadcaster.h>
+#include <std_msgs/Int16.h>
 
 #include <nav_msgs/Path.h>
 
@@ -131,6 +132,7 @@ namespace esvo_core
         ros::Subscriber events_left_sub_, events_right_sub_;
         ros::Subscriber stampedPose_sub_;
         message_filters::Subscriber<sensor_msgs::Image> TS_left_sub_, TS_right_sub_;
+        ros::Subscriber keyFrame_sub_;
 
         // Publishers
         ros::Publisher pc_pub_, gpc_pub_;
@@ -270,6 +272,8 @@ namespace esvo_core
         RegProblemSolverLM rpSolver_;
 
         bool bVisualizeTrajectory_;
+
+        std_msgs::Int16 msgKeyframe_;
     };
 } // namespace esvo_core
 
