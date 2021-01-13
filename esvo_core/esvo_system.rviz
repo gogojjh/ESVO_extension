@@ -4,6 +4,7 @@ Panels:
     Name: Displays
     Property Tree Widget:
       Expanded:
+        - /Global Options1
         - /TF1/Frames1
         - /TF1/Tree1
       Splitter Ratio: 0.3870967626571655
@@ -26,7 +27,7 @@ Panels:
     Experimental: false
     Name: Time
     SyncMode: 0
-    SyncSource: LocalMap
+    SyncSource: ""
 Preferences:
   PromptSaveOnExit: true
 Toolbars:
@@ -57,19 +58,13 @@ Visualization Manager:
       Frame Timeout: 999
       Frames:
         All Enabled: false
-        dvs:
-          Value: true
-        map:
-          Value: true
       Marker Scale: 1
       Name: TF
       Show Arrows: false
       Show Axes: true
       Show Names: true
       Tree:
-        map:
-          dvs:
-            {}
+        {}
       Update Interval: 0
       Value: true
     - Alpha: 1
@@ -88,12 +83,12 @@ Visualization Manager:
       Unreliable: false
       Value: false
     - Class: rviz/Axes
-      Enabled: false
-      Length: 1
+      Enabled: true
+      Length: 0.5
       Name: Axes
-      Radius: 0.10000000149011612
+      Radius: 0.05000000074505806
       Reference Frame: <Fixed Frame>
-      Value: false
+      Value: true
     - Alpha: 1
       Autocompute Intensity Bounds: true
       Autocompute Value Bounds:
@@ -205,7 +200,7 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz/Orbit
-      Distance: 4.160273551940918
+      Distance: 5.616532802581787
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.05999999865889549
         Stereo Focal Distance: 1

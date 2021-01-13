@@ -51,7 +51,7 @@
     <remap from="stamped_pose" to="/esvo_tracking/pose_pub" />
     <remap from="gt_pose" to="/optitrack/davis_stereo" />
     <remap from="events_left" to="/davis/left/events" />
-    <remap from="pointcloud" to="/esvo_mapping/pointcloud_local_other" />
+    <remap from="pointcloud" to="/esvo_mapping/pointcloud_local" />
 
     <rosparam param="dvs_frame_id">"dvs"</rosparam>
     <rosparam param="world_frame_id">"map"</rosparam>
