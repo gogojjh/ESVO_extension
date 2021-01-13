@@ -15,56 +15,59 @@
 
 namespace esvo_core
 {
-namespace core
-{
-enum RegProblemType
-{
-  REG_NUMERICAL,
-  REG_ANALYTICAL
-};
+  namespace core
+  {
+    enum RegProblemType
+    {
+      REG_NUMERICAL,
+      REG_ANALYTICAL
+    };
 
-struct LM_statics
-{
-  size_t nPoints_;
-  size_t nfev_;
-  size_t nIter_;
-};
+    struct LM_statics
+    {
+      size_t nPoints_;
+      size_t nfev_;
+      size_t nIter_;
+    };
 
-class RegProblemSolverLM
-{
-  public:
-  EIGEN_MAKE_ALIGNED_OPERATOR_NEW
-  RegProblemSolverLM(
-    CameraSystem::Ptr& camSysPtr,
-    std::shared_ptr<RegProblemConfig>& rpConfigPtr,
-    RegProblemType rpType = REG_NUMERICAL,
-    size_t numThread = 1);
-  virtual ~RegProblemSolverLM();
+    /**
+     * @brief Solver for image-to-map registration problem.
+     */
+    class RegProblemSolverLM
+    {
+    public:
+      EIGEN_MAKE_ALIGNED_OPERATOR_NEW
+      RegProblemSolverLM(
+          CameraSystem::Ptr &camSysPtr,
+          std::shared_ptr<RegProblemConfig> &rpConfigPtr,
+          RegProblemType rpType = REG_NUMERICAL,
+          size_t numThread = 1);
+      virtual ~RegProblemSolverLM();
 
-  bool resetRegProblem(RefFrame* ref, CurFrame* cur);
-  bool solve_numerical();// relatively slower
-  bool solve_analytical();// faster
+      bool resetRegProblem(RefFrame *ref, CurFrame *cur);
+      bool solve_numerical();  // relatively slower
+      bool solve_analytical(); // faster
 
-  // For test and visualization
-  void setRegPublisher(image_transport::Publisher* reprojMap_pub);
-  LM_statics lmStatics_;// record LevenburgMarquardt log.
+      // For test and visualization
+      void setRegPublisher(image_transport::Publisher *reprojMap_pub);
+      LM_statics lmStatics_; // record LevenburgMarquardt log.
 
-  // variables
-private:
-  CameraSystem::Ptr& camSysPtr_;
-  std::shared_ptr<RegProblemConfig> rpConfigPtr_;
-  size_t NUM_THREAD_;
-  RegProblemType rpType_;
+      // variables
+    private:
+      CameraSystem::Ptr &camSysPtr_;
+      std::shared_ptr<RegProblemConfig> rpConfigPtr_;
+      size_t NUM_THREAD_;
+      RegProblemType rpType_;
 
-  std::shared_ptr<RegProblemLM> regProblemPtr_;
-  std::shared_ptr<Eigen::NumericalDiff<RegProblemLM> > numDiff_regProblemPtr_;
+      std::shared_ptr<RegProblemLM> regProblemPtr_;
+      std::shared_ptr<Eigen::NumericalDiff<RegProblemLM>> numDiff_regProblemPtr_;
 
-  // For test
-  double z_min_, z_max_;
-  image_transport::Publisher *reprojMap_pub_;
-  Visualization visualizor_;
-  bool bPrint_, bVisualize_;
-};
-}//namespace core
-}//namespace esvo_core
+      // For test
+      double z_min_, z_max_;
+      image_transport::Publisher *reprojMap_pub_;
+      Visualization visualizor_;
+      bool bPrint_, bVisualize_;
+    };
+  } //namespace core
+} //namespace esvo_core
 #endif //ESVO_CORE_CORE_REGPROBLEMSOLVER2_H

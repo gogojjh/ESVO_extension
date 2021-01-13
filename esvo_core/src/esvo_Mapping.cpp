@@ -191,8 +191,8 @@ namespace esvo_core
       }
       // check system status
       nh_.getParam("/ESVO_SYSTEM_STATUS", ESVO_System_Status_);
-
       // LOG(INFO) << "SYSTEM STATUS (MappingLoop): " << ESVO_System_Status_;
+
       if (ESVO_System_Status_ == "TERMINATE")
       {
         LOG(INFO) << "The Mapping node is terminated manually...";

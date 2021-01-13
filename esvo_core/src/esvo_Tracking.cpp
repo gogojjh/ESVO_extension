@@ -155,7 +155,6 @@ namespace esvo_core
 #ifdef ESVO_CORE_TRACKING_DEBUG
         t_pub_result = tt.toc();
 #endif
-
         // save result and gt if available.
         if (bSaveTrajectory_)
         {
@@ -204,7 +203,7 @@ namespace esvo_core
   }
 
   /**
-   * @brief reload the current point cloud map
+   * @brief reload the current point cloud
    **/
   bool
   esvo_Tracking::refDataTransferring()
