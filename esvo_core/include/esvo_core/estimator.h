@@ -62,7 +62,8 @@ namespace esvo_core
 
         // mapping
         void MappingLoop(std::promise<void> prom_mapping, std::future<void> future_reset);
-        void Process(std::promise<void> prom_mapping, std::future<void> future_reset);
+        // void Process(std::promise<void> prom_mapping, std::future<void> future_reset);
+        void Process();
         void MappingAtTime(const ros::Time &t);
         bool InitializationAtTime(const ros::Time &t);
         bool MonoInitializationAtTime(const ros::Time &t);
@@ -97,7 +98,7 @@ namespace esvo_core
             image_transport::Publisher &pub,
             std::string encoding = "bgr8");
 
-        void publishEventFrame(const ros::Time &t);
+        void publishEventMap(const ros::Time &t);
 
         /*** event processing ***/
         void createEdgeMask(
@@ -162,6 +163,8 @@ namespace esvo_core
         size_t TS_id_;
         ros::Time tf_lastest_common_time_;
 
+        std::deque<std::pair<ros::Time, TimeSurfaceObservation>> TS_buf_;
+
         // system
         std::string ESVO_System_Status_;
         DepthProblemConfig::Ptr dpConfigPtr_;
@@ -187,6 +190,7 @@ namespace esvo_core
 
         // inter-thread management
         std::mutex data_mutex_;
+        std::mutex m_buf_;
         std::promise<void> mapping_thread_promise_, reset_promise_;
         std::future<void> mapping_thread_future_, reset_future_;
 

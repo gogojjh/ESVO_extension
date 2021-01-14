@@ -173,8 +173,9 @@ namespace esvo_core
 		reset_future_ = reset_promise_.get_future();
 
 		// stereo mapping detached thread
-		std::thread MappingThread(&esvo_Mapping::Process, this,
-								  std::move(mapping_thread_promise_), std::move(reset_future_));
+		// std::thread MappingThread(&esvo_Mapping::Process, this,
+		// 						  std::move(mapping_thread_promise_), std::move(reset_future_));
+		std::thread MappingThread(&esvo_Mapping::Process, this);
 		MappingThread.detach();
 
 		// Dynamic reconfigure
@@ -204,13 +205,14 @@ namespace esvo_core
 		costMap_pub_.shutdown();
 	}
 
-	void esvo_Mapping::Process(
-		std::promise<void> prom_mapping,
-		std::future<void> future_reset)
+	void esvo_Mapping::Process()
 	{
 		ros::Rate r(mapping_rate_hz_);
-		while (ros::ok())
+		while (1)
 		{
+			if (!ros::ok())
+				break;
+
 			// reset mapping rate
 			if (changed_frame_rate_)
 			{
@@ -227,34 +229,33 @@ namespace esvo_core
 				break;
 			}
 
-			if (TS_history_.size() >= 10) /* To assure the esvo_time_surface node has been working. */
+			if (ESVO_System_Status_ == "RESET")
 			{
-				while (true)
+				reset();
+				r.sleep();
+				continue;
+			}
+
+			if (!TS_buf_.empty()) /* To assure the esvo_time_surface node has been working. */
+			{
+				m_buf_.lock();
+				if (TS_obs_.first.toSec() < TS_buf_.back().first.toSec()) // // new observation arrived
 				{
-					if (data_mutex_.try_lock())
+					if (!dataTransferring())
 					{
-						dataTransferring();
-						data_mutex_.unlock();
-						break;
-					}
-					else
-					{
-						if (future_reset.wait_for(std::chrono::nanoseconds(1)) == std::future_status::ready)
-						{
-							prom_mapping.set_value();
-							return;
-						}
+						m_buf_.unlock();
+						r.sleep();
+						continue;
 					}
 				}
-
-				// To check if the most current TS observation has been loaded by dataTransferring()
-				if (TS_obs_.second.isEmpty())
+				else
 				{
+					m_buf_.unlock();
 					r.sleep();
 					continue;
 				}
+				m_buf_.unlock();
 
-				// cur_time_ = TS_obs_.first.toSec();
 #ifdef MONOCULAR_DEBUG
 				if (ESVO_System_Status_ == "INITIALIZATION" || ESVO_System_Status_ == "RESET")
 				{
@@ -270,149 +271,23 @@ namespace esvo_core
 				{
 					MappingAtTime(TS_obs_.first);
 				}
-				std::thread tPublishEventFrame(&esvo_Mapping::publishEventFrame, this, TS_obs_.first);
-				tPublishEventFrame.detach();
+				std::thread tpublishEventMap(&esvo_Mapping::publishEventMap, this, TS_obs_.first);
+				tpublishEventMap.detach();
 #else
 				if (ESVO_System_Status_ == "INITIALIZATION" || ESVO_System_Status_ == "RESET") // do initialization
 				{
 					if (InitializationAtTime(TS_obs_.first))
-					{
 						LOG(INFO) << "Initialization is successfully done!"; //(" << INITIALIZATION_COUNTER_ << ").";
-						// nh_.setParam("/ESVO_SYSTEM_STATUS", "WORKING");
-						// cur_.t_ = TS_obs_.first;
-						// cur_.pTsObs_ = &TS_obs_.second;
-						// cur_.tr_ = Transformation(T_world_cur_);
-						// cur_.numEventsSinceLastObs_ = vEventsPtr_left_SGM_.size();
-					}
 					else
 						LOG(INFO) << "Initialization fails once.";
 				}
 
 				if (ESVO_System_Status_ == "WORKING") // do tracking & mapping
-				{
-					// tracking
-					// setTrackingData();
-					// if (rpSolver_.resetRegProblem(&ref_, &cur_))
-					// {
-					// 	TicToc t_solve;
-					// 	if (rpType_ == REG_NUMERICAL)
-					// 	{
-					// 		// LOG(INFO) << "solving in numercial";
-					// 		rpSolver_.solve_numerical();
-					// 	}
-					// 	if (rpType_ == REG_ANALYTICAL)
-					// 	{
-					// 		// LOG(INFO) << "solving in analytical";
-					// 		rpSolver_.solve_analytical();
-					// 	}
-					// 	T_world_cur_ = cur_.tr_.getTransformationMatrix();
-					// 	TS_obs_.second.setTransformation(cur_.tr_); // update the current transformation
-					// 	// LOG(INFO) << "tracking costs " <<  t_solve.toc() << "ms"; // 30ms
-					// 	LOG(INFO) << "tracking pose: ";
-					// 	std::cout << T_world_cur_ << std::endl;
-					// }
-
-					// publish tracking results
-					// publishPose(cur_.t_, cur_.tr_);
-					// if (bVisualizeTrajectory_)
-					// {
-					// 	publishPath(cur_.t_, cur_.tr_);
-					// 	// save results to listPose and listPoseGt
-					// 	lTimestamp_.push_back(std::to_string(cur_.t_.toSec()));
-					// 	lPose_.push_back(cur_.tr_.getTransformationMatrix());
-					// }
-
-					// start mapping
-					// Eigen::Matrix3d R_world_cur = T_world_cur_.topLeftCorner<3, 3>();
-					// Eigen::Quaterniond q_world_cur(R_world_cur);
-					// Eigen::Vector3d t_world_cur = T_world_cur_.topRightCorner<3, 1>();
-					// tf::Transform tf(
-					// 	tf::Quaternion(
-					// 		q_world_cur.x(),
-					// 		q_world_cur.y(),
-					// 		q_world_cur.z(),
-					// 		q_world_cur.w()),
-					// 	tf::Vector3(
-					// 		t_world_cur.x(),
-					// 		t_world_cur.y(),
-					// 		t_world_cur.z()));
-					// tf::StampedTransform st(tf, cur_.t_, world_frame_id_, dvs_frame_id_.c_str());
-					// tf_->setTransform(st);
-					// static tf::TransformBroadcaster br;
-					// br.sendTransform(st);
-
-					// set poses of virtual views by linear interpolation
-					// st_map_.clear();
-					// ros::Time t_end = TS_obs_.first;
-					// ros::Time t_begin(std::max(0.0, t_end.toSec() - 10 * BM_half_slice_thickness_)); // 10ms
-					// ros::Time t_tmp = t_begin;
-					// while (t_tmp.toSec() <= t_end.toSec())
-					// {
-					//   Transformation tr;
-					//   if (getPoseAt(t_tmp, tr, dvs_frame_id_))
-					//     st_map_.emplace(t_tmp, tr);
-					//   t_tmp = ros::Time(t_tmp.toSec() + 0.05 * BM_half_slice_thickness_);
-					// }
-
 					MappingAtTime(TS_obs_.first);
-				}
 #endif
-				// T_world_cur_last_ = T_world_cur_;
-				// prev_time_ = TS_obs_.first.toSec();
-			}
-			else
-			{
-				if (future_reset.wait_for(std::chrono::nanoseconds(1)) == std::future_status::ready)
-				{
-					prom_mapping.set_value();
-					return;
-				}
 			}
 			r.sleep();
 		}
-	}
-
-	// extract depthMap from depthFramePtr_->dMap_
-	bool esvo_Mapping::setTrackingData()
-	{
-		// set reference data: local map
-		DepthMap::Ptr depthMapPtr = depthFramePtr_->dMap_;
-		Transformation tr = depthFramePtr_->T_world_frame_;
-
-		Eigen::Matrix<double, 4, 4> T_world_result = tr.getTransformationMatrix();
-		PointCloud::Ptr pc_local(new PointCloud());
-		pc_local->clear();
-		pc_local->reserve(50000);
-		for (auto it = depthMapPtr->begin(); it != depthMapPtr->end(); it++)
-		{
-			Eigen::Vector3d p_world = T_world_result.block<3, 3>(0, 0) * it->p_cam() + T_world_result.block<3, 1>(0, 3);
-			pc_local->push_back(pcl::PointXYZ(p_world(0), p_world(1), p_world(2)));
-		}
-
-		ref_.t_ = TS_obs_.first;
-		ref_.tr_ = tr;
-		size_t numPoint = pc_local->size();
-		ref_.vPointXYZPtr_.clear();
-		ref_.vPointXYZPtr_.reserve(numPoint);
-		auto PointXYZ_begin_it = pc_local->begin();
-		auto PointXYZ_end_it = pc_local->end();
-		while (PointXYZ_begin_it != PointXYZ_end_it)
-		{
-			ref_.vPointXYZPtr_.push_back(PointXYZ_begin_it.base()); // Copy the pointer of the pointXYZ
-			PointXYZ_begin_it++;
-		}
-
-		// set frame data: time surface
-		cur_.t_ = TS_obs_.first;
-		cur_.pTsObs_ = &TS_obs_.second;
-		cur_.tr_ = Transformation(T_world_cur_);
-		cur_.numEventsSinceLastObs_ = vALLEventsPtr_left_.size();
-
-#ifdef ESVO_CORE_MAPPING_DEBUG
-		LOG(INFO) << "map point size: " << pc_local->size();
-		LOG(INFO) << "current event size: " << cur_.numEventsSinceLastObs_;
-#endif
-		return true;
 	}
 
 	// follow LSD-SLAM to initialize the map
@@ -643,7 +518,7 @@ namespace esvo_core
 		for (auto it = dqvDepthPoints_.rbegin(); it != dqvDepthPoints_.rend(); it++)
 		{
 			numFusionCount += dFusor_.update(*it, depthFramePtr_, fusion_radius_); // fusing new points to update the depthmap
-			// LOG(INFO) << "numFusionCount: " << numFusionCount;
+																				   // LOG(INFO) << "numFusionCount: " << numFusionCount;
 		}
 
 		TotalNumFusion_ += numFusionCount;
@@ -696,11 +571,11 @@ namespace esvo_core
 
 	bool esvo_Mapping::dataTransferring()
 	{
-		TS_obs_ = std::make_pair(ros::Time(), TimeSurfaceObservation()); // clean the TS obs.
-		if (TS_history_.size() <= 10)									 /* To assure the esvo_time_surface node has been working. */
+		// TS_obs_ = std::make_pair(ros::Time(), TimeSurfaceObservation()); // clean the TS obs.
+		if (TS_buf_.size() <= 10) /* To assure the esvo_time_surface node has been working. */
 			return false;
-		totalNumCount_ = 0;
 
+		totalNumCount_ = 0;
 #ifdef MONOCULAR_DEBUG
 		auto it_end = TS_history_.rbegin();
 		TS_obs_ = *it_end;
@@ -753,10 +628,10 @@ namespace esvo_core
 		return true;
 #else
 		// load current Time-Surface Observation
-		auto it_end = TS_history_.rbegin();
+		auto it_end = TS_buf_.rbegin();
 		it_end++; // in case that the tf is behind the most current TS.
-		auto it_begin = TS_history_.begin();
-		while (TS_obs_.second.isEmpty())
+		auto it_begin = TS_buf_.begin();
+		while (it_end->first != it_begin->first)
 		{
 			Transformation tr;
 			if (ESVO_System_Status_ == "INITIALIZATION")
@@ -764,28 +639,27 @@ namespace esvo_core
 				tr.setIdentity();
 				it_end->second.setTransformation(tr);
 				TS_obs_ = *it_end;
+				break;
 			}
 			else if (ESVO_System_Status_ == "WORKING")
 			{
 				if (getPoseAt(it_end->first, tr, dvs_frame_id_))
 				{
-				  it_end->second.setTransformation(tr);
-				  TS_obs_ = *it_end;
+					it_end->second.setTransformation(tr);
+					TS_obs_ = *it_end;
+					break;
 				}
 				else
 				{
-				  // check if the tracking node is still working normally
-				  nh_.getParam("/ESVO_SYSTEM_STATUS", ESVO_System_Status_);
-				  if (ESVO_System_Status_ != "WORKING")
-				    return false;
+					// check if the tracking node is still working normally
+					nh_.getParam("/ESVO_SYSTEM_STATUS", ESVO_System_Status_);
+					if (ESVO_System_Status_ != "WORKING")
+						return false;
 				}
-				TS_obs_ = *it_end;
 			}
-			if (it_end->first == it_begin->first)
-				break;
 			it_end++;
 		}
-		if (TS_obs_.second.isEmpty())
+		if (it_end->first == it_begin->first)
 			return false;
 
 		/****** Load involved events *****/
@@ -842,16 +716,16 @@ namespace esvo_core
 			ros::Time t_tmp = t_begin;
 			while (t_tmp.toSec() <= t_end.toSec())
 			{
-			  Transformation tr;
-			  if (getPoseAt(t_tmp, tr, dvs_frame_id_))
-			    st_map_.emplace(t_tmp, tr);
-			  else
-			  {
-			    nh_.getParam("/ESVO_SYSTEM_STATUS", ESVO_System_Status_);
-			    if (ESVO_System_Status_ != "WORKING")
-			      return false;
-			  }
-			  t_tmp = ros::Time(t_tmp.toSec() + 0.05 * BM_half_slice_thickness_);
+				Transformation tr;
+				if (getPoseAt(t_tmp, tr, dvs_frame_id_))
+					st_map_.emplace(t_tmp, tr);
+				else
+				{
+					nh_.getParam("/ESVO_SYSTEM_STATUS", ESVO_System_Status_);
+					if (ESVO_System_Status_ != "WORKING")
+						return false;
+				}
+				t_tmp = ros::Time(t_tmp.toSec() + 0.05 * BM_half_slice_thickness_);
 			}
 #ifdef ESVO_CORE_MAPPING_DEBUG
 			LOG(INFO) << "Data Transferring (stampTransformation map): " << st_map_.size();
@@ -900,10 +774,9 @@ void esvo_Mapping::stampedPoseCallback(const geometry_msgs::PoseStampedConstPtr 
 }
 
 // return the pose of the left event cam at time t.
-bool esvo_Mapping::getPoseAt(
-	const ros::Time &t,
-	esvo_core::Transformation &Tr, // T_world_virtual
-	const std::string &source_frame)
+bool esvo_Mapping::getPoseAt(const ros::Time &t,
+							 esvo_core::Transformation &Tr, // T_world_virtual
+							 const std::string &source_frame)
 {
 	std::string *err_msg = new std::string();
 	if (!tf_->canTransform(world_frame_id_, source_frame, t, err_msg))
@@ -923,12 +796,10 @@ bool esvo_Mapping::getPoseAt(
 	}
 }
 
-void esvo_Mapping::eventsCallback(
-	const dvs_msgs::EventArray::ConstPtr &msg,
-	EventQueue &EQ)
+void esvo_Mapping::eventsCallback(const dvs_msgs::EventArray::ConstPtr &msg,
+								  EventQueue &EQ)
 {
 	std::lock_guard<std::mutex> lock(data_mutex_);
-
 	static constexpr double max_time_diff_before_reset_s = 0.5;
 	const ros::Time stamp_first_event = msg->events[0].ts;
 
@@ -972,12 +843,13 @@ void esvo_Mapping::clearEventQueue(EventQueue &EQ)
 void esvo_Mapping::timeSurfaceCallback(const sensor_msgs::ImageConstPtr &time_surface_left,
 									   const sensor_msgs::ImageConstPtr &time_surface_right)
 {
-	std::lock_guard<std::mutex> lock(data_mutex_);
+	// std::lock_guard<std::mutex> lock(data_mutex_);
+	m_buf_.lock();
 	// check time-stamp inconsistency
-	if (!TS_history_.empty())
+	if (!TS_buf_.empty())
 	{
 		static constexpr double max_time_diff_before_reset_s = 0.5;
-		const ros::Time stamp_last_image = TS_history_.rbegin()->first;
+		const ros::Time stamp_last_image = TS_buf_.back().first;
 		const double dt = time_surface_left->header.stamp.toSec() - stamp_last_image.toSec();
 		if (dt < 0 || std::fabs(dt) >= max_time_diff_before_reset_s)
 		{
@@ -1003,32 +875,32 @@ void esvo_Mapping::timeSurfaceCallback(const sensor_msgs::ImageConstPtr &time_su
 	ros::Time t_new_TS = time_surface_left->header.stamp;
 	// Made the gradient computation optional which is up to the jacobian choice.
 	if (dpSolver_.getProblemType() == NUMERICAL)
-		TS_history_.emplace(t_new_TS, TimeSurfaceObservation(cv_ptr_left, cv_ptr_right, TS_id_));
+		TS_buf_.push_back(std::make_pair(t_new_TS, TimeSurfaceObservation(cv_ptr_left, cv_ptr_right, TS_id_)));
 	else
-		TS_history_.emplace(t_new_TS, TimeSurfaceObservation(cv_ptr_left, cv_ptr_right, TS_id_, true));
+		TS_buf_.push_back(std::make_pair(t_new_TS, TimeSurfaceObservation(cv_ptr_left, cv_ptr_right, TS_id_, true)));
 	TS_id_++;
 
 	// keep TS_history's size constant
-	while (TS_history_.size() > TS_HISTORY_LENGTH_)
-	{
-		auto it = TS_history_.begin();
-		TS_history_.erase(it);
-	}
+	while (TS_buf_.size() > TS_HISTORY_LENGTH_)
+		TS_buf_.pop_front();
+	m_buf_.unlock();
 }
 
 void esvo_Mapping::reset()
 {
 	// mutual-thread communication with MappingThread.
 	LOG(INFO) << "Coming into reset()";
-	reset_promise_.set_value();
+	// reset_promise_.set_value();
 	LOG(INFO) << "(reset) The mapping thread future is waiting for the value.";
-	mapping_thread_future_.get();
+	// mapping_thread_future_.get();
 	LOG(INFO) << "(reset) The mapping thread future receives the value.";
 
+	m_buf_.lock();
 	// clear all maintained data
 	events_left_.clear();
 	events_right_.clear();
 	TS_history_.clear();
+	TS_buf_.clear();
 	tf_->clear();
 	pc_->clear();
 	pc_near_->clear();
@@ -1039,6 +911,7 @@ void esvo_Mapping::reset()
 
 	ebm_.resetParameters(BM_patch_size_X_, BM_patch_size_Y_,
 						 BM_min_disparity_, BM_max_disparity_, BM_step_, BM_ZNCC_Threshold_, BM_bUpDownConfiguration_);
+	m_buf_.unlock();
 
 	for (int i = 0; i < 2; i++)
 		LOG(INFO) << "****************************************************";
@@ -1047,15 +920,16 @@ void esvo_Mapping::reset()
 		LOG(INFO) << "****************************************************\n\n";
 
 	// restart the mapping thread
-	reset_promise_ = std::promise<void>();
-	mapping_thread_promise_ = std::promise<void>();
-	reset_future_ = reset_promise_.get_future();
-	mapping_thread_future_ = mapping_thread_promise_.get_future();
+	// reset_promise_ = std::promise<void>();
+	// mapping_thread_promise_ = std::promise<void>();
+	// reset_future_ = reset_promise_.get_future();
+	// mapping_thread_future_ = mapping_thread_promise_.get_future();
 	ESVO_System_Status_ = "INITIALIZATION";
 	nh_.setParam("/ESVO_SYSTEM_STATUS", ESVO_System_Status_);
-	std::thread MappingThread(&esvo_Mapping::Process, this,
-							  std::move(mapping_thread_promise_), std::move(reset_future_));
-	MappingThread.detach();
+	// std::thread MappingThread(&esvo_Mapping::Process, this,
+	// 						  std::move(mapping_thread_promise_), std::move(reset_future_));
+	// std::thread MappingThread(&esvo_Mapping::Process, this);
+	// MappingThread.detach();
 }
 
 void esvo_Mapping::onlineParameterChangeCallback(DVS_MappingStereoConfig &config, uint32_t level)
@@ -1120,10 +994,9 @@ void esvo_Mapping::onlineParameterChangeCallback(DVS_MappingStereoConfig &config
 	}
 }
 
-void esvo_Mapping::publishMappingResults(
-	DepthMap::Ptr depthMapPtr,
-	Transformation tr,
-	ros::Time t)
+void esvo_Mapping::publishMappingResults(DepthMap::Ptr depthMapPtr,
+										 Transformation tr,
+										 ros::Time t)
 {
 	cv::Mat invDepthImage, stdVarImage, ageImage, costImage, eventImage, confidenceMap;
 
@@ -1166,10 +1039,9 @@ void esvo_Mapping::publishMappingResults(
 	}
 }
 
-void esvo_Mapping::publishPointCloud(
-	DepthMap::Ptr &depthMapPtr,
-	Transformation &tr,
-	ros::Time &t)
+void esvo_Mapping::publishPointCloud(DepthMap::Ptr &depthMapPtr,
+									 Transformation &tr,
+									 ros::Time &t)
 {
 	sensor_msgs::PointCloud2::Ptr pc_to_publish(new sensor_msgs::PointCloud2);
 	Eigen::Matrix<double, 4, 4> T_world_result = tr.getTransformationMatrix();
@@ -1235,7 +1107,7 @@ void esvo_Mapping::publishPointCloud(
 	}
 }
 
-void esvo_Mapping::publishEventFrame(const ros::Time &t)
+void esvo_Mapping::publishEventMap(const ros::Time &t)
 {
 	cv::Mat eventMap;
 	visualizor_.plot_eventMap(vALLEventsPtr_left_,
@@ -1245,11 +1117,10 @@ void esvo_Mapping::publishEventFrame(const ros::Time &t)
 	publishImage(eventMap, t, eventFrame_pub_, "mono8");
 }
 
-void esvo_Mapping::publishImage(
-	const cv::Mat &image,
-	const ros::Time &t,
-	image_transport::Publisher &pub,
-	std::string encoding)
+void esvo_Mapping::publishImage(const cv::Mat &image,
+								const ros::Time &t,
+								image_transport::Publisher &pub,
+								std::string encoding)
 {
 	if (pub.getNumSubscribers() == 0)
 	{
@@ -1264,13 +1135,12 @@ void esvo_Mapping::publishImage(
 	pub.publish(msg);
 }
 
-void esvo_Mapping::createEdgeMask(
-	std::vector<dvs_msgs::Event *> &vEventsPtr,
-	PerspectiveCamera::Ptr &camPtr,
-	cv::Mat &edgeMap,
-	std::vector<std::pair<size_t, size_t>> &vEdgeletCoordinates,
-	bool bUndistortEvents,
-	size_t radius)
+void esvo_Mapping::createEdgeMask(std::vector<dvs_msgs::Event *> &vEventsPtr,
+								  PerspectiveCamera::Ptr &camPtr,
+								  cv::Mat &edgeMap,
+								  std::vector<std::pair<size_t, size_t>> &vEdgeletCoordinates,
+								  bool bUndistortEvents,
+								  size_t radius)
 {
 	size_t col = camPtr->width_;
 	size_t row = camPtr->height_;
@@ -1293,6 +1163,7 @@ void esvo_Mapping::createEdgeMask(
 		int ycoor = std::floor(coor(1));
 
 		for (int dy = -dilate_radius; dy <= dilate_radius; dy++)
+		{
 			for (int dx = -dilate_radius; dx <= dilate_radius; dx++)
 			{
 				int x = xcoor + dx;
@@ -1307,14 +1178,14 @@ void esvo_Mapping::createEdgeMask(
 					vEdgeletCoordinates.emplace_back((size_t)x, (size_t)y);
 				}
 			}
+		}
 		it_tmp++;
 	}
 }
 
-void esvo_Mapping::createDenoisingMask(
-	std::vector<dvs_msgs::Event *> &vAllEventsPtr,
-	cv::Mat &mask,
-	size_t row, size_t col)
+void esvo_Mapping::createDenoisingMask(std::vector<dvs_msgs::Event *> &vAllEventsPtr,
+									   cv::Mat &mask,
+									   size_t row, size_t col)
 {
 	cv::Mat eventMap;
 	visualizor_.plot_eventMap(vAllEventsPtr, eventMap, row, col);
@@ -1337,74 +1208,6 @@ void esvo_Mapping::extractDenoisedEvents(
 		if (mask.at<uchar>(y, x) == 255)
 			vEdgeEventsPtr.push_back(vCloseEventsPtr[i]);
 	}
-}
-
-/************ publish results *******************/
-void esvo_Mapping::publishPose(const ros::Time &t, Transformation &tr)
-{
-	geometry_msgs::PoseStampedPtr ps_ptr(new geometry_msgs::PoseStamped());
-	ps_ptr->header.stamp = t;
-	ps_ptr->header.frame_id = world_frame_id_;
-	ps_ptr->pose.position.x = tr.getPosition()(0);
-	ps_ptr->pose.position.y = tr.getPosition()(1);
-	ps_ptr->pose.position.z = tr.getPosition()(2);
-	ps_ptr->pose.orientation.x = tr.getRotation().x();
-	ps_ptr->pose.orientation.y = tr.getRotation().y();
-	ps_ptr->pose.orientation.z = tr.getRotation().z();
-	ps_ptr->pose.orientation.w = tr.getRotation().w();
-	pose_pub_.publish(ps_ptr);
-}
-
-void esvo_Mapping::publishPath(const ros::Time &t, Transformation &tr)
-{
-	geometry_msgs::PoseStampedPtr ps_ptr(new geometry_msgs::PoseStamped());
-	ps_ptr->header.stamp = t;
-	ps_ptr->header.frame_id = world_frame_id_;
-	ps_ptr->pose.position.x = tr.getPosition()(0);
-	ps_ptr->pose.position.y = tr.getPosition()(1);
-	ps_ptr->pose.position.z = tr.getPosition()(2);
-	ps_ptr->pose.orientation.x = tr.getRotation().x();
-	ps_ptr->pose.orientation.y = tr.getRotation().y();
-	ps_ptr->pose.orientation.z = tr.getRotation().z();
-	ps_ptr->pose.orientation.w = tr.getRotation().w();
-
-	path_.header.stamp = t;
-	path_.header.frame_id = world_frame_id_;
-	path_.poses.push_back(*ps_ptr);
-	path_pub_.publish(path_);
-}
-
-void esvo_Mapping::saveTrajectory(const std::string &resultDir)
-{
-	LOG(INFO) << "Saving trajectory to " << resultDir << " ......";
-
-	std::ofstream f;
-	f.open(resultDir.c_str(), std::ofstream::out);
-	if (!f.is_open())
-	{
-		LOG(INFO) << "File at " << resultDir << " is not opened, save trajectory failed.";
-		exit(-1);
-	}
-	f << std::fixed;
-
-	std::list<Eigen::Matrix<double, 4, 4>,
-			  Eigen::aligned_allocator<Eigen::Matrix<double, 4, 4>>>::iterator result_it_begin = lPose_.begin();
-	std::list<Eigen::Matrix<double, 4, 4>,
-			  Eigen::aligned_allocator<Eigen::Matrix<double, 4, 4>>>::iterator result_it_end = lPose_.end();
-	std::list<std::string>::iterator ts_it_begin = lTimestamp_.begin();
-
-	for (; result_it_begin != result_it_end; result_it_begin++, ts_it_begin++)
-	{
-		Eigen::Matrix3d Rwc_result;
-		Eigen::Vector3d twc_result;
-		Rwc_result = (*result_it_begin).block<3, 3>(0, 0);
-		twc_result = (*result_it_begin).block<3, 1>(0, 3);
-		Eigen::Quaterniond q(Rwc_result);
-		f << *ts_it_begin << " " << std::setprecision(9) << twc_result.transpose() << " "
-		  << q.x() << " " << q.y() << " " << q.z() << " " << q.w() << std::endl;
-	}
-	f.close();
-	LOG(INFO) << "Saving trajectory to " << resultDir << ". Done !!!!!!.";
 }
 
 } // namespace esvo_core

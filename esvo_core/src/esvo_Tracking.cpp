@@ -94,6 +94,19 @@ namespace esvo_core
 				break;
 			}
 
+			if (ESVO_System_Status_ == "RESET") // This is true when the system is mannally reset, waiting for mapping's response
+			{
+				r.sleep();
+				continue;
+			}
+
+			if (ESVO_System_Status_ == "INITIALIZATION" && ets_ == WORKING) // This is true when the system is reset from dynamic reconfigure
+			{
+				reset();
+				r.sleep();
+				continue;
+			}
+
 			if (!TS_buf_.empty())
 			{
 				m_buf_.lock();
@@ -109,6 +122,7 @@ namespace esvo_core
 				else
 				{
 					m_buf_.unlock();
+					r.sleep();
 					continue;
 				}
 
@@ -116,6 +130,7 @@ namespace esvo_core
 				{
 					publishTimeSurface();
 					m_buf_.unlock();
+					r.sleep();
 					continue;
 				}
 				else if (ref_.t_.toSec() < refPCMap_buf_.back().first.toSec()) // new reference map arrived
@@ -129,8 +144,8 @@ namespace esvo_core
 				double t_resetRegProblem, t_solve, t_pub_result, t_pub_gt;
 				if (rpSolver_.resetRegProblem(&ref_, &cur_))
 				{
-					// if (ets_ == IDLE)
-					// 	ets_ = WORKING;
+					if (ets_ == IDLE)
+						ets_ = WORKING;
 					if (ESVO_System_Status_ != "WORKING")
 						nh_.setParam("/ESVO_SYSTEM_STATUS", "WORKING"); // trigger the main mapping process
 
@@ -155,7 +170,7 @@ namespace esvo_core
 				else
 				{
 					nh_.setParam("/ESVO_SYSTEM_STATUS", "INITIALIZATION");
-					// ets_ = IDLE;
+					ets_ = IDLE;
 					//      LOG(INFO) << "Tracking thread is IDLE";
 				}
 
@@ -191,8 +206,8 @@ namespace esvo_core
 					saveTrajectory(resultPath_ + "result.txt");
 				}
 			}
+			r.sleep();
 		} // while
-		r.sleep();
 	}
 
 	/**
@@ -202,9 +217,9 @@ namespace esvo_core
 	{
 		// load reference info
 		ref_.t_ = refPCMap_buf_.back().first;
-		if (ESVO_System_Status_ == "INITIALIZATION")
+		if (ESVO_System_Status_ == "INITIALIZATION" && ets_ == IDLE) // will be true if receive the first PCMap from mapping
 			ref_.tr_.setIdentity();
-		if (ESVO_System_Status_ == "WORKING")
+		if (ESVO_System_Status_ == "WORKING" || (ESVO_System_Status_ == "INITIALIZATION" && ets_ == WORKING))
 		{
 			if (!getPoseAt(ref_.t_, ref_.tr_, dvs_frame_id_))
 			{
@@ -245,12 +260,18 @@ namespace esvo_core
 
 	void esvo_Tracking::reset()
 	{
+		m_buf_.lock();
 		// clear all maintained data
 		ets_ = IDLE;
 		TS_id_ = 0;
 		TS_history_.clear();
+		TS_buf_.clear();
 		refPCMap_.clear();
+		refPCMap_buf_.clear();
 		events_left_.clear();
+
+		path_.clear();		
+		m_buf_.unlock();
 	}
 
 	/********************** Callback functions *****************************/
