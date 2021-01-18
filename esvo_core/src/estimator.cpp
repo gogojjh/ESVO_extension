@@ -574,7 +574,7 @@ namespace esvo_core
 		depthFramePtr_new->setTransformation(TS_obs_.second.tr_);
 		depthFramePtr_ = depthFramePtr_new;
 
-		double t_BM_denoising = 0.0;
+		double t_denoising = 0.0;
 		// Denoising operations
 		if (bDenoising_) // Set it to "True" to deal with flicker effect caused by VICON.
 		{
@@ -589,7 +589,7 @@ namespace esvo_core
 			extractDenoisedEvents(vCloseEventsPtr_left_, vDenoisedEventsPtr_left_, denoising_mask, PROCESS_EVENT_NUM_);
 			totalNumCount_ = vDenoisedEventsPtr_left_.size();
 
-			t_BM_denoising = tt_mapping.toc();
+			t_denoising = tt_mapping.toc();
 		}
 		else
 		{
@@ -599,17 +599,19 @@ namespace esvo_core
 				vDenoisedEventsPtr_left_.end(), vCloseEventsPtr_left_.begin(),
 				vCloseEventsPtr_left_.begin() + min(vCloseEventsPtr_left_.size(), PROCESS_EVENT_NUM_));
 		}
+		t_overall_count += t_denoising;
 
 		/******************************************************/
 		/*************** Mapping with the Disparity Space Image ****************/
 		/******************************************************/
 
 		// ******************************** Event Back-Projection
-		// tt_mapping.tic();
-		// emvs_mapper_.updateDSI(&st_map_, &vDenoisedEventsPtr_left_);
-		// t_BM = tt_mapping.toc();
-		// t_overall_count += t_BM_denoising;
-		// t_overall_count += t_BM;
+		double t_DSI, t_DepthMap;
+		tt_mapping.tic();
+		emvs_mapper_.initializeDSI(TS_obs_.second.tr_.getTransformationMatrix());
+		emvs_mapper_.updateDSI(mVirtualPoses_, vDenoisedEventsPtr_left_);
+		t_DSI = tt_mapping.toc();
+		t_overall_count += t_DSI;
 
 		// emvs_mapper_.dsi_.writeGridNpy("/tmp/dsi.npy");
 
@@ -913,6 +915,13 @@ namespace esvo_core
 												   ps_msg->pose.position.y,
 												   ps_msg->pose.position.z);
 		mAllPoses_.emplace(ps_msg->header.stamp, T);
+
+		// TODO: remove redundant poses
+		// if (mAllPoses_.size() > 360000)
+		// {
+		// 	mAllPoses_.erase(mAllPoses_.begin(), mAllPoses_.begin() + xx);
+		// }
+
 		m_buf_.unlock();
 	}
 

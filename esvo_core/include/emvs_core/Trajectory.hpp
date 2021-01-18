@@ -107,7 +107,7 @@ namespace EMVS
 				T0_ = (it0)->second;
 				t1_ = (it1)->first;
 				T1_ = (it1)->second;
-#ifdef
+#ifdef TRAJECTORY_LOG
 				printf("interpolation: %f < %f < %f\n\n", it0->first.toSec(), t.toSec(), it1->first.toSec());
 #endif
 			}

@@ -14,7 +14,6 @@
 #include "camodocal/camera_models/CameraFactory.h"
 #include "camodocal/camera_models/PinholeCamera.h"
 #include "cartesian3dgrid/cartesian3dgrid.h"
-#include "Trajectory.hpp"
 #include "DepthVector.hpp"
 
 #define USE_INVERSE_DEPTH
@@ -26,6 +25,14 @@ namespace EMVS
 #else
 	using TypeDepthVector = LinearDepthVector;
 #endif
+
+	// // return the first iterator which is greater than t
+	// inline std::map<ros::Time, Eigen::Matrix4d>::const_iterator Homo_lower_bound(
+	// 	const std::map<ros::Time, Eigen::Matrix4d> &stm, const ros::Time &t)
+	// {
+	// 	return std::lower_bound(stm.begin(), stm.end(), t,
+	// 							[](const std::pair<ros::Time, Eigen::Matrix4d> &st, const ros::Time &t) { return st.first.toSec() < t.toSec(); });
+	// }
 
 	struct ShapeDSI
 	{
@@ -87,9 +94,8 @@ namespace EMVS
 
 		void initializeDSI(const Eigen::Matrix4d &T_w_rv);
 
-		bool updateDSI(const std::vector<dvs_msgs::Event> &events,
-					   const LinearTrajectory &trajectory,
-					   const PoseMap &poses);
+		bool updateDSI(const std::map<ros::Time, Eigen::Matrix4d> pVirtualPoses,
+					   const std::vector<dvs_msgs::Event *> pvEventsPtr);
 
 		void getDepthMapFromDSI(cv::Mat &depth_map, cv::Mat &confidence_map, cv::Mat &mask, const OptionsDepthMap &options_depth_map);
 
@@ -120,7 +126,7 @@ namespace EMVS
 		std::vector<double> camera_params_;
 		std::vector<double> camera_virtual_params_;
 
-		Eigen::Matrix3f K_;
+		Eigen::Matrix3f K_virtual_;
 		int width_;
 		int height_;
 

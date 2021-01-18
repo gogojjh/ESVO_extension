@@ -33,6 +33,7 @@
 #include "camodocal/camera_models/CameraFactory.h"
 #include "camodocal/camera_models/PinholeCamera.h"
 #include "emvs_core/MapperEMVS.hpp"
+#include "emvs_core/Trajectory.hpp"
 
 #include <opencv2/core/core.hpp>
 #include <opencv2/imgproc/imgproc.hpp>
