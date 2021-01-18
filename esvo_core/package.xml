@@ -30,6 +30,8 @@
   <depend>tf2_ros</depend>
   <depend>roscpp</depend>
   <depend>dynamic_reconfigure</depend>
+  <depend>esvo_camera_models</depend>
+  <depend>esvo_cartesian3dgrid</depend>
 
   <!-- The export tag contains other, unspecified, tags -->
   <export>

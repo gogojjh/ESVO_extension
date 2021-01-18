@@ -260,19 +260,17 @@ namespace esvo_core
 				if (ESVO_System_Status_ == "INITIALIZATION" || ESVO_System_Status_ == "RESET")
 				{
 					if (MonoInitializationAtTime(TS_obs_.first))
-					{
 						LOG(INFO) << "Initialization is successfully done!"; //(" << INITIALIZATION_COUNTER_ << ").";
-						nh_.setParam("/ESVO_SYSTEM_STATUS", "WORKING");
-					}
 					else
 						LOG(INFO) << "Initialization fails once.";
 				}
-				else if (ESVO_System_Status_ == "WORKING")
+
+				if (ESVO_System_Status_ == "WORKING") // do tracking & mapping
 				{
 					MappingAtTime(TS_obs_.first);
+					std::thread tpublishEventMap(&esvo_Mapping::publishEventMap, this, TS_obs_.first);
+					tpublishEventMap.detach();
 				}
-				std::thread tpublishEventMap(&esvo_Mapping::publishEventMap, this, TS_obs_.first);
-				tpublishEventMap.detach();
 #else
 				if (ESVO_System_Status_ == "INITIALIZATION" || ESVO_System_Status_ == "RESET") // do initialization
 				{
@@ -283,7 +281,15 @@ namespace esvo_core
 				}
 
 				if (ESVO_System_Status_ == "WORKING") // do tracking & mapping
+				{
 					MappingAtTime(TS_obs_.first);
+
+					// monocular mapping
+					// MonoMappingAtTime(TS_obs_.first);
+
+					std::thread tpublishEventMap(&esvo_Mapping::publishEventMap, this, TS_obs_.first);
+					tpublishEventMap.detach();
+				}
 #endif
 			}
 			r.sleep();
@@ -295,7 +301,7 @@ namespace esvo_core
 	{
 		cv::Mat edgeMap;
 		std::vector<std::pair<size_t, size_t>> vEdgeletCoordinates;
-		createEdgeMask(vALLEventsPtr_left_, camSysPtr_->cam_left_ptr_,
+		createEdgeMask(vEventsPtr_left_SGM_, camSysPtr_->cam_left_ptr_,
 					   edgeMap, vEdgeletCoordinates, true, 0);
 
 		std::vector<DepthPoint> vdp;
@@ -468,7 +474,7 @@ namespace esvo_core
 		tt_mapping.tic();
 
 		// ******************************** Nonlinear opitmization
-		std::vector<DepthPoint> vdp;
+		std::vector<DepthPoint> vdp; // depth points on the current stereo observations
 		vdp.reserve(vEMP.size());
 		dpSolver_.solve(&vEMP, &TS_obs_, vdp); // hyper-thread version
 #ifdef ESVO_CORE_MAPPING_DEBUG
@@ -502,7 +508,7 @@ namespace esvo_core
 		else if (FusionStrategy_ == "CONST_FRAMES") // (strategy 2: const number of frames)
 		{
 			tt_mapping.tic();
-			dqvDepthPoints_.push_back(vdp);
+			dqvDepthPoints_.push_back(vdp); // all depth points on historical stereo observations
 			while (dqvDepthPoints_.size() > maxNumFusionFrames_)
 				dqvDepthPoints_.pop_front();
 		}
@@ -518,14 +524,14 @@ namespace esvo_core
 		for (auto it = dqvDepthPoints_.rbegin(); it != dqvDepthPoints_.rend(); it++)
 		{
 			numFusionCount += dFusor_.update(*it, depthFramePtr_, fusion_radius_); // fusing new points to update the depthmap
-																				   // LOG(INFO) << "numFusionCount: " << numFusionCount;
+			// LOG(INFO) << "numFusionCount: " << numFusionCount;
 		}
 
 		TotalNumFusion_ += numFusionCount;
 		depthFramePtr_->dMap_->clean(pow(stdVar_vis_threshold_, 2), age_vis_threshold_, invDepth_max_range_, invDepth_min_range_);
 		t_fusion = tt_mapping.toc();
 
-		// regularization
+		// regularization 
 		if (bRegularization_)
 		{
 			tt_mapping.tic();
@@ -569,6 +575,165 @@ namespace esvo_core
 #endif
 	}
 
+	void esvo_Mapping::MonoMappingAtTime(const ros::Time &t)
+	{
+		TicToc tt_mapping;
+		double t_overall_count = 0;
+		/************************************************/
+		/************ set the new DepthFrame ************/
+		/************************************************/
+		DepthFrame::Ptr depthFramePtr_new = std::make_shared<DepthFrame>(
+			camSysPtr_->cam_left_ptr_->height_, camSysPtr_->cam_left_ptr_->width_);
+		depthFramePtr_new->setId(TS_obs_.second.id_);
+		depthFramePtr_new->setTransformation(TS_obs_.second.tr_);
+		depthFramePtr_ = depthFramePtr_new;
+
+		double t_BM_denoising = 0.0;
+		// Denoising operations
+		if (bDenoising_) // Set it to "True" to deal with flicker effect caused by VICON.
+		{
+			tt_mapping.tic();
+			// Draw one mask image for denoising.
+			cv::Mat denoising_mask;
+			createDenoisingMask(vALLEventsPtr_left_, denoising_mask,
+								camSysPtr_->cam_left_ptr_->height_, camSysPtr_->cam_left_ptr_->width_);
+
+			// Extract denoised events (appear on edges likely).
+			vDenoisedEventsPtr_left_.clear();
+			extractDenoisedEvents(vCloseEventsPtr_left_, vDenoisedEventsPtr_left_, denoising_mask, PROCESS_EVENT_NUM_);
+			totalNumCount_ = vDenoisedEventsPtr_left_.size();
+
+			t_BM_denoising = tt_mapping.toc();
+		}
+		else
+		{
+			vDenoisedEventsPtr_left_.clear();
+			vDenoisedEventsPtr_left_.reserve(PROCESS_EVENT_NUM_);
+			vDenoisedEventsPtr_left_.insert(
+				vDenoisedEventsPtr_left_.end(), vCloseEventsPtr_left_.begin(),
+				vCloseEventsPtr_left_.begin() + min(vCloseEventsPtr_left_.size(), PROCESS_EVENT_NUM_));
+		}
+
+		/******************************************************/
+		/*************** Mapping with the Disparity Space Image ****************/
+		/******************************************************/
+
+		// ******************************** Event Back-Projection
+		// tt_mapping.tic();
+		// emvs_mapper_.updateDSI(&st_map_, &vDenoisedEventsPtr_left_);
+		// t_BM = tt_mapping.toc();
+		// t_overall_count += t_BM_denoising;
+		// t_overall_count += t_BM;
+
+		// emvs_mapper_.dsi_.writeGridNpy("/tmp/dsi.npy");
+
+		// ******************************** Ray Counting on DSI
+		// double t_optimization = 0;
+		// double t_solve, t_fusion, t_regularization;
+		// t_solve = t_fusion = t_regularization = 0;
+		// size_t numFusionCount = 0; // To count the total number of fusion (in terms of fusion between two estimates, i.e. a priori and a propagated one).
+		// tt_mapping.tic();
+
+		// EMVS::OptionsDepthMap opts_depth_map;
+		// opts_depth_map.adaptive_threshold_kernel_size_ = FLAGS_adaptive_threshold_kernel_size;
+		// opts_depth_map.adaptive_threshold_c_ = FLAGS_adaptive_threshold_c;
+		// opts_depth_map.median_filter_size_ = FLAGS_median_filter_size;
+		// cv::Mat depth_map, confidence_map, semidense_mask;
+		// mapper.getDepthMapFromDSI(depth_map, confidence_map, semidense_mask, opts_depth_map);
+
+		// maximizeContrast(depth_map); 
+
+		// std::vector<DepthPoint> vdp; // depth points on the current stereo observations
+		// vdp.reserve(dsi.dimX_ * dsi.dimY_ * dsi.dimZ_);
+		// emvs_mapper_.getDepthPoint(depth_map, semidense_mask, &TS_obs_, vdp);
+		// LOG(INFO) << "Ray counting on DSI succeeds!";
+
+		// ******************************** Fusion (strategy 1: const number of point)
+		// if (FusionStrategy_ == "CONST_POINTS")
+		// {
+		// 	size_t numFusionPoints = 0;
+		// 	tt_mapping.tic();
+		// 	dqvDepthPoints_.push_back(vdp);
+		// 	for (size_t n = 0; n < dqvDepthPoints_.size(); n++)
+		// 		numFusionPoints += dqvDepthPoints_[n].size();
+		// 	while (numFusionPoints > 1.5 * maxNumFusionPoints_)
+		// 	{
+		// 		dqvDepthPoints_.pop_front();
+		// 		numFusionPoints = 0;
+		// 		for (size_t n = 0; n < dqvDepthPoints_.size(); n++)
+		// 			numFusionPoints += dqvDepthPoints_[n].size();
+		// 	}
+		// }
+		// else if (FusionStrategy_ == "CONST_FRAMES") // (strategy 2: const number of frames)
+		// {
+		// 	tt_mapping.tic();
+		// 	dqvDepthPoints_.push_back(vdp); // all depth points on historical stereo observations
+		// 	while (dqvDepthPoints_.size() > maxNumFusionFrames_)
+		// 		dqvDepthPoints_.pop_front();
+		// }
+		// else
+		// {
+		// 	LOG(INFO) << "Invalid FusionStrategy is assigned.";
+		// 	exit(-1);
+		// }
+		// LOG(INFO) << "Fusion succeeds";
+
+		// // ******************************** apply fusion and count the total number of fusion.
+		// numFusionCount = 0;
+		// for (auto it = dqvDepthPoints_.rbegin(); it != dqvDepthPoints_.rend(); it++)
+		// {
+		// 	numFusionCount += dFusor_.update(*it, depthFramePtr_, fusion_radius_); // fusing new points to update the depthmap
+		// 																		   // LOG(INFO) << "numFusionCount: " << numFusionCount;
+		// }
+
+		// TotalNumFusion_ += numFusionCount;
+		// depthFramePtr_->dMap_->clean(pow(stdVar_vis_threshold_, 2), age_vis_threshold_, invDepth_max_range_, invDepth_min_range_);
+		// t_fusion = tt_mapping.toc();
+
+		// // regularization
+		// if (bRegularization_)
+		// {
+		// 	tt_mapping.tic();
+		// 	dRegularizor_.apply(depthFramePtr_->dMap_);
+		// 	t_regularization = tt_mapping.toc();
+		// }
+		// // count time
+		// t_optimization = t_solve + t_fusion + t_regularization;
+		// t_overall_count += t_optimization;
+
+		// // publish results
+		// std::thread tPublishMappingResult(&esvo_Mapping::publishMappingResults, this,
+		// 								  depthFramePtr_->dMap_, depthFramePtr_->T_world_frame_, t);
+		// tPublishMappingResult.detach();
+
+#ifdef ESVO_CORE_MAPPING_LOG
+		LOG(INFO) << "\n";
+		LOG(INFO) << "------------------------------------------------------------";
+		LOG(INFO) << "--------------Computation Cost (Mapping)---------------------";
+		LOG(INFO) << "------------------------------------------------------------";
+		LOG(INFO) << "Denoising: " << t_BM_denoising << " ms, (" << t_BM_denoising / t_overall_count * 100 << "%).";
+		LOG(INFO) << "Block Matching (BM): " << t_BM << " ms, (" << t_BM / t_overall_count * 100 << "%).";
+		LOG(INFO) << "BM success ratio: " << vEMP.size() << "/" << totalNumCount_ << "(Successes/Total).";
+		LOG(INFO) << "------------------------------------------------------------";
+		LOG(INFO) << "------------------------------------------------------------";
+		LOG(INFO) << "Update: " << t_optimization << " ms, (" << t_optimization / t_overall_count * 100
+				  << "%).";
+		LOG(INFO) << "-- nonlinear optimization: " << t_solve << " ms, (" << t_solve / t_overall_count * 100
+				  << "%).";
+		LOG(INFO) << "-- fusion (" << numFusionCount << ", " << TotalNumFusion_ << "): " << t_fusion << " ms, (" << t_fusion / t_overall_count * 100
+				  << "%).";
+		LOG(INFO) << "-- regularization: " << t_regularization << " ms, (" << t_regularization / t_overall_count * 100
+				  << "%).";
+		LOG(INFO) << "------------------------------------------------------------";
+		LOG(INFO) << "------------------------------------------------------------";
+		LOG(INFO) << "Total Computation (" << depthFramePtr_->dMap_->size() << "): " << t_overall_count << " ms.";
+		LOG(INFO) << "------------------------------------------------------------";
+		LOG(INFO) << "------------------------------END---------------------------";
+		LOG(INFO) << "------------------------------------------------------------";
+		LOG(INFO) << "\n";
+#endif
+	}
+
 	bool esvo_Mapping::dataTransferring()
 	{
 		// TS_obs_ = std::make_pair(ros::Time(), TimeSurfaceObservation()); // clean the TS obs.
@@ -576,57 +741,7 @@ namespace esvo_core
 			return false;
 
 		totalNumCount_ = 0;
-#ifdef MONOCULAR_DEBUG
-		auto it_end = TS_history_.rbegin();
-		TS_obs_ = *it_end;
 
-		if (ESVO_System_Status_ == "INITIALIZATION")
-		{
-			// copy all involved events' pointers
-			vALLEventsPtr_left_.clear(); // Used to generate denoising mask (only used to deal with flicker induced by VICON.)
-
-			// load allEvent
-			ros::Time t_end = TS_obs_.first;
-			ros::Time t_begin(std::max(0.0, t_end.toSec() - 0.002)); // 10ms
-			auto ev_end_it = tools::EventBuffer_lower_bound(events_left_, t_end);
-			auto ev_begin_it = tools::EventBuffer_lower_bound(events_left_, t_begin);
-			const size_t MAX_NUM_Event_INVOLVED = 30000;
-			vALLEventsPtr_left_.reserve(MAX_NUM_Event_INVOLVED);
-			while (ev_end_it != ev_begin_it && vALLEventsPtr_left_.size() < MAX_NUM_Event_INVOLVED)
-			{
-				vALLEventsPtr_left_.push_back(ev_end_it._M_cur);
-				ev_end_it--;
-			}
-		}
-		else if (ESVO_System_Status_ == "WORKING")
-		{
-			// copy all involved events' pointers
-			vALLEventsPtr_left_.clear();   // Used to generate denoising mask (only used to deal with flicker induced by VICON.)
-			vCloseEventsPtr_left_.clear(); // Will be denoised using the mask above.
-
-			// load allEvent
-			ros::Time t_end = TS_obs_.first;
-			ros::Time t_begin(std::max(0.0, t_end.toSec() - 0.01)); // 10ms
-			auto ev_end_it = tools::EventBuffer_lower_bound(events_left_, t_end);
-			auto ev_begin_it = tools::EventBuffer_lower_bound(events_left_, t_begin);
-			const size_t MAX_NUM_Event_INVOLVED = 10000;
-			vALLEventsPtr_left_.reserve(MAX_NUM_Event_INVOLVED);
-			vCloseEventsPtr_left_.reserve(MAX_NUM_Event_INVOLVED);
-			while (ev_end_it != ev_begin_it && vALLEventsPtr_left_.size() < MAX_NUM_Event_INVOLVED)
-			{
-				vALLEventsPtr_left_.push_back(ev_end_it._M_cur);
-				vCloseEventsPtr_left_.push_back(ev_end_it._M_cur);
-				ev_end_it--;
-			}
-		}
-		totalNumCount_ = vALLEventsPtr_left_.size();
-
-#ifdef ESTIMATOR_DEBUG
-		LOG(INFO) << "Data Transferring (vALLEventsPtr_left_): " << vALLEventsPtr_left_.size();
-		LOG(INFO) << "Data Transforming (vCloseEventsPtr_left_): " << vCloseEventsPtr_left_.size();
-#endif
-		return true;
-#else
 		// load current Time-Surface Observation
 		auto it_end = TS_buf_.rbegin();
 		it_end++; // in case that the tf is behind the most current TS.
@@ -643,7 +758,7 @@ namespace esvo_core
 			}
 			else if (ESVO_System_Status_ == "WORKING")
 			{
-				if (getPoseAt(it_end->first, tr, dvs_frame_id_))
+				if (getPoseAt(it_end->first, tr, dvs_frame_id_)) // ask if the newest pose is sent
 				{
 					it_end->second.setTransformation(tr);
 					TS_obs_ = *it_end;
@@ -730,484 +845,482 @@ namespace esvo_core
 #ifdef ESVO_CORE_MAPPING_DEBUG
 			LOG(INFO) << "Data Transferring (stampTransformation map): " << st_map_.size();
 #endif
-
-#endif
-	}
-	return true;
-} // namespace esvo_core
-
-void esvo_Mapping::stampedPoseCallback(const geometry_msgs::PoseStampedConstPtr &ps_msg)
-{
-	std::lock_guard<std::mutex> lock(data_mutex_);
-	// To check inconsistent timestamps and reset.
-	static constexpr double max_time_diff_before_reset_s = 0.5;
-	const ros::Time stamp_first_event = ps_msg->header.stamp;
-	std::string *err_tf = new std::string();
-	//  int iGetLastest_common_time =
-	//    tf_->getLatestCommonTime(dvs_frame_id_.c_str(), ps_msg->header.frame_id, tf_lastest_common_time_, err_tf);
-	delete err_tf;
-
-	if (tf_lastest_common_time_.toSec() != 0)
-	{
-		const double dt = stamp_first_event.toSec() - tf_lastest_common_time_.toSec();
-		if (dt < 0 || std::fabs(dt) >= max_time_diff_before_reset_s)
-		{
-			ROS_INFO("Inconsistent event timestamps detected <stampedPoseCallback> (new: %f, old %f), resetting.",
-					 stamp_first_event.toSec(), tf_lastest_common_time_.toSec());
-			reset();
 		}
-	}
-
-	// add pose to tf
-	tf::Transform tf(
-		tf::Quaternion(
-			ps_msg->pose.orientation.x,
-			ps_msg->pose.orientation.y,
-			ps_msg->pose.orientation.z,
-			ps_msg->pose.orientation.w),
-		tf::Vector3(
-			ps_msg->pose.position.x,
-			ps_msg->pose.position.y,
-			ps_msg->pose.position.z));
-	tf::StampedTransform st(tf, ps_msg->header.stamp, ps_msg->header.frame_id, dvs_frame_id_.c_str());
-	tf_->setTransform(st);
-}
-
-// return the pose of the left event cam at time t.
-bool esvo_Mapping::getPoseAt(const ros::Time &t,
-							 esvo_core::Transformation &Tr, // T_world_virtual
-							 const std::string &source_frame)
-{
-	std::string *err_msg = new std::string();
-	if (!tf_->canTransform(world_frame_id_, source_frame, t, err_msg))
-	{
-#ifdef ESVO_CORE_MAPPING_LOG
-		LOG(WARNING) << t.toNSec() << " : " << *err_msg;
-#endif
-		delete err_msg;
-		return false;
-	}
-	else
-	{
-		tf::StampedTransform st;
-		tf_->lookupTransform(world_frame_id_, source_frame, t, st);
-		tf::transformTFToKindr(st, &Tr);
 		return true;
-	}
-}
+	} // namespace esvo_core
 
-void esvo_Mapping::eventsCallback(const dvs_msgs::EventArray::ConstPtr &msg,
-								  EventQueue &EQ)
-{
-	std::lock_guard<std::mutex> lock(data_mutex_);
-	static constexpr double max_time_diff_before_reset_s = 0.5;
-	const ros::Time stamp_first_event = msg->events[0].ts;
-
-	// check time stamp inconsistency
-	if (!msg->events.empty() && !EQ.empty())
+	void esvo_Mapping::stampedPoseCallback(const geometry_msgs::PoseStampedConstPtr &ps_msg)
 	{
-		const double dt = stamp_first_event.toSec() - EQ.back().ts.toSec();
-		if (dt < 0 || std::fabs(dt) >= max_time_diff_before_reset_s)
-		{
-			ROS_INFO("Inconsistent event timestamps detected <eventCallback> (new: %f, old %f), resetting.",
-					 stamp_first_event.toSec(), events_left_.back().ts.toSec());
-			reset();
-		}
-	}
-
-	// add new ones and remove old ones
-	for (const dvs_msgs::Event &e : msg->events)
-	{
-		EQ.push_back(e);
-		int i = EQ.size() - 2;
-		while (i >= 0 && EQ[i].ts > e.ts) // we may have to sort the queue, just in case the raw event messages do not come in a chronological order.
-		{
-			EQ[i + 1] = EQ[i];
-			i--;
-		}
-		EQ[i + 1] = e;
-	}
-	clearEventQueue(EQ);
-}
-
-void esvo_Mapping::clearEventQueue(EventQueue &EQ)
-{
-	static constexpr size_t MAX_EVENT_QUEUE_LENGTH = 3000000;
-	if (EQ.size() > MAX_EVENT_QUEUE_LENGTH)
-	{
-		size_t NUM_EVENTS_TO_REMOVE = EQ.size() - MAX_EVENT_QUEUE_LENGTH;
-		EQ.erase(EQ.begin(), EQ.begin() + NUM_EVENTS_TO_REMOVE);
-	}
-}
-
-void esvo_Mapping::timeSurfaceCallback(const sensor_msgs::ImageConstPtr &time_surface_left,
-									   const sensor_msgs::ImageConstPtr &time_surface_right)
-{
-	// std::lock_guard<std::mutex> lock(data_mutex_);
-	m_buf_.lock();
-	// check time-stamp inconsistency
-	if (!TS_buf_.empty())
-	{
+		std::lock_guard<std::mutex> lock(data_mutex_);
+		// To check inconsistent timestamps and reset.
 		static constexpr double max_time_diff_before_reset_s = 0.5;
-		const ros::Time stamp_last_image = TS_buf_.back().first;
-		const double dt = time_surface_left->header.stamp.toSec() - stamp_last_image.toSec();
-		if (dt < 0 || std::fabs(dt) >= max_time_diff_before_reset_s)
+		const ros::Time stamp_first_event = ps_msg->header.stamp;
+		std::string *err_tf = new std::string();
+		//  int iGetLastest_common_time =
+		//    tf_->getLatestCommonTime(dvs_frame_id_.c_str(), ps_msg->header.frame_id, tf_lastest_common_time_, err_tf);
+		delete err_tf;
+
+		if (tf_lastest_common_time_.toSec() != 0)
 		{
-			ROS_INFO("Inconsistent frame timestamp detected <timeSurfaceCallback> (new: %f, old %f), resetting.",
-					 time_surface_left->header.stamp.toSec(), stamp_last_image.toSec());
-			reset();
-		}
-	}
-
-	cv_bridge::CvImagePtr cv_ptr_left, cv_ptr_right;
-	try
-	{
-		cv_ptr_left = cv_bridge::toCvCopy(time_surface_left, sensor_msgs::image_encodings::MONO8);
-		cv_ptr_right = cv_bridge::toCvCopy(time_surface_right, sensor_msgs::image_encodings::MONO8);
-	}
-	catch (cv_bridge::Exception &e)
-	{
-		ROS_ERROR("cv_bridge exception: %s", e.what());
-		return;
-	}
-
-	// push back the new time surface map
-	ros::Time t_new_TS = time_surface_left->header.stamp;
-	// Made the gradient computation optional which is up to the jacobian choice.
-	if (dpSolver_.getProblemType() == NUMERICAL)
-		TS_buf_.push_back(std::make_pair(t_new_TS, TimeSurfaceObservation(cv_ptr_left, cv_ptr_right, TS_id_)));
-	else
-		TS_buf_.push_back(std::make_pair(t_new_TS, TimeSurfaceObservation(cv_ptr_left, cv_ptr_right, TS_id_, true)));
-	TS_id_++;
-
-	// keep TS_history's size constant
-	while (TS_buf_.size() > TS_HISTORY_LENGTH_)
-		TS_buf_.pop_front();
-	m_buf_.unlock();
-}
-
-void esvo_Mapping::reset()
-{
-	// mutual-thread communication with MappingThread.
-	LOG(INFO) << "Coming into reset()";
-	// reset_promise_.set_value();
-	LOG(INFO) << "(reset) The mapping thread future is waiting for the value.";
-	// mapping_thread_future_.get();
-	LOG(INFO) << "(reset) The mapping thread future receives the value.";
-
-	m_buf_.lock();
-	// clear all maintained data
-	events_left_.clear();
-	events_right_.clear();
-	TS_history_.clear();
-	TS_buf_.clear();
-	tf_->clear();
-	pc_->clear();
-	pc_near_->clear();
-	pc_global_->clear();
-	TS_id_ = 0;
-	depthFramePtr_->clear();
-	dqvDepthPoints_.clear();
-
-	ebm_.resetParameters(BM_patch_size_X_, BM_patch_size_Y_,
-						 BM_min_disparity_, BM_max_disparity_, BM_step_, BM_ZNCC_Threshold_, BM_bUpDownConfiguration_);
-	m_buf_.unlock();
-
-	for (int i = 0; i < 2; i++)
-		LOG(INFO) << "****************************************************";
-	LOG(INFO) << "****************** RESET THE SYSTEM *********************";
-	for (int i = 0; i < 2; i++)
-		LOG(INFO) << "****************************************************\n\n";
-
-	// restart the mapping thread
-	// reset_promise_ = std::promise<void>();
-	// mapping_thread_promise_ = std::promise<void>();
-	// reset_future_ = reset_promise_.get_future();
-	// mapping_thread_future_ = mapping_thread_promise_.get_future();
-	ESVO_System_Status_ = "INITIALIZATION";
-	nh_.setParam("/ESVO_SYSTEM_STATUS", ESVO_System_Status_);
-	// std::thread MappingThread(&esvo_Mapping::Process, this,
-	// 						  std::move(mapping_thread_promise_), std::move(reset_future_));
-	// std::thread MappingThread(&esvo_Mapping::Process, this);
-	// MappingThread.detach();
-}
-
-void esvo_Mapping::onlineParameterChangeCallback(DVS_MappingStereoConfig &config, uint32_t level)
-{
-	bool online_parameters_changed = false;
-	{
-		std::lock_guard<std::mutex> lock(data_mutex_);
-
-		if (invDepth_min_range_ != config.invDepth_min_range ||
-			invDepth_max_range_ != config.invDepth_max_range ||
-			residual_vis_threshold_ != config.residual_vis_threshold ||
-			stdVar_vis_threshold_ != config.stdVar_vis_threshold ||
-			age_max_range_ != config.age_max_range ||
-			age_vis_threshold_ != config.age_vis_threshold ||
-			fusion_radius_ != config.fusion_radius ||
-			maxNumFusionFrames_ != config.maxNumFusionFrames ||
-			bDenoising_ != config.Denoising ||
-			bRegularization_ != config.Regularization ||
-			resetButton_ != config.ResetButton ||
-			PROCESS_EVENT_NUM_ != config.PROCESS_EVENT_NUM ||
-			TS_HISTORY_LENGTH_ != config.TS_HISTORY_LENGTH ||
-			BM_min_disparity_ != config.BM_min_disparity ||
-			BM_max_disparity_ != config.BM_max_disparity ||
-			BM_step_ != config.BM_step ||
-			BM_ZNCC_Threshold_ != config.BM_ZNCC_Threshold)
-		{
-			online_parameters_changed = true;
-		}
-
-		invDepth_min_range_ = config.invDepth_min_range;
-		invDepth_max_range_ = config.invDepth_max_range;
-		residual_vis_threshold_ = config.residual_vis_threshold;
-		cost_vis_threshold_ = patch_area_ * pow(residual_vis_threshold_, 2);
-		stdVar_vis_threshold_ = config.stdVar_vis_threshold;
-		age_max_range_ = config.age_max_range;
-		age_vis_threshold_ = config.age_vis_threshold;
-		fusion_radius_ = config.fusion_radius;
-		maxNumFusionFrames_ = config.maxNumFusionFrames;
-		bDenoising_ = config.Denoising;
-		bRegularization_ = config.Regularization;
-		resetButton_ = config.ResetButton;
-		PROCESS_EVENT_NUM_ = config.PROCESS_EVENT_NUM;
-		TS_HISTORY_LENGTH_ = config.TS_HISTORY_LENGTH;
-		BM_min_disparity_ = config.BM_min_disparity;
-		BM_max_disparity_ = config.BM_max_disparity;
-		BM_step_ = config.BM_step;
-		BM_ZNCC_Threshold_ = config.BM_ZNCC_Threshold;
-	}
-
-	if (config.mapping_rate_hz != mapping_rate_hz_)
-	{
-		changed_frame_rate_ = true;
-		online_parameters_changed = true;
-		mapping_rate_hz_ = config.mapping_rate_hz;
-	}
-
-	if (online_parameters_changed)
-	{
-		std::lock_guard<std::mutex> lock(data_mutex_);
-		LOG(INFO) << "onlineParameterChangeCallback ==============";
-		reset();
-	}
-}
-
-void esvo_Mapping::publishMappingResults(DepthMap::Ptr depthMapPtr,
-										 Transformation tr,
-										 ros::Time t)
-{
-	cv::Mat invDepthImage, stdVarImage, ageImage, costImage, eventImage, confidenceMap;
-
-	// invDepthImage
-	visualizor_.plot_map(depthMapPtr, tools::InvDepthMap, invDepthImage,
-						 invDepth_max_range_, invDepth_min_range_, stdVar_vis_threshold_, age_vis_threshold_);
-	publishImage(invDepthImage, t, invDepthMap_pub_);
-
-	// stdVarImage
-	visualizor_.plot_map(depthMapPtr, tools::StdVarMap, stdVarImage,
-						 stdVar_vis_threshold_, 0.0, stdVar_vis_threshold_);
-	publishImage(stdVarImage, t, stdVarMap_pub_);
-
-	// ageImage
-	visualizor_.plot_map(depthMapPtr, tools::AgeMap, ageImage, age_max_range_, 0, age_vis_threshold_);
-	publishImage(ageImage, t, ageMap_pub_);
-
-	// costImage
-	visualizor_.plot_map(depthMapPtr, tools::CostMap, costImage, cost_vis_threshold_, 0.0, cost_vis_threshold_);
-	publishImage(costImage, t, costMap_pub_);
-
-	if (ESVO_System_Status_ == "INITIALIZATION")
-		publishPointCloud(depthMapPtr, tr, t);
-
-	if (ESVO_System_Status_ == "WORKING")
-	{
-		if (FusionStrategy_ == "CONST_FRAMES")
-		{
-			if (dqvDepthPoints_.size() == maxNumFusionFrames_)
-				publishPointCloud(depthMapPtr, tr, t);
-		}
-		if (FusionStrategy_ == "CONST_POINTS")
-		{
-			size_t numFusionPoints = 0;
-			for (size_t n = 0; n < dqvDepthPoints_.size(); n++)
-				numFusionPoints += dqvDepthPoints_[n].size();
-			if (numFusionPoints > 0.5 * maxNumFusionPoints_)
-				publishPointCloud(depthMapPtr, tr, t);
-		}
-	}
-}
-
-void esvo_Mapping::publishPointCloud(DepthMap::Ptr &depthMapPtr,
-									 Transformation &tr,
-									 ros::Time &t)
-{
-	sensor_msgs::PointCloud2::Ptr pc_to_publish(new sensor_msgs::PointCloud2);
-	Eigen::Matrix<double, 4, 4> T_world_result = tr.getTransformationMatrix();
-
-	pc_->clear();
-	pc_->reserve(50000);
-	pc_near_->clear();
-	pc_near_->reserve(50000);
-
-	double FarthestDistance = 0.0;
-	Eigen::Vector3d FarthestPoint;
-
-	for (auto it = depthMapPtr->begin(); it != depthMapPtr->end(); it++)
-	{
-		Eigen::Vector3d p_world = T_world_result.block<3, 3>(0, 0) * it->p_cam() + T_world_result.block<3, 1>(0, 3);
-		pc_->push_back(pcl::PointXYZ(p_world(0), p_world(1), p_world(2)));
-
-		if (it->p_cam().norm() < visualize_range_)
-			pc_near_->push_back(pcl::PointXYZ(p_world(0), p_world(1), p_world(2)));
-
-		if (it->p_cam().norm() > FarthestDistance)
-		{
-			FarthestDistance = it->p_cam().norm();
-			FarthestPoint = it->p_cam();
-		}
-	}
-#ifdef ESVO_CORE_MAPPING_DEBUG
-	LOG(INFO) << "The farthest point (p_cam): " << FarthestPoint.transpose();
-#endif
-
-	if (!pc_->empty())
-	{
-#ifdef ESVO_CORE_MAPPING_DEBUG
-		LOG(INFO) << "<<<<<<<<<(pointcloud)<<<<<<<<" << pc_->size() << " points are published";
-#endif
-		pcl::toROSMsg(*pc_, *pc_to_publish);
-		pc_to_publish->header.stamp = t;
-		pc_pub_.publish(pc_to_publish);
-	}
-
-	// publish global pointcloud
-	if (bVisualizeGlobalPC_)
-	{
-		if (t.toSec() - t_last_pub_pc_ > visualizeGPC_interval_)
-		{
-			PointCloud::Ptr pc_filtered(new PointCloud());
-			pcl::VoxelGrid<pcl::PointXYZ> sor;
-			sor.setInputCloud(pc_near_);
-			sor.setLeafSize(0.03, 0.03, 0.03);
-			sor.filter(*pc_filtered);
-
-			// copy the most current pc tp pc_global
-			size_t pc_length = pc_filtered->size();
-			size_t numAddedPC = min(pc_length, numAddedPC_threshold_) - 1;
-			pc_global_->insert(pc_global_->end(), pc_filtered->end() - numAddedPC, pc_filtered->end());
-
-			// publish point cloud
-			pcl::toROSMsg(*pc_global_, *pc_to_publish);
-			pc_to_publish->header.stamp = t;
-			gpc_pub_.publish(pc_to_publish);
-			t_last_pub_pc_ = t.toSec();
-		}
-	}
-}
-
-void esvo_Mapping::publishEventMap(const ros::Time &t)
-{
-	cv::Mat eventMap;
-	visualizor_.plot_eventMap(vALLEventsPtr_left_,
-							  eventMap,
-							  camSysPtr_->cam_left_ptr_->height_,
-							  camSysPtr_->cam_left_ptr_->width_);
-	publishImage(eventMap, t, eventFrame_pub_, "mono8");
-}
-
-void esvo_Mapping::publishImage(const cv::Mat &image,
-								const ros::Time &t,
-								image_transport::Publisher &pub,
-								std::string encoding)
-{
-	if (pub.getNumSubscribers() == 0)
-	{
-		//    LOG(INFO) << "------------------------------: " << pub.getTopic();
-		return;
-	}
-	//  LOG(INFO) << "+++++++++++++++++++++++++++++++: " << pub.getTopic();
-
-	std_msgs::Header header;
-	header.stamp = t;
-	sensor_msgs::ImagePtr msg = cv_bridge::CvImage(header, encoding.c_str(), image).toImageMsg();
-	pub.publish(msg);
-}
-
-void esvo_Mapping::createEdgeMask(std::vector<dvs_msgs::Event *> &vEventsPtr,
-								  PerspectiveCamera::Ptr &camPtr,
-								  cv::Mat &edgeMap,
-								  std::vector<std::pair<size_t, size_t>> &vEdgeletCoordinates,
-								  bool bUndistortEvents,
-								  size_t radius)
-{
-	size_t col = camPtr->width_;
-	size_t row = camPtr->height_;
-	int dilate_radius = (int)radius;
-	edgeMap = cv::Mat(cv::Size(col, row), CV_8UC1, cv::Scalar(0));
-	vEdgeletCoordinates.reserve(col * row);
-
-	auto it_tmp = vEventsPtr.begin();
-	while (it_tmp != vEventsPtr.end())
-	{
-		// undistortion + rectification
-		Eigen::Matrix<double, 2, 1> coor;
-		if (bUndistortEvents)
-			coor = camPtr->getRectifiedUndistortedCoordinate((*it_tmp)->x, (*it_tmp)->y);
-		else
-			coor = Eigen::Matrix<double, 2, 1>((*it_tmp)->x, (*it_tmp)->y);
-
-		// assign
-		int xcoor = std::floor(coor(0));
-		int ycoor = std::floor(coor(1));
-
-		for (int dy = -dilate_radius; dy <= dilate_radius; dy++)
-		{
-			for (int dx = -dilate_radius; dx <= dilate_radius; dx++)
+			const double dt = stamp_first_event.toSec() - tf_lastest_common_time_.toSec();
+			if (dt < 0 || std::fabs(dt) >= max_time_diff_before_reset_s)
 			{
-				int x = xcoor + dx;
-				int y = ycoor + dy;
-
-				if (x < 0 || x >= col || y < 0 || y >= row)
-				{
-				}
-				else
-				{
-					edgeMap.at<uchar>(y, x) = 255;
-					vEdgeletCoordinates.emplace_back((size_t)x, (size_t)y);
-				}
+				ROS_INFO("Inconsistent event timestamps detected <stampedPoseCallback> (new: %f, old %f), resetting.",
+						 stamp_first_event.toSec(), tf_lastest_common_time_.toSec());
+				reset();
 			}
 		}
-		it_tmp++;
+
+		// add pose to tf
+		tf::Transform tf(
+			tf::Quaternion(
+				ps_msg->pose.orientation.x,
+				ps_msg->pose.orientation.y,
+				ps_msg->pose.orientation.z,
+				ps_msg->pose.orientation.w),
+			tf::Vector3(
+				ps_msg->pose.position.x,
+				ps_msg->pose.position.y,
+				ps_msg->pose.position.z));
+		tf::StampedTransform st(tf, ps_msg->header.stamp, ps_msg->header.frame_id, dvs_frame_id_.c_str());
+		tf_->setTransform(st);
 	}
-}
 
-void esvo_Mapping::createDenoisingMask(std::vector<dvs_msgs::Event *> &vAllEventsPtr,
-									   cv::Mat &mask,
-									   size_t row, size_t col)
-{
-	cv::Mat eventMap;
-	visualizor_.plot_eventMap(vAllEventsPtr, eventMap, row, col);
-	cv::medianBlur(eventMap, mask, 3);
-}
-
-void esvo_Mapping::extractDenoisedEvents(
-	std::vector<dvs_msgs::Event *> &vCloseEventsPtr,
-	std::vector<dvs_msgs::Event *> &vEdgeEventsPtr,
-	cv::Mat &mask,
-	size_t maxNum)
-{
-	vEdgeEventsPtr.reserve(vCloseEventsPtr.size());
-	for (size_t i = 0; i < vCloseEventsPtr.size(); i++)
+	// return the pose of the left event cam at time t.
+	bool esvo_Mapping::getPoseAt(const ros::Time &t,
+								 esvo_core::Transformation &Tr, // T_world_virtual
+								 const std::string &source_frame)
 	{
-		if (vEdgeEventsPtr.size() >= maxNum)
-			break;
-		size_t x = vCloseEventsPtr[i]->x;
-		size_t y = vCloseEventsPtr[i]->y;
-		if (mask.at<uchar>(y, x) == 255)
-			vEdgeEventsPtr.push_back(vCloseEventsPtr[i]);
+		std::string *err_msg = new std::string();
+		if (!tf_->canTransform(world_frame_id_, source_frame, t, err_msg))
+		{
+#ifdef ESVO_CORE_MAPPING_LOG
+			LOG(WARNING) << t.toNSec() << " : " << *err_msg;
+#endif
+			delete err_msg;
+			return false;
+		}
+		else
+		{
+			tf::StampedTransform st;
+			tf_->lookupTransform(world_frame_id_, source_frame, t, st); // get tf within historical timestamp by linear interpoalation
+			tf::transformTFToKindr(st, &Tr);
+			return true;
+		}
 	}
-}
+
+	void esvo_Mapping::eventsCallback(const dvs_msgs::EventArray::ConstPtr &msg,
+									  EventQueue &EQ)
+	{
+		std::lock_guard<std::mutex> lock(data_mutex_);
+		static constexpr double max_time_diff_before_reset_s = 0.5;
+		const ros::Time stamp_first_event = msg->events[0].ts;
+
+		// check time stamp inconsistency
+		if (!msg->events.empty() && !EQ.empty())
+		{
+			const double dt = stamp_first_event.toSec() - EQ.back().ts.toSec();
+			if (dt < 0 || std::fabs(dt) >= max_time_diff_before_reset_s)
+			{
+				ROS_INFO("Inconsistent event timestamps detected <eventCallback> (new: %f, old %f), resetting.",
+						 stamp_first_event.toSec(), events_left_.back().ts.toSec());
+				reset();
+			}
+		}
+
+		// add new ones and remove old ones
+		for (const dvs_msgs::Event &e : msg->events)
+		{
+			EQ.push_back(e);
+			int i = EQ.size() - 2;
+			while (i >= 0 && EQ[i].ts > e.ts) // we may have to sort the queue, just in case the raw event messages do not come in a chronological order.
+			{
+				EQ[i + 1] = EQ[i];
+				i--;
+			}
+			EQ[i + 1] = e;
+		}
+		clearEventQueue(EQ);
+	}
+
+	void esvo_Mapping::clearEventQueue(EventQueue &EQ)
+	{
+		static constexpr size_t MAX_EVENT_QUEUE_LENGTH = 3000000;
+		if (EQ.size() > MAX_EVENT_QUEUE_LENGTH)
+		{
+			size_t NUM_EVENTS_TO_REMOVE = EQ.size() - MAX_EVENT_QUEUE_LENGTH;
+			EQ.erase(EQ.begin(), EQ.begin() + NUM_EVENTS_TO_REMOVE);
+		}
+	}
+
+	void esvo_Mapping::timeSurfaceCallback(const sensor_msgs::ImageConstPtr &time_surface_left,
+										   const sensor_msgs::ImageConstPtr &time_surface_right)
+	{
+		// std::lock_guard<std::mutex> lock(data_mutex_);
+		m_buf_.lock();
+		// check time-stamp inconsistency
+		if (!TS_buf_.empty())
+		{
+			static constexpr double max_time_diff_before_reset_s = 0.5;
+			const ros::Time stamp_last_image = TS_buf_.back().first;
+			const double dt = time_surface_left->header.stamp.toSec() - stamp_last_image.toSec();
+			if (dt < 0 || std::fabs(dt) >= max_time_diff_before_reset_s)
+			{
+				ROS_INFO("Inconsistent frame timestamp detected <timeSurfaceCallback> (new: %f, old %f), resetting.",
+						 time_surface_left->header.stamp.toSec(), stamp_last_image.toSec());
+				reset();
+			}
+		}
+
+		cv_bridge::CvImagePtr cv_ptr_left, cv_ptr_right;
+		try
+		{
+			cv_ptr_left = cv_bridge::toCvCopy(time_surface_left, sensor_msgs::image_encodings::MONO8);
+			cv_ptr_right = cv_bridge::toCvCopy(time_surface_right, sensor_msgs::image_encodings::MONO8);
+		}
+		catch (cv_bridge::Exception &e)
+		{
+			ROS_ERROR("cv_bridge exception: %s", e.what());
+			return;
+		}
+
+		// push back the new time surface map
+		ros::Time t_new_TS = time_surface_left->header.stamp;
+		// Made the gradient computation optional which is up to the jacobian choice.
+		if (dpSolver_.getProblemType() == NUMERICAL)
+			TS_buf_.push_back(std::make_pair(t_new_TS, TimeSurfaceObservation(cv_ptr_left, cv_ptr_right, TS_id_)));
+		else
+			TS_buf_.push_back(std::make_pair(t_new_TS, TimeSurfaceObservation(cv_ptr_left, cv_ptr_right, TS_id_, true)));
+		TS_id_++;
+
+		// keep TS_history's size constant
+		while (TS_buf_.size() > TS_HISTORY_LENGTH_)
+			TS_buf_.pop_front();
+		m_buf_.unlock();
+	}
+
+	void esvo_Mapping::reset()
+	{
+		// mutual-thread communication with MappingThread.
+		LOG(INFO) << "Coming into reset()";
+		// reset_promise_.set_value();
+		LOG(INFO) << "(reset) The mapping thread future is waiting for the value.";
+		// mapping_thread_future_.get();
+		LOG(INFO) << "(reset) The mapping thread future receives the value.";
+
+		m_buf_.lock();
+		// clear all maintained data
+		events_left_.clear();
+		events_right_.clear();
+		TS_history_.clear();
+		TS_buf_.clear();
+		tf_->clear();
+		pc_->clear();
+		pc_near_->clear();
+		pc_global_->clear();
+		TS_id_ = 0;
+		depthFramePtr_->clear();
+		dqvDepthPoints_.clear();
+
+		ebm_.resetParameters(BM_patch_size_X_, BM_patch_size_Y_,
+							 BM_min_disparity_, BM_max_disparity_, BM_step_, BM_ZNCC_Threshold_, BM_bUpDownConfiguration_);
+		m_buf_.unlock();
+
+		for (int i = 0; i < 2; i++)
+			LOG(INFO) << "****************************************************";
+		LOG(INFO) << "****************** RESET THE SYSTEM *********************";
+		for (int i = 0; i < 2; i++)
+			LOG(INFO) << "****************************************************\n\n";
+
+		// restart the mapping thread
+		// reset_promise_ = std::promise<void>();
+		// mapping_thread_promise_ = std::promise<void>();
+		// reset_future_ = reset_promise_.get_future();
+		// mapping_thread_future_ = mapping_thread_promise_.get_future();
+		ESVO_System_Status_ = "INITIALIZATION";
+		nh_.setParam("/ESVO_SYSTEM_STATUS", ESVO_System_Status_);
+		// std::thread MappingThread(&esvo_Mapping::Process, this,
+		// 						  std::move(mapping_thread_promise_), std::move(reset_future_));
+		// std::thread MappingThread(&esvo_Mapping::Process, this);
+		// MappingThread.detach();
+	}
+
+	void esvo_Mapping::onlineParameterChangeCallback(DVS_MappingStereoConfig &config, uint32_t level)
+	{
+		bool online_parameters_changed = false;
+		{
+			std::lock_guard<std::mutex> lock(data_mutex_);
+
+			if (invDepth_min_range_ != config.invDepth_min_range ||
+				invDepth_max_range_ != config.invDepth_max_range ||
+				residual_vis_threshold_ != config.residual_vis_threshold ||
+				stdVar_vis_threshold_ != config.stdVar_vis_threshold ||
+				age_max_range_ != config.age_max_range ||
+				age_vis_threshold_ != config.age_vis_threshold ||
+				fusion_radius_ != config.fusion_radius ||
+				maxNumFusionFrames_ != config.maxNumFusionFrames ||
+				bDenoising_ != config.Denoising ||
+				bRegularization_ != config.Regularization ||
+				resetButton_ != config.ResetButton ||
+				PROCESS_EVENT_NUM_ != config.PROCESS_EVENT_NUM ||
+				TS_HISTORY_LENGTH_ != config.TS_HISTORY_LENGTH ||
+				BM_min_disparity_ != config.BM_min_disparity ||
+				BM_max_disparity_ != config.BM_max_disparity ||
+				BM_step_ != config.BM_step ||
+				BM_ZNCC_Threshold_ != config.BM_ZNCC_Threshold)
+			{
+				online_parameters_changed = true;
+			}
+
+			invDepth_min_range_ = config.invDepth_min_range;
+			invDepth_max_range_ = config.invDepth_max_range;
+			residual_vis_threshold_ = config.residual_vis_threshold;
+			cost_vis_threshold_ = patch_area_ * pow(residual_vis_threshold_, 2);
+			stdVar_vis_threshold_ = config.stdVar_vis_threshold;
+			age_max_range_ = config.age_max_range;
+			age_vis_threshold_ = config.age_vis_threshold;
+			fusion_radius_ = config.fusion_radius;
+			maxNumFusionFrames_ = config.maxNumFusionFrames;
+			bDenoising_ = config.Denoising;
+			bRegularization_ = config.Regularization;
+			resetButton_ = config.ResetButton;
+			PROCESS_EVENT_NUM_ = config.PROCESS_EVENT_NUM;
+			TS_HISTORY_LENGTH_ = config.TS_HISTORY_LENGTH;
+			BM_min_disparity_ = config.BM_min_disparity;
+			BM_max_disparity_ = config.BM_max_disparity;
+			BM_step_ = config.BM_step;
+			BM_ZNCC_Threshold_ = config.BM_ZNCC_Threshold;
+		}
+
+		if (config.mapping_rate_hz != mapping_rate_hz_)
+		{
+			changed_frame_rate_ = true;
+			online_parameters_changed = true;
+			mapping_rate_hz_ = config.mapping_rate_hz;
+		}
+
+		if (online_parameters_changed)
+		{
+			std::lock_guard<std::mutex> lock(data_mutex_);
+			LOG(INFO) << "onlineParameterChangeCallback ==============";
+			reset();
+		}
+	}
+
+	void esvo_Mapping::publishMappingResults(DepthMap::Ptr depthMapPtr,
+											 Transformation tr,
+											 ros::Time t)
+	{
+		cv::Mat invDepthImage, stdVarImage, ageImage, costImage, eventImage, confidenceMap;
+
+		// invDepthImage
+		visualizor_.plot_map(depthMapPtr, tools::InvDepthMap, invDepthImage,
+							 invDepth_max_range_, invDepth_min_range_, stdVar_vis_threshold_, age_vis_threshold_);
+		publishImage(invDepthImage, t, invDepthMap_pub_);
+
+		// stdVarImage
+		visualizor_.plot_map(depthMapPtr, tools::StdVarMap, stdVarImage,
+							 stdVar_vis_threshold_, 0.0, stdVar_vis_threshold_);
+		publishImage(stdVarImage, t, stdVarMap_pub_);
+
+		// ageImage
+		visualizor_.plot_map(depthMapPtr, tools::AgeMap, ageImage, age_max_range_, 0, age_vis_threshold_);
+		publishImage(ageImage, t, ageMap_pub_);
+
+		// costImage
+		visualizor_.plot_map(depthMapPtr, tools::CostMap, costImage, cost_vis_threshold_, 0.0, cost_vis_threshold_);
+		publishImage(costImage, t, costMap_pub_);
+
+		if (ESVO_System_Status_ == "INITIALIZATION")
+			publishPointCloud(depthMapPtr, tr, t);
+
+		if (ESVO_System_Status_ == "WORKING")
+		{
+			if (FusionStrategy_ == "CONST_FRAMES")
+			{
+				if (dqvDepthPoints_.size() == maxNumFusionFrames_)
+					publishPointCloud(depthMapPtr, tr, t);
+			}
+			if (FusionStrategy_ == "CONST_POINTS")
+			{
+				size_t numFusionPoints = 0;
+				for (size_t n = 0; n < dqvDepthPoints_.size(); n++)
+					numFusionPoints += dqvDepthPoints_[n].size();
+				if (numFusionPoints > 0.5 * maxNumFusionPoints_)
+					publishPointCloud(depthMapPtr, tr, t);
+			}
+		}
+	}
+
+	void esvo_Mapping::publishPointCloud(DepthMap::Ptr &depthMapPtr,
+										 Transformation &tr,
+										 ros::Time &t)
+	{
+		sensor_msgs::PointCloud2::Ptr pc_to_publish(new sensor_msgs::PointCloud2);
+		Eigen::Matrix<double, 4, 4> T_world_result = tr.getTransformationMatrix();
+
+		pc_->clear();
+		pc_->reserve(50000);
+		pc_near_->clear();
+		pc_near_->reserve(50000);
+
+		double FarthestDistance = 0.0;
+		Eigen::Vector3d FarthestPoint;
+
+		for (auto it = depthMapPtr->begin(); it != depthMapPtr->end(); it++)
+		{
+			Eigen::Vector3d p_world = T_world_result.block<3, 3>(0, 0) * it->p_cam() + T_world_result.block<3, 1>(0, 3);
+			pc_->push_back(pcl::PointXYZ(p_world(0), p_world(1), p_world(2)));
+
+			if (it->p_cam().norm() < visualize_range_)
+				pc_near_->push_back(pcl::PointXYZ(p_world(0), p_world(1), p_world(2)));
+
+			if (it->p_cam().norm() > FarthestDistance)
+			{
+				FarthestDistance = it->p_cam().norm();
+				FarthestPoint = it->p_cam();
+			}
+		}
+#ifdef ESVO_CORE_MAPPING_DEBUG
+		LOG(INFO) << "The farthest point (p_cam): " << FarthestPoint.transpose();
+#endif
+
+		if (!pc_->empty())
+		{
+#ifdef ESVO_CORE_MAPPING_DEBUG
+			LOG(INFO) << "<<<<<<<<<(pointcloud)<<<<<<<<" << pc_->size() << " points are published";
+#endif
+			pcl::toROSMsg(*pc_, *pc_to_publish);
+			pc_to_publish->header.stamp = t;
+			pc_pub_.publish(pc_to_publish);
+		}
+
+		// publish global pointcloud
+		if (bVisualizeGlobalPC_)
+		{
+			if (t.toSec() - t_last_pub_pc_ > visualizeGPC_interval_)
+			{
+				PointCloud::Ptr pc_filtered(new PointCloud());
+				pcl::VoxelGrid<pcl::PointXYZ> sor;
+				sor.setInputCloud(pc_near_);
+				sor.setLeafSize(0.03, 0.03, 0.03);
+				sor.filter(*pc_filtered);
+
+				// copy the most current pc tp pc_global
+				size_t pc_length = pc_filtered->size();
+				size_t numAddedPC = min(pc_length, numAddedPC_threshold_) - 1;
+				pc_global_->insert(pc_global_->end(), pc_filtered->end() - numAddedPC, pc_filtered->end());
+
+				// publish point cloud
+				pcl::toROSMsg(*pc_global_, *pc_to_publish);
+				pc_to_publish->header.stamp = t;
+				gpc_pub_.publish(pc_to_publish);
+				t_last_pub_pc_ = t.toSec();
+			}
+		}
+	}
+
+	void esvo_Mapping::publishEventMap(const ros::Time &t)
+	{
+		cv::Mat eventMap;
+		visualizor_.plot_eventMap(vALLEventsPtr_left_,
+									eventMap,
+									camSysPtr_->cam_left_ptr_->height_,
+									camSysPtr_->cam_left_ptr_->width_);
+		publishImage(eventMap, t, eventFrame_pub_, "mono8");
+	}
+
+	void esvo_Mapping::publishImage(const cv::Mat &image,
+									const ros::Time &t,
+									image_transport::Publisher &pub,
+									std::string encoding)
+	{
+		if (pub.getNumSubscribers() == 0)
+		{
+			//    LOG(INFO) << "------------------------------: " << pub.getTopic();
+			return;
+		}
+		//  LOG(INFO) << "+++++++++++++++++++++++++++++++: " << pub.getTopic();
+
+		std_msgs::Header header;
+		header.stamp = t;
+		sensor_msgs::ImagePtr msg = cv_bridge::CvImage(header, encoding.c_str(), image).toImageMsg();
+		pub.publish(msg);
+	}
+
+	void esvo_Mapping::createEdgeMask(std::vector<dvs_msgs::Event *> &vEventsPtr,
+									  PerspectiveCamera::Ptr &camPtr,
+									  cv::Mat &edgeMap,
+									  std::vector<std::pair<size_t, size_t>> &vEdgeletCoordinates,
+									  bool bUndistortEvents,
+									  size_t radius)
+	{
+		size_t col = camPtr->width_;
+		size_t row = camPtr->height_;
+		int dilate_radius = (int)radius;
+		edgeMap = cv::Mat(cv::Size(col, row), CV_8UC1, cv::Scalar(0));
+		vEdgeletCoordinates.reserve(col * row);
+
+		auto it_tmp = vEventsPtr.begin();
+		while (it_tmp != vEventsPtr.end())
+		{
+			// undistortion + rectification
+			Eigen::Matrix<double, 2, 1> coor;
+			if (bUndistortEvents)
+				coor = camPtr->getRectifiedUndistortedCoordinate((*it_tmp)->x, (*it_tmp)->y);
+			else
+				coor = Eigen::Matrix<double, 2, 1>((*it_tmp)->x, (*it_tmp)->y);
+
+			// assign
+			int xcoor = std::floor(coor(0));
+			int ycoor = std::floor(coor(1));
+
+			for (int dy = -dilate_radius; dy <= dilate_radius; dy++)
+			{
+				for (int dx = -dilate_radius; dx <= dilate_radius; dx++)
+				{
+					int x = xcoor + dx;
+					int y = ycoor + dy;
+
+					if (x < 0 || x >= col || y < 0 || y >= row)
+					{
+					}
+					else
+					{
+						edgeMap.at<uchar>(y, x) = 255;
+						vEdgeletCoordinates.emplace_back((size_t)x, (size_t)y);
+					}
+				}
+			}
+			it_tmp++;
+		}
+	}
+
+	void esvo_Mapping::createDenoisingMask(std::vector<dvs_msgs::Event *> &vAllEventsPtr,
+										   cv::Mat &mask,
+										   size_t row, size_t col)
+	{
+		cv::Mat eventMap;
+		visualizor_.plot_eventMap(vAllEventsPtr, eventMap, row, col);
+		cv::medianBlur(eventMap, mask, 3);
+	}
+
+	void esvo_Mapping::extractDenoisedEvents(
+		std::vector<dvs_msgs::Event *> &vCloseEventsPtr,
+		std::vector<dvs_msgs::Event *> &vEdgeEventsPtr,
+		cv::Mat &mask,
+		size_t maxNum)
+	{
+		vEdgeEventsPtr.reserve(vCloseEventsPtr.size());
+		for (size_t i = 0; i < vCloseEventsPtr.size(); i++)
+		{
+			if (vEdgeEventsPtr.size() >= maxNum)
+				break;
+			size_t x = vCloseEventsPtr[i]->x;
+			size_t y = vCloseEventsPtr[i]->y;
+			if (mask.at<uchar>(y, x) == 255)
+				vEdgeEventsPtr.push_back(vCloseEventsPtr[i]);
+		}
+	}
 
 } // namespace esvo_core

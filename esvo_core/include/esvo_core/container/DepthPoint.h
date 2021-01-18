@@ -52,7 +52,7 @@ namespace esvo_core
       void update_p_cam(const Eigen::Vector3d &p);
       const Eigen::Vector3d &p_cam() const;
 
-      void updatePose(Eigen::Matrix<double, 4, 4> &T_world_cam); // used in the fusion of each newly estimate.
+      void updatePose(const Eigen::Matrix<double, 4, 4> &T_world_cam); // used in the fusion of each newly estimate.
       // Therefore, it is not necessary to call updatePose for those created in the fusion. Because those share
       // the pose of the fused depthFrame.
 

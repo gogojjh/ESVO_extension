@@ -17,7 +17,9 @@ rectification_matrix:
 projection_matrix:
   rows: 3
   cols: 4
-  data: [156.925, 0, 108.167, -23.2327, 0, 156.925, 78.4205, 0, 0, 0, 1, 0]
+  data: [156.925, 0, 108.167, -23.2327, 
+         0, 156.925, 78.4205, 0, 
+         0, 0, 1, 0]
 T_right_left:
   rows: 3
   cols: 4

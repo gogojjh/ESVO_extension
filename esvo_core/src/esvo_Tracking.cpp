@@ -142,7 +142,7 @@ namespace esvo_core
 				// create new regProblem
 				TicToc tt;
 				double t_resetRegProblem, t_solve, t_pub_result, t_pub_gt;
-				if (rpSolver_.resetRegProblem(&ref_, &cur_))
+				if (rpSolver_.resetRegProblem(&ref_, &cur_)) // will be false if no enough points in local map, need to reinitialize
 				{
 					if (ets_ == IDLE)
 						ets_ = WORKING;
@@ -166,17 +166,23 @@ namespace esvo_core
 						lTimestamp_.push_back(std::to_string(cur_.t_.toSec()));
 						lPose_.push_back(cur_.tr_.getTransformationMatrix());
 					}
+
+					if (insertKeyFrame())
+					{
+						m_buf_.lock();
+						publishTimeSurface();
+						m_buf_.unlock();
+					}
 				}
 				else
 				{
 					nh_.setParam("/ESVO_SYSTEM_STATUS", "INITIALIZATION");
 					ets_ = IDLE;
-					//      LOG(INFO) << "Tracking thread is IDLE";
+					LOG(INFO) << "Tracking thread is IDLE";
+					m_buf_.lock();
+					publishTimeSurface();
+					m_buf_.unlock();
 				}
-
-				m_buf_.lock();
-				publishTimeSurface();
-				m_buf_.unlock();
 
 #ifdef ESVO_CORE_TRACKING_LOG
 				double t_overall_count = 0;
@@ -243,8 +249,8 @@ namespace esvo_core
 	}
 
 	/**
-   * @brief extract current events
-   **/
+    * @brief extract current events
+    **/
 	bool esvo_Tracking::curDataTransferring()
 	{
 		// load current observation
@@ -252,9 +258,21 @@ namespace esvo_core
 		cur_.t_ = TS_buf_.back().first;
 		cur_.pTsObs_ = &TS_buf_.back().second;
 		cur_.tr_ = Transformation(T_world_cur_);
-		// Count the number of events occuring since the last observation.
 		auto ev_cur_it = EventBuffer_lower_bound(events_left_, cur_.t_);
-		cur_.numEventsSinceLastObs_ = std::distance(ev_last_it, ev_cur_it) + 1;
+		cur_.numEventsSinceLastObs_ = std::distance(ev_last_it, ev_cur_it) + 1; // Count the number of events occuring since the last observation.
+		// LOG(INFO) << "event number in 10ms: " << cur_.numEventsSinceLastObs_; // 2000-1400
+		return true;
+	}
+
+	/**
+	 * @brief: This function defines xx criterias to indicate if insert new keyframe in Mapping
+	 */
+	bool esvo_Tracking::insertKeyFrame()
+	{
+		// criterion in LSD-SLAM
+		// This is done based on two weights, the relative distance to the current key-frame and
+		// the angle to the current key-frame. Is the weighted sum of these two larger than a certain threshold, 
+		// a new key-frame is taken.
 		return true;
 	}
 
@@ -270,7 +288,7 @@ namespace esvo_core
 		refPCMap_buf_.clear();
 		events_left_.clear();
 
-		path_.clear();		
+		path_.poses.clear();		
 		m_buf_.unlock();
 	}
 

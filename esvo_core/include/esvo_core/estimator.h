@@ -30,6 +30,10 @@
 #include <dynamic_reconfigure/server.h>
 #include <esvo_core/DVS_MappingStereoConfig.h>
 
+#include "camodocal/camera_models/CameraFactory.h"
+#include "camodocal/camera_models/PinholeCamera.h"
+#include "emvs_core/MapperEMVS.hpp"
+
 #include <opencv2/core/core.hpp>
 #include <opencv2/imgproc/imgproc.hpp>
 #include <opencv2/calib3d/calib3d.hpp>
@@ -65,6 +69,7 @@ namespace esvo_core
         // void Process(std::promise<void> prom_mapping, std::future<void> future_reset);
         void Process();
         void MappingAtTime(const ros::Time &t);
+        void MonoMappingAtTime(const ros::Time &t);
         bool InitializationAtTime(const ros::Time &t);
         bool MonoInitializationAtTime(const ros::Time &t);
         bool dataTransferring();

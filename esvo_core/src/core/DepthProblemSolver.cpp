@@ -25,10 +25,9 @@ DepthProblemSolver::~DepthProblemSolver()
 {
 }
 
-void DepthProblemSolver::solve(
-  std::vector<EventMatchPair>* pvEMP,
-  StampedTimeSurfaceObs* pStampedTsObs,
-  std::vector<DepthPoint> &vdp )
+void DepthProblemSolver::solve(std::vector<EventMatchPair> *pvEMP,
+                               StampedTimeSurfaceObs *pStampedTsObs,
+                               std::vector<DepthPoint> &vdp)
 {
 //  TicToc tt;
 //  tt.tic();
@@ -123,7 +122,7 @@ void DepthProblemSolver::solve_multiple_problems(Job & job)
       else if(strcmp(dpConfigPtr_->LSnorm_.c_str(), "Tdist") == 0)
       {
         double scale2_rho = result[1] * (dpConfigPtr_->td_nu_ - 2) / dpConfigPtr_->td_nu_;
-        dp.update_studentT(result[0], scale2_rho, result[1], dpConfigPtr_->td_nu_);
+        dp.update_studentT(result[0], scale2_rho, result[1], dpConfigPtr_->td_nu_); // invDepth, scale2, variance, nu; initialize the students' t distribution
       }
       else
         exit(-1);

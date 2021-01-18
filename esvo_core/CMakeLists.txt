@@ -112,10 +112,13 @@ set(SOURCES
 
 cs_add_library(estimator_lib ${SOURCES} ${HEADERS})
 
-# Node esvo_Mapping
+cs_add_library(emvs_lib
+  src/emvs_core/MapperEMVS.cpp
+  src/emvs_core/MedianFilter.cpp)
+
 cs_add_executable(estimator src/estimator_node.cpp
     src/estimator.cpp include/esvo_core/estimator.h)
-target_link_libraries(estimator estimator_lib
+target_link_libraries(estimator estimator_lib emvs_lib
     ${catkin_LIBRARIES} ${OpenCV_LIBRARIES} yaml-cpp)
 
 # Node esvo_Tracking
@@ -124,5 +127,8 @@ target_link_libraries(estimator estimator_lib
 #target_link_libraries(esvo_Tracking ${PROJECT_NAME}_LIB
 #    ${catkin_LIBRARIES} ${OpenCV_LIBRARIES} yaml-cpp)
 
-
-
+###############
+##### Test ####
+###############
+cs_add_executable(test_transform test/test_transform.cpp)
+target_link_libraries(test_transform ${catkin_LIBRARIES})

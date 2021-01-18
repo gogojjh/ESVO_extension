@@ -200,7 +200,7 @@ DepthPoint::p_cam() const
 }
 
 void
-DepthPoint::updatePose(Eigen::Matrix<double, 4, 4> &T_world_cam)
+DepthPoint::updatePose(const Eigen::Matrix<double, 4, 4> &T_world_cam)
 {
   T_world_cam_ = T_world_cam;
 }

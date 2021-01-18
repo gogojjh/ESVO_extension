@@ -52,12 +52,11 @@ namespace esvo_core
     void TrackingLoop();
     bool refDataTransferring();
     bool curDataTransferring(); // These two data transferring functions are decoupled because the data are not updated at the same frequency.
+    bool insertKeyFrame();
 
     // topic callback functions
     void refMapCallback(const sensor_msgs::PointCloud2::ConstPtr &msg);
-    void timeSurfaceCallback(
-        const sensor_msgs::ImageConstPtr &time_surface_left,
-        const sensor_msgs::ImageConstPtr &time_surface_right);
+    void timeSurfaceCallback(const sensor_msgs::ImageConstPtr &time_surface_left, const sensor_msgs::ImageConstPtr &time_surface_right);
     void eventsCallback(const dvs_msgs::EventArray::ConstPtr &msg);
 
     // results
@@ -70,10 +69,9 @@ namespace esvo_core
     void reset();
     void clearEventQueue();
     void stampedPoseCallback(const geometry_msgs::PoseStampedConstPtr &msg);
-    bool getPoseAt(
-        const ros::Time &t,
-        esvo_core::Transformation &Tr, // T_world_something
-        const std::string &source_frame);
+    bool getPoseAt(const ros::Time &t,
+                   esvo_core::Transformation &Tr, // T_world_something
+                   const std::string &source_frame);
 
   private:
     ros::NodeHandle nh_, pnh_;

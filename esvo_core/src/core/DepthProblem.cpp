@@ -31,7 +31,11 @@ void DepthProblem::setProblem(
   resetNumberValues(dpConfigPtr_->patchSize_X_ * dpConfigPtr_->patchSize_Y_);
 }
 
-int DepthProblem::operator()( const Eigen::VectorXd &x, Eigen::VectorXd & fvec ) const
+/**
+ * @brief: This function computes the temporal residual for depth estimation
+ * equ. (3)
+ */
+int DepthProblem::operator()(const Eigen::VectorXd &x, Eigen::VectorXd & fvec ) const
 {
   size_t wx = dpConfigPtr_->patchSize_X_;
   size_t wy = dpConfigPtr_->patchSize_Y_;
@@ -39,16 +43,16 @@ int DepthProblem::operator()( const Eigen::VectorXd &x, Eigen::VectorXd & fvec )
   int numValid  = 0;
 
   Eigen::Vector2d x1_s, x2_s;
-  if(!warping(coordinate_, x(0), vT_left_virtual_[0], x1_s, x2_s))
+  if (!warping(coordinate_, x(0), vT_left_virtual_[0], x1_s, x2_s)) // check if the project points are in the timesurface, if not, give large residuals
   {
-    if(strcmp(dpConfigPtr_->LSnorm_.c_str(), "l2") == 0)
-      for(size_t i = 0; i < patchSize; i++)
+    if (strcmp(dpConfigPtr_->LSnorm_.c_str(), "l2") == 0)
+      for (size_t i = 0; i < patchSize; i++)
         fvec[i] = 255;
-    else if(strcmp(dpConfigPtr_->LSnorm_.c_str(), "zncc") == 0)
-      for(size_t i = 0; i < patchSize; i++)
+    else if (strcmp(dpConfigPtr_->LSnorm_.c_str(), "zncc") == 0)
+      for (size_t i = 0; i < patchSize; i++)
         fvec[i] = 2 / sqrt(patchSize);
-    else if(strcmp(dpConfigPtr_->LSnorm_.c_str(), "Tdist") == 0)
-      for(size_t i = 0; i < patchSize; i++)
+    else if (strcmp(dpConfigPtr_->LSnorm_.c_str(), "Tdist") == 0)
+      for (size_t i = 0; i < patchSize; i++)
       {
         double residual = 255;
         double weight = (dpConfigPtr_->td_nu_ + 1) / (dpConfigPtr_->td_nu_ + std::pow(residual / dpConfigPtr_->td_scale_, 2));
@@ -60,8 +64,8 @@ int DepthProblem::operator()( const Eigen::VectorXd &x, Eigen::VectorXd & fvec )
   }
 
   Eigen::MatrixXd tau1, tau2;
-  if (patchInterpolation(pStampedTsObs_->second.TS_left_, x1_s, tau1)
-    && patchInterpolation(pStampedTsObs_->second.TS_right_, x2_s, tau2))
+  if (patchInterpolation(pStampedTsObs_->second.TS_left_, x1_s, tau1) 
+   && patchInterpolation(pStampedTsObs_->second.TS_right_, x2_s, tau2))
   {
     // compute temporal residual
     if (strcmp(dpConfigPtr_->LSnorm_.c_str(), "l2") == 0)
@@ -85,7 +89,7 @@ int DepthProblem::operator()( const Eigen::VectorXd &x, Eigen::VectorXd & fvec )
           fvec[index] = ((tau1(y,x) - mu1) / sigma1 - (tau2(y,x) - mu2) / sigma2) / sqrt(patchSize);
         }
     }
-    else if(strcmp(dpConfigPtr_->LSnorm_.c_str(), "Tdist") == 0)
+    else if(strcmp(dpConfigPtr_->LSnorm_.c_str(), "Tdist") == 0) // temporal residuals
     {
       std::vector<double> vResidual(patchSize);
       std::vector<double> vResidualSquared(patchSize);
@@ -159,12 +163,14 @@ int DepthProblem::operator()( const Eigen::VectorXd &x, Eigen::VectorXd & fvec )
   return numValid;
 }
 
-bool DepthProblem::warping(
-  const Eigen::Vector2d &x,
-  double d,
-  const Eigen::Matrix<double, 3, 4> &T_left_virtual,
-  Eigen::Vector2d &x1_s,
-  Eigen::Vector2d &x2_s) const
+/**
+ * @brief: This function project events from virtual views to the timesurface
+ */
+bool DepthProblem::warping(const Eigen::Vector2d &x,
+                           double d,
+                           const Eigen::Matrix<double, 3, 4> &T_left_virtual,
+                           Eigen::Vector2d &x1_s,
+                           Eigen::Vector2d &x2_s) const
 {
   // back-project to 3D
   Eigen::Vector3d p_rv;
