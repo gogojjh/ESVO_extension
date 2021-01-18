@@ -49,6 +49,7 @@
 
 #define ESTIMATOR_DEBUG
 // #define MONOCULAR_DEBUG
+// #define EMVS_MAPPING_DEBUG
 
 const double VAR_RANDOM_INIT_INITIAL_ = 0.2;
 const double INIT_DP_NUM_Threshold_ = 500;
@@ -251,38 +252,19 @@ namespace esvo_core
         /******************** For test & debug ********************/
         /**********************************************************/
         image_transport::Publisher invDepthMap_pub_, stdVarMap_pub_, ageMap_pub_, costMap_pub_;
+        image_transport::Publisher eventFrame_pub_;
 
         // For counting the total number of fusion
         size_t TotalNumFusion_;
 
-        /**** other parameters defined by jjiao testing ***/
-        image_transport::Publisher eventFrame_pub_, reprojMap_pub_left_;
-        // publishers
-        ros::Publisher pose_pub_, path_pub_;
-
-        nav_msgs::Path path_;
-        std::list<Eigen::Matrix<double, 4, 4>, Eigen::aligned_allocator<Eigen::Matrix<double, 4, 4>>> lPose_;
-        std::list<std::string> lTimestamp_;
-
         double invDepth_INIT_;
 
-        RefFrame ref_;
-        CurFrame cur_;
-
-        Eigen::Matrix<double, 4, 4> T_world_ref_;
-        Eigen::Matrix<double, 4, 4> T_world_cur_;
-        Eigen::Matrix<double, 4, 4> T_world_cur_last_;
-
-        double prev_time_, cur_time_;
-
-        /*** system objects ***/
-        RegProblemType rpType_;
-        RegProblemConfig::Ptr rpConfigPtr_;
-        RegProblemSolverLM rpSolver_;
-
-        bool bVisualizeTrajectory_;
-
-        std_msgs::Int16 msgKeyframe_;
+        camodocal::CameraPtr camPtr_, camVirtualPtr_;
+        EMVS::MapperEMVS emvs_mapper_;
+        EMVS::ShapeDSI emvs_dsi_shape_;
+        std::map<ros::Time, Eigen::Matrix4d> mAllPoses_;
+        std::map<ros::Time, Eigen::Matrix4d> mVirtualPoses_;
+        EMVS::LinearTrajectory trajectory_;
     };
 } // namespace esvo_core
 

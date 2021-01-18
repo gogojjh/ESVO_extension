@@ -112,6 +112,11 @@ set(SOURCES
 
 cs_add_library(estimator_lib ${SOURCES} ${HEADERS})
 
+option(DEFINE_USE_INVERSE_DEPTH "Use linear spacing in inverse depth (if OFF, will use linear spacing in depth)" ON)
+if(DEFINE_USE_INVERSE_DEPTH)
+    add_definitions(-DUSE_INVERSE_DEPTH)
+endif(DEFINE_USE_INVERSE_DEPTH)
+
 cs_add_library(emvs_lib
   src/emvs_core/MapperEMVS.cpp
   src/emvs_core/MedianFilter.cpp)

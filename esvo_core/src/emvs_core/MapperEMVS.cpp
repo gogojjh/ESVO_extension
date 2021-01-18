@@ -6,17 +6,32 @@
 namespace EMVS
 {
 	MapperEMVS::MapperEMVS(const camodocal::CameraPtr &camera_ptr,
-						   const camodocal::CameraPtr &camera_virtual_ptr,
-						   const ShapeDSI &dsi_shape)
+						   const camodocal::CameraPtr &camera_virtual_ptr)
 		: camera_ptr_(camera_ptr),
-		  camera_virtual_ptr_(camera_virtual_ptr),
-		  dsi_shape_(dsi_shape)
+		  camera_virtual_ptr_(camera_virtual_ptr)
 	{
 		width_ = camera_ptr_->imageWidth();
 		height_ = camera_ptr_->imageHeight();
 		camera_ptr_->writeParameters(camera_params_);
-		setupDSI();
 		precomputeRectifiedPoints();
+	}
+
+	void MapperEMVS::configDSI(ShapeDSI &dsi_shape)
+	{
+		CHECK_GT(dsi_shape.min_depth_, 0.0);
+		CHECK_GT(dsi_shape.max_depth_, dsi_shape.min_depth_);
+		depths_vec_ = TypeDepthVector(float(dsi_shape.min_depth_), float(dsi_shape.max_depth_), float(dsi_shape.dimZ_));
+		raw_depths_vec_ = depths_vec_.getDepthVector();
+		dsi_shape.dimX_ = (dsi_shape.dimX_ > 0) ? dsi_shape.dimX_ : camera_ptr_->imageWidth();
+		dsi_shape.dimY_ = (dsi_shape.dimY_ > 0) ? dsi_shape.dimY_ : camera_ptr_->imageHeight();
+		dsi_shape.fov_ = (dsi_shape.fov_ > 0) ? dsi_shape.fov_ : 45.0; // using event camera's fov
+		camera_virtual_params_ = std::vector<double>{0, 0, 0, 0,
+													 camera_params_[4],
+													 camera_params_[4],
+													 0.5 * dsi_shape.dimX_,
+													 0.5 * dsi_shape.dimY_};
+		camera_virtual_ptr_->readParameters(camera_virtual_params_);
+		dsi_ = Grid3D(dsi_shape.dimX_, dsi_shape.dimY_, dsi_shape.dimZ_);
 	}
 
 	void MapperEMVS::initializeDSI(const Eigen::Matrix4d &T_w_rv)
@@ -26,7 +41,9 @@ namespace EMVS
 	}
 
 	bool MapperEMVS::updateDSI(const std::vector<dvs_msgs::Event> &events,
-							   const TrajectoryType &trajectory)
+							   const LinearTrajectory &trajectory,
+							   const PoseMap &poses)
+
 	{
 		if (events.size() < packet_size_)
 		{
@@ -53,7 +70,7 @@ namespace EMVS
 
 			Eigen::Matrix4d T_w_ev;	// from event camera to world
 			Eigen::Matrix4d T_rv_ev; // from event camera to reference viewpoint
-			if (!trajectory.getPoseAt(frame_ts, T_w_ev))
+			if (!trajectory.getPoseAt(poses, frame_ts, T_w_ev))
 			{
 				current_event_++;
 				continue;
@@ -108,11 +125,6 @@ namespace EMVS
 		return true;
 	}
 
-	void MapperEMVS::resetDSI()
-	{
-		dsi_.resetGrid();
-	}
-
 	void MapperEMVS::fillVoxelGrid(const std::vector<Eigen::Vector4f> &event_locations_z0,
 								   const std::vector<Eigen::Vector3f> &camera_centers)
 	{
@@ -165,23 +177,6 @@ namespace EMVS
 				}
 			}
 		}
-	}
-
-	void MapperEMVS::setupDSI()
-	{
-		CHECK_GT(dsi_shape_.min_depth_, 0.0);
-		CHECK_GT(dsi_shape_.max_depth_, dsi_shape_.min_depth_);
-		depths_vec_ = TypeDepthVector(dsi_shape_.min_depth_, dsi_shape_.max_depth_, dsi_shape_.dimZ_);
-		raw_depths_vec_ = depths_vec_.getDepthVector();
-		dsi_shape_.dimX_ = (dsi_shape_.dimX_ > 0) ? dsi_shape_.dimX_ : camera_ptr_->imageWidth();
-		dsi_shape_.dimY_ = (dsi_shape_.dimY_ > 0) ? dsi_shape_.dimY_ : camera_ptr_->imageHeight();
-		camera_virtual_params_ = std::vector<double>{0, 0, 0, 0,
-													 camera_params_[4],
-													 camera_params_[4],
-													 0.5 * (double)dsi_shape_.dimX_,
-													 0.5 * (double)dsi_shape_.dimY_};
-		camera_virtual_ptr_->readParameters(camera_virtual_params_);
-		dsi_ = Grid3D(dsi_shape_.dimX_, dsi_shape_.dimY_, dsi_shape_.dimZ_);
 	}
 
 	void MapperEMVS::precomputeRectifiedPoints()

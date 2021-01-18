@@ -41,7 +41,9 @@ namespace esvo_core
 			  tools::param(pnh_, "Tdist_nu", 0.0),
 			  tools::param(pnh_, "Tdist_scale", 0.0),
 			  tools::param(pnh_, "ITERATION_OPTIMIZATION", 10))),
-		  dpSolver_(camSysPtr_, dpConfigPtr_, NUMERICAL, NUM_THREAD_MAPPING),
+		  invDepth_min_range_(tools::param(pnh_, "invDepth_min_range", 0.16)),
+	  	  invDepth_max_range_(tools::param(pnh_, "invDepth_max_range", 2.0)),
+	  	  dpSolver_(camSysPtr_, dpConfigPtr_, NUMERICAL, NUM_THREAD_MAPPING),
 		  dFusor_(camSysPtr_, dpConfigPtr_),
 		  dRegularizor_(dpConfigPtr_),
 		  ebm_(camSysPtr_, NUM_THREAD_MAPPING, tools::param(pnh_, "SmoothTimeSurface", false)),
@@ -49,21 +51,11 @@ namespace esvo_core
 		  pc_near_(new PointCloud()),
 		  pc_global_(new PointCloud()),
 		  depthFramePtr_(new DepthFrame(camSysPtr_->cam_left_ptr_->height_, camSysPtr_->cam_left_ptr_->width_)),
-		  // tracking parameters
-		  rpConfigPtr_(new RegProblemConfig(
-			  tools::param(pnh_, "patch_size_X", 25),
-			  tools::param(pnh_, "patch_size_Y", 25),
-			  tools::param(pnh_, "kernelSize", 15),
-			  tools::param(pnh_, "LSnorm", std::string("l2")),
-			  tools::param(pnh_, "huber_threshold", 10.0),
-			  tools::param(pnh_, "invDepth_min_range", 0.0),
-			  tools::param(pnh_, "invDepth_max_range", 0.0),
-			  tools::param(pnh_, "MIN_NUM_EVENTS", 1000),
-			  tools::param(pnh_, "MAX_REGISTRATION_POINTS", 500),
-			  tools::param(pnh_, "BATCH_SIZE", 200),
-			  tools::param(pnh_, "MAX_ITERATION", 10))),
-		  rpType_((RegProblemType)((size_t)tools::param(pnh_, "RegProblemType", 0))),
-		  rpSolver_(camSysPtr_, rpConfigPtr_, rpType_, NUM_THREAD_TRACKING)
+		  // added by jjiao
+		  camPtr_(camodocal::CameraFactory::instance()->generateCameraFromYamlFile("/home/jjiao/catkin_ws/src/localization/ESVO/esvo_core/calib/rpg/left_pinhole.yaml")),
+		  camVirtualPtr_(camodocal::CameraFactory::instance()->generateCameraFromYamlFile("/home/jjiao/catkin_ws/src/localization/ESVO/esvo_core/calib/rpg/left_pinhole.yaml")),
+		  emvs_dsi_shape_(0, 0, 100, 1.0 / invDepth_max_range_, 1.0 / invDepth_min_range_, 0.0),
+		  emvs_mapper_(camPtr_, camVirtualPtr_)
 	{
 		// frame id
 		dvs_frame_id_ = tools::param(pnh_, "dvs_frame_id", std::string("dvs"));
@@ -74,8 +66,6 @@ namespace esvo_core
 
 		/**** mapping parameters ***/
 		// range and visualization threshold
-		invDepth_min_range_ = tools::param(pnh_, "invDepth_min_range", 0.16);
-		invDepth_max_range_ = tools::param(pnh_, "invDepth_max_range", 2.0);
 		patch_area_ = tools::param(pnh_, "patch_size_X", 25) * tools::param(pnh_, "patch_size_Y", 25);
 		residual_vis_threshold_ = tools::param(pnh_, "residual_vis_threshold", 15);
 		cost_vis_threshold_ = pow(residual_vis_threshold_, 2) * patch_area_;
@@ -183,17 +173,13 @@ namespace esvo_core
 		server_.reset(new dynamic_reconfigure::Server<DVS_MappingStereoConfig>(nh_private));
 		server_->setCallback(dynamic_reconfigure_callback_);
 
-		invDepth_INIT_ = 1.0;
+		emvs_mapper_.configDSI(emvs_dsi_shape_);
+		// invDepth_INIT_ = 1.0;
+		mAllPoses_.clear();
 
-		reprojMap_pub_left_ = it_.advertise("Reproj_Map_Left", 1);
-		rpSolver_.setRegPublisher(&reprojMap_pub_left_);
-
-		pose_pub_ = nh_.advertise<geometry_msgs::PoseStamped>("/esvo_tracking/pose_pub", 1);
-		path_pub_ = nh_.advertise<nav_msgs::Path>("/esvo_tracking/trajectory", 1);
-
-		bVisualizeTrajectory_ = true;
-
-		T_world_cur_last_ = T_world_cur_ = Eigen::Matrix<double, 4, 4>::Identity();
+#ifdef EMVS_MAPPING_DEBUG
+		emvs_dsi_shape_.printDSIInfo();
+#endif
 	}
 
 	esvo_Mapping::~esvo_Mapping()
@@ -845,13 +831,46 @@ namespace esvo_core
 #ifdef ESVO_CORE_MAPPING_DEBUG
 			LOG(INFO) << "Data Transferring (stampTransformation map): " << st_map_.size();
 #endif
+
+			// using inherent linear interpolation
+			mVirtualPoses_.clear();
+			t_tmp = t_begin;
+			while (t_tmp.toSec() <= t_end.toSec())
+			{
+				Eigen::Matrix4d T;
+				if (trajectory_.getPoseAt(mAllPoses_, t_tmp, T)) // liner interpolation
+					mVirtualPoses_.emplace(t_tmp, T);
+				else
+				{
+					nh_.getParam("/ESVO_SYSTEM_STATUS", ESVO_System_Status_);
+					if (ESVO_System_Status_ != "WORKING")
+						return false;
+				}
+				t_tmp = ros::Time(t_tmp.toSec() + 0.05 * BM_half_slice_thickness_);
+			}
+
+#ifdef EMVS_MAPPING_DEBUG
+			t_tmp = t_begin;
+			size_t cnt = 0;
+			while (t_tmp.toSec() <= t_end.toSec())
+			{
+				Eigen::Matrix4d T0 = st_map_[t_tmp].getTransformationMatrix();
+				Eigen::Matrix4d T1 = mVirtualPoses_[t_tmp];
+				std::cout << "st_map: " << T0.topRightCorner<3, 1>().transpose()
+							<< "; vp: " << T1.topRightCorner<3, 1>().transpose() << std::endl;
+				t_tmp = ros::Time(t_tmp.toSec() + 0.05 * BM_half_slice_thickness_);
+				cnt++;
+				if (cnt >= 3)
+					break;
+			}
+#endif
 		}
 		return true;
 	} // namespace esvo_core
 
 	void esvo_Mapping::stampedPoseCallback(const geometry_msgs::PoseStampedConstPtr &ps_msg)
 	{
-		std::lock_guard<std::mutex> lock(data_mutex_);
+		m_buf_.lock();
 		// To check inconsistent timestamps and reset.
 		static constexpr double max_time_diff_before_reset_s = 0.5;
 		const ros::Time stamp_first_event = ps_msg->header.stamp;
@@ -884,6 +903,17 @@ namespace esvo_core
 				ps_msg->pose.position.z));
 		tf::StampedTransform st(tf, ps_msg->header.stamp, ps_msg->header.frame_id, dvs_frame_id_.c_str());
 		tf_->setTransform(st);
+
+		Eigen::Matrix4d T = Eigen::Matrix4d::Identity();
+		T.topLeftCorner<3, 3>() = Eigen::Quaterniond(ps_msg->pose.orientation.w,
+													 ps_msg->pose.orientation.x,
+													 ps_msg->pose.orientation.y,
+													 ps_msg->pose.orientation.z).toRotationMatrix();
+		T.topRightCorner<3, 1>() = Eigen::Vector3d(ps_msg->pose.position.x,
+												   ps_msg->pose.position.y,
+												   ps_msg->pose.position.z);
+		mAllPoses_.emplace(ps_msg->header.stamp, T);
+		m_buf_.unlock();
 	}
 
 	// return the pose of the left event cam at time t.
@@ -1043,6 +1073,8 @@ namespace esvo_core
 		// 						  std::move(mapping_thread_promise_), std::move(reset_future_));
 		// std::thread MappingThread(&esvo_Mapping::Process, this);
 		// MappingThread.detach();
+
+		mAllPoses_.clear();
 	}
 
 	void esvo_Mapping::onlineParameterChangeCallback(DVS_MappingStereoConfig &config, uint32_t level)
@@ -1224,9 +1256,9 @@ namespace esvo_core
 	{
 		cv::Mat eventMap;
 		visualizor_.plot_eventMap(vALLEventsPtr_left_,
-									eventMap,
-									camSysPtr_->cam_left_ptr_->height_,
-									camSysPtr_->cam_left_ptr_->width_);
+								  eventMap,
+								  camSysPtr_->cam_left_ptr_->height_,
+								  camSysPtr_->cam_left_ptr_->width_);
 		publishImage(eventMap, t, eventFrame_pub_, "mono8");
 	}
 
@@ -1305,11 +1337,10 @@ namespace esvo_core
 		cv::medianBlur(eventMap, mask, 3);
 	}
 
-	void esvo_Mapping::extractDenoisedEvents(
-		std::vector<dvs_msgs::Event *> &vCloseEventsPtr,
-		std::vector<dvs_msgs::Event *> &vEdgeEventsPtr,
-		cv::Mat &mask,
-		size_t maxNum)
+	void esvo_Mapping::extractDenoisedEvents(std::vector<dvs_msgs::Event *> &vCloseEventsPtr,
+											 std::vector<dvs_msgs::Event *> &vEdgeEventsPtr,
+											 cv::Mat &mask,
+											 size_t maxNum)
 	{
 		vEdgeEventsPtr.reserve(vCloseEventsPtr.size());
 		for (size_t i = 0; i < vCloseEventsPtr.size(); i++)
