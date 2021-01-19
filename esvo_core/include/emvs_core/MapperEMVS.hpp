@@ -94,7 +94,7 @@ namespace EMVS
 
 		void initializeDSI(const Eigen::Matrix4d &T_w_rv);
 
-		bool updateDSI(const std::map<ros::Time, Eigen::Matrix4d> pVirtualPoses,
+		bool updateDSI(const std::vector<std::pair<ros::Time, Eigen::Matrix4d>> pVirtualPoses,
 					   const std::vector<dvs_msgs::Event *> pvEventsPtr);
 
 		void getDepthMapFromDSI(cv::Mat &depth_map, cv::Mat &confidence_map, cv::Mat &mask, const OptionsDepthMap &options_depth_map);

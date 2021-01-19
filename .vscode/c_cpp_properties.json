@@ -5,8 +5,8 @@
             "includePath": [
                 "${workspaceFolder}/**",
                 "/usr/local/",
+                "/usr/include/pcl-1.8/",
                 "/opt/ros/melodic/include/**",
-                "/usr/local/include/pcl-1.8/",
                 "~/catkin_ws/devel/include/**",
                 "/usr/include/eigen3"
             ],

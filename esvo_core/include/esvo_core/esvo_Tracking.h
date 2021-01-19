@@ -52,7 +52,6 @@ namespace esvo_core
     void TrackingLoop();
     bool refDataTransferring();
     bool curDataTransferring(); // These two data transferring functions are decoupled because the data are not updated at the same frequency.
-    bool insertKeyFrame();
 
     // topic callback functions
     void refMapCallback(const sensor_msgs::PointCloud2::ConstPtr &msg);
@@ -69,6 +68,7 @@ namespace esvo_core
     void reset();
     void clearEventQueue();
     void stampedPoseCallback(const geometry_msgs::PoseStampedConstPtr &msg);
+    void gtPoseCallback(const geometry_msgs::PoseStampedConstPtr &msg);
     bool getPoseAt(const ros::Time &t,
                    esvo_core::Transformation &Tr, // T_world_something
                    const std::string &source_frame);
@@ -81,18 +81,21 @@ namespace esvo_core
     ros::Subscriber events_left_sub_;
     ros::Subscriber map_sub_;
     message_filters::Subscriber<sensor_msgs::Image> TS_left_sub_, TS_right_sub_;
-    ros::Subscriber stampedPose_sub_;
+    ros::Subscriber gtPose_sub_, stampedPose_sub_;
     image_transport::Publisher reprojMap_pub_left_;
     image_transport::Publisher time_surface_left_pub_, time_surface_right_pub_;
 
     // publishers
-    ros::Publisher pose_pub_, path_pub_;
+    ros::Publisher pose_pub_, path_pub_, pose_gt_pub_, path_gt_pub_;
     ros::Publisher keyFrame_pub_;
 
     // results
-    nav_msgs::Path path_;
+    nav_msgs::Path path_, path_gt_;
     std::list<Eigen::Matrix<double, 4, 4>, Eigen::aligned_allocator<Eigen::Matrix<double, 4, 4>>> lPose_;
     std::list<std::string> lTimestamp_;
+
+    Eigen::Quaterniond q_gt_s_;
+    Eigen::Vector3d t_gt_s_;
 
     // Time Surface sync policy
     typedef message_filters::sync_policies::ExactTime<sensor_msgs::Image, sensor_msgs::Image> ExactSyncPolicy;

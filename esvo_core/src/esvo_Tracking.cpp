@@ -57,9 +57,12 @@ namespace esvo_core
 		tf_ = std::make_shared<tf::Transformer>(true, ros::Duration(100.0));
 		map_sub_ = nh_.subscribe("pointcloud", 0, &esvo_Tracking::refMapCallback, this);				// local map in the ref view.
 		stampedPose_sub_ = nh_.subscribe("stamped_pose", 0, &esvo_Tracking::stampedPoseCallback, this); // for accessing the pose of the ref view.
+		gtPose_sub_ = nh_.subscribe("gt_pose", 0, &esvo_Tracking::gtPoseCallback, this); // for accessing the pose of the ref view.
 
 		pose_pub_ = nh_.advertise<geometry_msgs::PoseStamped>("/esvo_tracking/pose_pub", 1);
 		path_pub_ = nh_.advertise<nav_msgs::Path>("/esvo_tracking/trajectory", 1);
+		pose_gt_pub_ = nh_.advertise<geometry_msgs::PoseStamped>("/gt/pose_pub", 1);
+		path_gt_pub_ = nh_.advertise<nav_msgs::Path>("/gt/trajectory", 1);
 
 		/*** For Visualization and Test ***/
 		reprojMap_pub_left_ = it_.advertise("Reproj_Map_Left", 1);
@@ -129,6 +132,9 @@ namespace esvo_core
 				if (refPCMap_buf_.empty()) // Mapping is still in initialization
 				{
 					publishTimeSurface();
+					publishPose(cur_.t_, cur_.tr_); // publish identity pose
+					if (bVisualizeTrajectory_)
+						publishPath(cur_.t_, cur_.tr_);
 					m_buf_.unlock();
 					r.sleep();
 					continue;
@@ -166,13 +172,9 @@ namespace esvo_core
 						lTimestamp_.push_back(std::to_string(cur_.t_.toSec()));
 						lPose_.push_back(cur_.tr_.getTransformationMatrix());
 					}
-
-					if (insertKeyFrame())
-					{
-						m_buf_.lock();
-						publishTimeSurface();
-						m_buf_.unlock();
-					}
+					m_buf_.lock();
+					publishTimeSurface();
+					m_buf_.unlock();
 				}
 				else
 				{
@@ -264,18 +266,6 @@ namespace esvo_core
 		return true;
 	}
 
-	/**
-	 * @brief: This function defines xx criterias to indicate if insert new keyframe in Mapping
-	 */
-	bool esvo_Tracking::insertKeyFrame()
-	{
-		// criterion in LSD-SLAM
-		// This is done based on two weights, the relative distance to the current key-frame and
-		// the angle to the current key-frame. Is the weighted sum of these two larger than a certain threshold, 
-		// a new key-frame is taken.
-		return true;
-	}
-
 	void esvo_Tracking::reset()
 	{
 		m_buf_.lock();
@@ -288,7 +278,8 @@ namespace esvo_core
 		refPCMap_buf_.clear();
 		events_left_.clear();
 
-		path_.poses.clear();		
+		path_.poses.clear();
+		path_gt_.poses.clear();
 		m_buf_.unlock();
 	}
 
@@ -373,9 +364,11 @@ namespace esvo_core
 		time_surface_right_pub_.publish(TS_buf_.back().second.cvImagePtr_right_->toImageMsg());
 	}
 
+
+
 	void esvo_Tracking::stampedPoseCallback(const geometry_msgs::PoseStampedConstPtr &msg)
 	{
-		std::lock_guard<std::mutex> lock(m_buf_);
+		m_buf_.lock();
 		// add pose to tf
 		tf::Transform tf(
 			tf::Quaternion(
@@ -391,12 +384,11 @@ namespace esvo_core
 		tf_->setTransform(st);
 		// broadcast the tf such that the nav_path messages can find the valid fixed frame "map".
 		static tf::TransformBroadcaster br;
-		br.sendTransform(st);
+		m_buf_.unlock();
 	}
 
-	bool
-	esvo_Tracking::getPoseAt(const ros::Time &t, esvo_core::Transformation &Tr,
-							 const std::string &source_frame)
+	bool esvo_Tracking::getPoseAt(const ros::Time &t, esvo_core::Transformation &Tr,
+			  					  const std::string &source_frame)
 	{
 		std::string *err_msg = new std::string();
 		if (!tf_->canTransform(world_frame_id_, source_frame, t, err_msg))
@@ -414,7 +406,68 @@ namespace esvo_core
 		}
 	}
 
-	/************ publish results *******************/
+	/************ publish results *******************/	
+	void esvo_Tracking::gtPoseCallback(const geometry_msgs::PoseStampedConstPtr &msg)
+	{
+		// m_buf_.lock();
+		// publish gt pose and path
+		Eigen::Quaterniond q_gt_cur(msg->pose.orientation.w,
+									msg->pose.orientation.x,
+									msg->pose.orientation.y,
+									msg->pose.orientation.z);
+		Eigen::Vector3d t_gt_cur(msg->pose.position.x,
+								 msg->pose.position.y,
+								 msg->pose.position.z);
+		if (path_gt_.poses.empty())
+		{
+			q_gt_s_ = Eigen::Quaterniond(msg->pose.orientation.w,
+										 msg->pose.orientation.x,
+										 msg->pose.orientation.y,
+										 msg->pose.orientation.z);
+			t_gt_s_ = Eigen::Vector3d(msg->pose.position.x,
+									  msg->pose.position.y,
+									  msg->pose.position.z);
+		}
+		Eigen::Quaterniond q_w_gt = q_gt_s_.inverse() * q_gt_cur;
+		Eigen::Vector3d t_w_gt = q_gt_s_.inverse() * (t_gt_cur - t_gt_s_);
+
+		geometry_msgs::PoseStampedPtr ps_ptr(new geometry_msgs::PoseStamped());
+		ps_ptr->header.stamp = msg->header.stamp;
+		ps_ptr->header.frame_id = world_frame_id_;
+		ps_ptr->pose.orientation.x = q_w_gt.x();
+		ps_ptr->pose.orientation.y = q_w_gt.y();
+		ps_ptr->pose.orientation.z = q_w_gt.z();
+		ps_ptr->pose.orientation.w = q_w_gt.w();
+		ps_ptr->pose.position.x = t_w_gt.x();
+		ps_ptr->pose.position.y = t_w_gt.y();
+		ps_ptr->pose.position.z = t_w_gt.z();
+		pose_gt_pub_.publish(ps_ptr);
+
+		path_gt_.header.stamp = msg->header.stamp;
+		path_gt_.header.frame_id = world_frame_id_;
+		path_gt_.poses.push_back(*ps_ptr);
+		path_gt_pub_.publish(path_gt_);
+
+		tf::Transform tf(
+			tf::Quaternion(
+				q_w_gt.x(),
+				q_w_gt.y(),
+				q_w_gt.z(),
+				q_w_gt.w()),
+			tf::Vector3(
+				t_w_gt.x(),
+				t_w_gt.y(),
+				t_w_gt.z()));
+		tf::StampedTransform st(tf, msg->header.stamp, world_frame_id_, "gt");
+		tf_->setTransform(st);
+		// broadcast the tf such that the nav_path messages can find the valid fixed frame "map".
+		static tf::TransformBroadcaster br;
+		br.sendTransform(st);
+
+		// m_buf_.unlock();
+	}
+
+
 	void esvo_Tracking::publishPose(const ros::Time &t, Transformation &tr)
 	{
 		geometry_msgs::PoseStampedPtr ps_ptr(new geometry_msgs::PoseStamped());

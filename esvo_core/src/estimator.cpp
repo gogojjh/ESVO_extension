@@ -52,8 +52,8 @@ namespace esvo_core
 		  pc_global_(new PointCloud()),
 		  depthFramePtr_(new DepthFrame(camSysPtr_->cam_left_ptr_->height_, camSysPtr_->cam_left_ptr_->width_)),
 		  // added by jjiao
-		  camPtr_(camodocal::CameraFactory::instance()->generateCameraFromYamlFile("/home/jjiao/catkin_ws/src/localization/ESVO/esvo_core/calib/rpg/left_pinhole.yaml")),
-		  camVirtualPtr_(camodocal::CameraFactory::instance()->generateCameraFromYamlFile("/home/jjiao/catkin_ws/src/localization/ESVO/esvo_core/calib/rpg/left_pinhole.yaml")),
+		  camPtr_(camodocal::CameraFactory::instance()->generateCameraFromYamlFile("/home/jjiao/catkin_ws/src/localization/ESVO/esvo_core/calib/upenn/left_pinhole.yaml")),
+		  camVirtualPtr_(camodocal::CameraFactory::instance()->generateCameraFromYamlFile("/home/jjiao/catkin_ws/src/localization/ESVO/esvo_core/calib/upenn/left_pinhole.yaml")),
 		  emvs_dsi_shape_(0, 0, 100, 1.0 / invDepth_max_range_, 1.0 / invDepth_min_range_, 0.0),
 		  emvs_mapper_(camPtr_, camVirtualPtr_)
 	{
@@ -145,12 +145,14 @@ namespace esvo_core
 		tf_ = std::make_shared<tf::Transformer>(true, ros::Duration(100.0));
 
 		// result publishers
+		pc_pub_ = nh_.advertise<PointCloud>("/esvo_mapping/pointcloud_local", 1);
 		invDepthMap_pub_ = it_.advertise("Inverse_Depth_Map", 1);
 		stdVarMap_pub_ = it_.advertise("Standard_Variance_Map", 1);
 		ageMap_pub_ = it_.advertise("Age_Map", 1);
 		costMap_pub_ = it_.advertise("cost_map", 1);
-		pc_pub_ = nh_.advertise<PointCloud>("/esvo_mapping/pointcloud_local", 1);
-		eventFrame_pub_ = it_.advertise("Event_Frame", 1);
+		depthMap_pub_ = it_.advertise("DSI_Depth_Map", 1);
+		confidenceMap_pub_ = it_.advertise("DSI_Confidence_Map", 1);
+		eventMap_pub_ = it_.advertise("Event_Map", 1);
 		if (bVisualizeGlobalPC_)
 		{
 			gpc_pub_ = nh_.advertise<PointCloud>("/esvo_mapping/pointcloud_global", 1);
@@ -173,9 +175,15 @@ namespace esvo_core
 		server_.reset(new dynamic_reconfigure::Server<DVS_MappingStereoConfig>(nh_private));
 		server_->setCallback(dynamic_reconfigure_callback_);
 
+		// DSI_Mapper configure
 		emvs_mapper_.configDSI(emvs_dsi_shape_);
+		emvs_opts_depth_map_.adaptive_threshold_kernel_size_ = 5; // Size of the Gaussian kernel used for adaptive thresholding"
+		emvs_opts_depth_map_.adaptive_threshold_c_ = 5;           // A value in [0, 255]. The smaller the noisier and more dense reconstruction"
+		emvs_opts_depth_map_.median_filter_size_ = 5;             // Size of the median filter used to clean the depth map"
+
 		// invDepth_INIT_ = 1.0;
 		mAllPoses_.clear();
+		isKeyframe_ = false;
 
 #ifdef EMVS_MAPPING_DEBUG
 		emvs_dsi_shape_.printDSIInfo();
@@ -189,6 +197,10 @@ namespace esvo_core
 		stdVarMap_pub_.shutdown();
 		ageMap_pub_.shutdown();
 		costMap_pub_.shutdown();
+
+		depthMap_pub_.shutdown();
+		confidenceMap_pub_.shutdown();
+		eventMap_pub_.shutdown();
 	}
 
 	void esvo_Mapping::Process()
@@ -261,7 +273,10 @@ namespace esvo_core
 				if (ESVO_System_Status_ == "INITIALIZATION" || ESVO_System_Status_ == "RESET") // do initialization
 				{
 					if (InitializationAtTime(TS_obs_.first))
+					{
 						LOG(INFO) << "Initialization is successfully done!"; //(" << INITIALIZATION_COUNTER_ << ").";
+						isKeyframe_ = true;
+					}
 					else
 						LOG(INFO) << "Initialization fails once.";
 				}
@@ -271,7 +286,9 @@ namespace esvo_core
 					MappingAtTime(TS_obs_.first);
 
 					// monocular mapping
-					// MonoMappingAtTime(TS_obs_.first);
+					// insertKeyframe();
+					MonoMappingAtTime(TS_obs_.first);
+					isKeyframe_ = false;
 
 					std::thread tpublishEventMap(&esvo_Mapping::publishEventMap, this, TS_obs_.first);
 					tpublishEventMap.detach();
@@ -586,55 +603,72 @@ namespace esvo_core
 
 			// Extract denoised events (appear on edges likely).
 			vDenoisedEventsPtr_left_.clear();
-			extractDenoisedEvents(vCloseEventsPtr_left_, vDenoisedEventsPtr_left_, denoising_mask, PROCESS_EVENT_NUM_);
+			// extractDenoisedEvents(vCloseEventsPtr_left_, vDenoisedEventsPtr_left_, denoising_mask, PROCESS_EVENT_NUM_);
+			extractDenoisedEvents(vCloseEventsPtr_left_, vDenoisedEventsPtr_left_, denoising_mask, 10000);
 			totalNumCount_ = vDenoisedEventsPtr_left_.size();
-
 			t_denoising = tt_mapping.toc();
 		}
 		else
 		{
 			vDenoisedEventsPtr_left_.clear();
-			vDenoisedEventsPtr_left_.reserve(PROCESS_EVENT_NUM_);
-			vDenoisedEventsPtr_left_.insert(
-				vDenoisedEventsPtr_left_.end(), vCloseEventsPtr_left_.begin(),
-				vCloseEventsPtr_left_.begin() + min(vCloseEventsPtr_left_.size(), PROCESS_EVENT_NUM_));
+			// vDenoisedEventsPtr_left_.reserve(10000);
+			// vDenoisedEventsPtr_left_.insert(vDenoisedEventsPtr_left_.end(), vCloseEventsPtr_left_.begin(),
+			// 								vCloseEventsPtr_left_.begin() + min(vCloseEventsPtr_left_.size(), PROCESS_EVENT_NUM_));
+			vDenoisedEventsPtr_left_.insert(vDenoisedEventsPtr_left_.end(), vCloseEventsPtr_left_.begin(),
+											vCloseEventsPtr_left_.end());
 		}
-		t_overall_count += t_denoising;
 
 		/******************************************************/
 		/*************** Mapping with the Disparity Space Image ****************/
 		/******************************************************/
-
 		// ******************************** Event Back-Projection
 		double t_DSI, t_DepthMap;
 		tt_mapping.tic();
-		emvs_mapper_.initializeDSI(TS_obs_.second.tr_.getTransformationMatrix());
-		emvs_mapper_.updateDSI(mVirtualPoses_, vDenoisedEventsPtr_left_);
+		if (isKeyframe_)
+		{
+			LOG(INFO) << "insert a keyframe";
+			emvs_mapper_.initializeDSI(TS_obs_.second.tr_.getTransformationMatrix());
+			emvs_mapper_.updateDSI(mVirtualPoses_, vDenoisedEventsPtr_left_);
+			std::cout << TS_obs_.second.tr_.getTransformationMatrix() << std::endl;
+		}
+		else
+		{
+			LOG(INFO) << "insert an non-keyframe";
+			emvs_mapper_.updateDSI(mVirtualPoses_, vDenoisedEventsPtr_left_);
+		}
 		t_DSI = tt_mapping.toc();
+		LOG(INFO) << "update DSI costs: " << t_DSI << "ms";
 		t_overall_count += t_DSI;
 
-		// emvs_mapper_.dsi_.writeGridNpy("/tmp/dsi.npy");
+#ifdef EMVS_MAPPING_DEBUG
+		if (TS_id_ >= 20)
+		{
+			for (auto it_vp : mVirtualPoses_)
+				std::cout << it_vp.second.topRightCorner<3, 1>().transpose() << std::endl;
+			CHECK_GT(0, 1);
+		}
+#endif
 
 		// ******************************** Ray Counting on DSI
+		// emvs_mapper_.dsi_.writeGridNpy("/tmp/dsi.npy");
 		// double t_optimization = 0;
 		// double t_solve, t_fusion, t_regularization;
 		// t_solve = t_fusion = t_regularization = 0;
 		// size_t numFusionCount = 0; // To count the total number of fusion (in terms of fusion between two estimates, i.e. a priori and a propagated one).
 		// tt_mapping.tic();
-
-		// EMVS::OptionsDepthMap opts_depth_map;
-		// opts_depth_map.adaptive_threshold_kernel_size_ = FLAGS_adaptive_threshold_kernel_size;
-		// opts_depth_map.adaptive_threshold_c_ = FLAGS_adaptive_threshold_c;
-		// opts_depth_map.median_filter_size_ = FLAGS_median_filter_size;
-		// cv::Mat depth_map, confidence_map, semidense_mask;
-		// mapper.getDepthMapFromDSI(depth_map, confidence_map, semidense_mask, opts_depth_map);
-
 		// maximizeContrast(depth_map); 
 
-		// std::vector<DepthPoint> vdp; // depth points on the current stereo observations
-		// vdp.reserve(dsi.dimX_ * dsi.dimY_ * dsi.dimZ_);
-		// emvs_mapper_.getDepthPoint(depth_map, semidense_mask, &TS_obs_, vdp);
-		// LOG(INFO) << "Ray counting on DSI succeeds!";
+		double t_ray_counting;
+		tt_mapping.tic();
+		cv::Mat depth_map, confidence_map, semidense_mask;
+		emvs_mapper_.getDepthMapFromDSI(depth_map, confidence_map, semidense_mask, emvs_opts_depth_map_);
+		
+		std::vector<DepthPoint> vdp; // depth points on the current stereo observations
+		emvs_mapper_.getDepthPoint(depth_map, semidense_mask, vdp);
+		t_ray_counting = tt_mapping.toc();
+		LOG(INFO) << "Number of depth points: " << vdp.size();
+		LOG(INFO) << "Ray counting costs: " << t_ray_counting << "ms";
+		t_overall_count += t_ray_counting;
 
 		// ******************************** Fusion (strategy 1: const number of point)
 		// if (FusionStrategy_ == "CONST_POINTS")
@@ -694,6 +728,10 @@ namespace esvo_core
 		// 								  depthFramePtr_->dMap_, depthFramePtr_->T_world_frame_, t);
 		// tPublishMappingResult.detach();
 
+		std::thread tPublishDSIResult(&esvo_Mapping::publishDSIResults, this,
+									  t, depth_map, confidence_map);
+		tPublishDSIResult.detach();
+
 #ifdef ESVO_CORE_MAPPING_LOG
 		LOG(INFO) << "\n";
 		LOG(INFO) << "------------------------------------------------------------";
@@ -720,6 +758,17 @@ namespace esvo_core
 		LOG(INFO) << "------------------------------------------------------------";
 		LOG(INFO) << "\n";
 #endif
+	}
+
+	/**
+	 * @brief: This function defines xx criterias to indicate if insert new keyframe in Mapping
+	 */
+	void esvo_Mapping::insertKeyframe()
+	{
+		// criterion in LSD-SLAM or EVO
+		// This is done based on two weights, the relative distance to the current key-frame and
+		// the angle to the current key-frame. Is the weighted sum of these two larger than a certain threshold,
+		// a new key-frame is taken.
 	}
 
 	bool esvo_Mapping::dataTransferring()
@@ -835,13 +884,16 @@ namespace esvo_core
 #endif
 
 			// using inherent linear interpolation
+			// t0 <= ev.ts <= t1
+			// pose_0 (t0), pose_1 (t1), ..., pose_N (tN)
+			// t_begin, t_tmp, ..., t_end
 			mVirtualPoses_.clear();
 			t_tmp = t_begin;
 			while (t_tmp.toSec() <= t_end.toSec())
 			{
 				Eigen::Matrix4d T;
-				if (trajectory_.getPoseAt(mAllPoses_, t_tmp, T)) // liner interpolation
-					mVirtualPoses_.emplace(t_tmp, T);
+				if (trajectory_.getPoseAt(mAllPoses_, t_tmp, T)) 
+					mVirtualPoses_.push_back(std::make_pair(t_tmp, T));
 				else
 				{
 					nh_.getParam("/ESVO_SYSTEM_STATUS", ESVO_System_Status_);
@@ -917,9 +969,9 @@ namespace esvo_core
 		mAllPoses_.emplace(ps_msg->header.stamp, T);
 
 		// TODO: remove redundant poses
-		// if (mAllPoses_.size() > 360000)
+		// if (mAllPoses_.size() > 360000) // 1 hours
 		// {
-		// 	mAllPoses_.erase(mAllPoses_.begin(), mAllPoses_.begin() + xx);
+		// 	mAllPoses_.erase(mAllPoses_.begin(), mAllPoses_.begin() + 360000);
 		// }
 
 		m_buf_.unlock();
@@ -1268,7 +1320,13 @@ namespace esvo_core
 								  eventMap,
 								  camSysPtr_->cam_left_ptr_->height_,
 								  camSysPtr_->cam_left_ptr_->width_);
-		publishImage(eventMap, t, eventFrame_pub_, "mono8");
+		publishImage(eventMap, t, eventMap_pub_, "mono8");
+	}
+
+	void esvo_Mapping::publishDSIResults(const ros::Time &t, const cv::Mat &depthMap, const cv::Mat &confidenceMap)
+	{
+		// publishImage(depthMap, t, depthMap_pub_, "bgr8");
+		publishImage(confidenceMap, t, confidenceMap_pub_, "mono8");
 	}
 
 	void esvo_Mapping::publishImage(const cv::Mat &image,

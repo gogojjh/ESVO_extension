@@ -62,27 +62,24 @@ namespace esvo_core
     {
     public:
         EIGEN_MAKE_ALIGNED_OPERATOR_NEW
-        esvo_Mapping(const ros::NodeHandle &nh,
-                     const ros::NodeHandle &nh_private);
+        esvo_Mapping(const ros::NodeHandle &nh, const ros::NodeHandle &nh_private);
         virtual ~esvo_Mapping();
 
         // mapping
         void MappingLoop(std::promise<void> prom_mapping, std::future<void> future_reset);
-        // void Process(std::promise<void> prom_mapping, std::future<void> future_reset);
         void Process();
-        void MappingAtTime(const ros::Time &t);
-        void MonoMappingAtTime(const ros::Time &t);
         bool InitializationAtTime(const ros::Time &t);
         bool MonoInitializationAtTime(const ros::Time &t);
+        void MappingAtTime(const ros::Time &t);
+        void MonoMappingAtTime(const ros::Time &t);
+        void insertKeyframe();
         bool dataTransferring();
-        bool setTrackingData();
 
         // callback functions
         void stampedPoseCallback(const geometry_msgs::PoseStampedConstPtr &ps_msg);
         void eventsCallback(const dvs_msgs::EventArray::ConstPtr &msg, EventQueue &EQ);
-        void timeSurfaceCallback(
-            const sensor_msgs::ImageConstPtr &time_surface_left,
-            const sensor_msgs::ImageConstPtr &time_surface_right);
+        void timeSurfaceCallback(const sensor_msgs::ImageConstPtr &time_surface_left,
+                                 const sensor_msgs::ImageConstPtr &time_surface_right);
         void onlineParameterChangeCallback(DVS_MappingStereoConfig &config, uint32_t level);
 
         // utils
@@ -91,21 +88,21 @@ namespace esvo_core
         void reset();
 
         /*** publish results ***/
-        void publishMappingResults(
-            DepthMap::Ptr depthMapPtr,
-            Transformation tr,
-            ros::Time t);
+        void publishMappingResults(DepthMap::Ptr depthMapPtr, Transformation tr, ros::Time t);
         void publishPointCloud(
             DepthMap::Ptr &depthMapPtr,
             Transformation &tr,
             ros::Time &t);
+
+        void publishDSIResults(const ros::Time &t, const cv::Mat &depthMap, const cv::Mat &semiDenseMask);
+
+        void publishEventMap(const ros::Time &t);
+
         void publishImage(
             const cv::Mat &image,
             const ros::Time &t,
             image_transport::Publisher &pub,
             std::string encoding = "bgr8");
-
-        void publishEventMap(const ros::Time &t);
 
         /*** event processing ***/
         void createEdgeMask(
@@ -253,7 +250,8 @@ namespace esvo_core
         /******************** For test & debug ********************/
         /**********************************************************/
         image_transport::Publisher invDepthMap_pub_, stdVarMap_pub_, ageMap_pub_, costMap_pub_;
-        image_transport::Publisher eventFrame_pub_;
+        image_transport::Publisher depthMap_pub_, confidenceMap_pub_;
+        image_transport::Publisher eventMap_pub_;
 
         // For counting the total number of fusion
         size_t TotalNumFusion_;
@@ -263,9 +261,11 @@ namespace esvo_core
         camodocal::CameraPtr camPtr_, camVirtualPtr_;
         EMVS::MapperEMVS emvs_mapper_;
         EMVS::ShapeDSI emvs_dsi_shape_;
+        EMVS::OptionsDepthMap emvs_opts_depth_map_;
         std::map<ros::Time, Eigen::Matrix4d> mAllPoses_;
-        std::map<ros::Time, Eigen::Matrix4d> mVirtualPoses_;
+        std::vector<std::pair<ros::Time, Eigen::Matrix4d>> mVirtualPoses_;
         EMVS::LinearTrajectory trajectory_;
+        bool isKeyframe_;
     };
 } // namespace esvo_core
 

@@ -35,6 +35,8 @@ namespace EMVS
    			          0.0, camera_virtual_params_[5], camera_virtual_params_[7],
    			          0.0, 0.0, 1.0;
 		dsi_ = Grid3D(dsi_shape.dimX_, dsi_shape.dimY_, dsi_shape.dimZ_);
+		std::cout << camera_ptr_->parametersToString() << std::endl;
+		std::cout << camera_virtual_ptr_->parametersToString() << std::endl;
 	}
 
 	void MapperEMVS::initializeDSI(const Eigen::Matrix4d &T_w_rv)
@@ -43,10 +45,11 @@ namespace EMVS
 		dsi_.resetGrid();
 	}
 
-	bool MapperEMVS::updateDSI(const std::map<ros::Time, Eigen::Matrix4d> pVirtualPoses,
+	bool MapperEMVS::updateDSI(const std::vector<std::pair<ros::Time, Eigen::Matrix4d>> pVirtualPoses,
   							   const std::vector<dvs_msgs::Event *> pvEventsPtr)
 	{
 		CHECK_GT(pVirtualPoses.size(), 1);
+		CHECK_GE(pVirtualPoses.back().first.toSec(), pvEventsPtr.back()->ts.toSec());
 
 		// 2D coordinates of the events transferred to reference view using plane Z = Z_0.
 		// We use Vector4f because Eigen is optimized for matrix multiplications with inputs whose size is a multiple of 4
@@ -92,9 +95,9 @@ namespace EMVS
 					break;
 				}
 
-				if ((*it_ev)->y * width_ + (*it_ev)->x < 0 || 
-					(*it_ev)->y * width_ + (*it_ev)->x >= precomputed_rectified_points_.cols())
-					continue;
+				// if ((*it_ev)->y * width_ + (*it_ev)->x < 0 || 
+				// 	(*it_ev)->y * width_ + (*it_ev)->x >= precomputed_rectified_points_.cols())
+				// 	continue;
 
 				// For each event, precompute the warped event locations according to Eq. (11) in the IJCV paper.
 				Eigen::Vector4f p;
@@ -107,8 +110,8 @@ namespace EMVS
 				// Optical center of the event camera in the coordinate frame of the reference view
 				camera_centers.push_back(c);
 			}
-			// LOG(INFO) << "number of virtual view: " << camera_centers.size();
 		}
+		LOG(INFO) << "No. virtual cam: " << pVirtualPoses.size() << ", No. events: " << pvEventsPtr.size();
 
 		fillVoxelGrid(event_locations_z0, camera_centers);
 		return true;
@@ -144,14 +147,6 @@ namespace EMVS
 					const float bx = (z0 - zi) * (C[0] * camera_virtual_params_[4] + C[2] * camera_virtual_params_[6]);
 					const float by = (z0 - zi) * (C[1] * camera_virtual_params_[5] + C[2] * camera_virtual_params_[7]);
 					const float d = zi * (z0 - C[2]);
-
-					// Eq. (15)
-					// Arrayf X, Y;
-					// for (size_t i = 0; i < N; ++i)
-					// {
-					// 	X[i] = pe[i][0];
-					// 	Y[i] = pe[i][1];
-					// }
 					float X = (event_locations_z0[i][0] * a + bx) / d;
 					float Y = (event_locations_z0[i][1] * a + by) / d;
 					// Bilinear voting
@@ -162,7 +157,7 @@ namespace EMVS
 
 		void MapperEMVS::precomputeRectifiedPoints()
 		{
-			// Create a lookup table that maps pixel coordinates to undistorted pixel coordinates
+			// (Mono) Create a lookup table that maps pixel coordinates to undistorted pixel coordinates
 			precomputed_rectified_points_ = Eigen::Matrix2Xf(2, height_ * width_);
 			for (int y = 0; y < height_; y++)
 			{
@@ -209,7 +204,6 @@ namespace EMVS
 		void MapperEMVS::getDepthMapFromDSI(cv::Mat & depth_map, cv::Mat & confidence_map, cv::Mat & mask, const OptionsDepthMap &options_depth_map)
 		{
 			// Reference: Section 5.2.3 in the IJCV paper.
-
 			// Maximum number of votes along optical ray
 			cv::Mat depth_cell_indices;
 			dsi_.collapseMaxZSlice(&confidence_map, &depth_cell_indices);
