@@ -26,14 +26,6 @@ namespace EMVS
 	using TypeDepthVector = LinearDepthVector;
 #endif
 
-	// // return the first iterator which is greater than t
-	// inline std::map<ros::Time, Eigen::Matrix4d>::const_iterator Homo_lower_bound(
-	// 	const std::map<ros::Time, Eigen::Matrix4d> &stm, const ros::Time &t)
-	// {
-	// 	return std::lower_bound(stm.begin(), stm.end(), t,
-	// 							[](const std::pair<ros::Time, Eigen::Matrix4d> &st, const ros::Time &t) { return st.first.toSec() < t.toSec(); });
-	// }
-
 	struct ShapeDSI
 	{
 	public:
@@ -140,8 +132,6 @@ namespace EMVS
 
 		// Precomputed (normalized) bearing vectors for each pixel of the reference image
 		Eigen::Matrix2Xf precomputed_rectified_points_;
-
-		const size_t packet_size_ = 1024;
 	};
 
 } // namespace EMVS

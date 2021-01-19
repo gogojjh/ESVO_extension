@@ -384,6 +384,7 @@ namespace esvo_core
 		tf_->setTransform(st);
 		// broadcast the tf such that the nav_path messages can find the valid fixed frame "map".
 		static tf::TransformBroadcaster br;
+		br.sendTransform(st);
 		m_buf_.unlock();
 	}
 

@@ -45,6 +45,10 @@ namespace EMVS
 		dsi_.resetGrid();
 	}
 
+	/**
+	 * @brief: This functionj use the latest events with discrete poses to update the DSI
+	 * pvEventsPtr: events, pvEventsPtr.front() is the latest event, pvEventsPtr.back() is the eariest event
+	 */
 	bool MapperEMVS::updateDSI(const std::vector<std::pair<ros::Time, Eigen::Matrix4d>> pVirtualPoses,
   							   const std::vector<dvs_msgs::Event *> pvEventsPtr)
 	{
@@ -62,7 +66,8 @@ namespace EMVS
 		camera_centers.clear();
 		camera_centers.reserve(pvEventsPtr.size());
 
-		auto it_ev_begin = pvEventsPtr.begin();
+		const float z0 = raw_depths_vec_[0];
+		auto it_ev_begin = pvEventsPtr.rbegin();
 		for (auto it_vp = pVirtualPoses.begin(); it_vp != pVirtualPoses.end(); it_vp++)
 		{
 			Eigen::Matrix4f T_w_ev = it_vp->second.cast<float>();
@@ -72,7 +77,6 @@ namespace EMVS
 			Eigen::Vector3f c = -R.transpose() * t;
 
 			// Project the points on plane at distance z0
-			const float z0 = raw_depths_vec_[0];
 			// Planar homography  (H_z0)^-1 that maps a point in the reference view to the event camera through plane Z = Z0 (Eq. (8) in the IJCV paper)
 			// Planar homography  (H_z0) transforms [u, v] to [X(Z0), Y(Z0), 1]
 			Eigen::Matrix3f H_z0_inv = R;
@@ -87,7 +91,7 @@ namespace EMVS
 			H_z0_px_4x4.col(3).setZero();
 			H_z0_px_4x4.row(3).setZero();
 
-			for (auto it_ev = it_ev_begin; it_ev != pvEventsPtr.end(); it_ev++)
+			for (auto it_ev = it_ev_begin; it_ev != pvEventsPtr.rend(); it_ev++)
 			{
 				if ((*it_ev)->ts.toSec() > it_vp->first.toSec())
 				{
@@ -95,9 +99,9 @@ namespace EMVS
 					break;
 				}
 
-				// if ((*it_ev)->y * width_ + (*it_ev)->x < 0 || 
-				// 	(*it_ev)->y * width_ + (*it_ev)->x >= precomputed_rectified_points_.cols())
-				// 	continue;
+				if ((*it_ev)->y * width_ + (*it_ev)->x < 0 || 
+					(*it_ev)->y * width_ + (*it_ev)->x >= precomputed_rectified_points_.cols())
+					continue;
 
 				// For each event, precompute the warped event locations according to Eq. (11) in the IJCV paper.
 				Eigen::Vector4f p;
@@ -111,7 +115,8 @@ namespace EMVS
 				camera_centers.push_back(c);
 			}
 		}
-		LOG(INFO) << "No. virtual cam: " << pVirtualPoses.size() << ", No. events: " << pvEventsPtr.size();
+		// LOG(INFO) << "No. virtual cam: " << pVirtualPoses.size() << ", No. events: " << pvEventsPtr.size();
+		// LOG(INFO) << "No. camera centers: " << camera_centers.size();
 
 		fillVoxelGrid(event_locations_z0, camera_centers);
 		return true;
@@ -201,7 +206,7 @@ namespace EMVS
 			}
 		}
 
-		void MapperEMVS::getDepthMapFromDSI(cv::Mat & depth_map, cv::Mat & confidence_map, cv::Mat & mask, const OptionsDepthMap &options_depth_map)
+		void MapperEMVS::getDepthMapFromDSI(cv::Mat &depth_map, cv::Mat &confidence_map, cv::Mat &mask, const OptionsDepthMap &options_depth_map)
 		{
 			// Reference: Section 5.2.3 in the IJCV paper.
 			// Maximum number of votes along optical ray

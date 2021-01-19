@@ -46,6 +46,7 @@
 
 #include <cv_bridge/cv_bridge.h>
 #include <pcl/point_types.h>
+#include <pcl/common/transforms.h>
 #include <pcl_ros/point_cloud.h>
 
 #define ESTIMATOR_DEBUG
@@ -94,7 +95,10 @@ namespace esvo_core
             Transformation &tr,
             ros::Time &t);
 
-        void publishDSIResults(const ros::Time &t, const cv::Mat &depthMap, const cv::Mat &semiDenseMask);
+        void publishEMVSPointCloud(const ros::Time &t, const Eigen::Matrix4d &T_w_rv);
+
+        void publishDSIResults(const ros::Time &t, const cv::Mat &semiDenseMask,
+                               const cv::Mat &depthMap, const cv::Mat &confidenceMap);
 
         void publishEventMap(const ros::Time &t);
 
@@ -250,8 +254,10 @@ namespace esvo_core
         /******************** For test & debug ********************/
         /**********************************************************/
         image_transport::Publisher invDepthMap_pub_, stdVarMap_pub_, ageMap_pub_, costMap_pub_;
-        image_transport::Publisher depthMap_pub_, confidenceMap_pub_;
+        image_transport::Publisher depthMap_pub_, confidenceMap_pub_, semiDenseMask_pub_;
         image_transport::Publisher eventMap_pub_;
+
+        ros::Publisher emvs_pc_pub_;
 
         // For counting the total number of fusion
         size_t TotalNumFusion_;
@@ -262,10 +268,14 @@ namespace esvo_core
         EMVS::MapperEMVS emvs_mapper_;
         EMVS::ShapeDSI emvs_dsi_shape_;
         EMVS::OptionsDepthMap emvs_opts_depth_map_;
+        EMVS::OptionsPointCloud emvs_opts_pc_;
+
         std::map<ros::Time, Eigen::Matrix4d> mAllPoses_;
         std::vector<std::pair<ros::Time, Eigen::Matrix4d>> mVirtualPoses_;
         EMVS::LinearTrajectory trajectory_;
         bool isKeyframe_;
+        Eigen::Matrix4d T_w_keyframe_, T_w_frame_;
+        pcl::PointCloud<pcl::PointXYZI>::Ptr emvs_pc_;
     };
 } // namespace esvo_core
 
