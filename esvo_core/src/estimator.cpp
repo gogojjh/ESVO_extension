@@ -191,9 +191,12 @@ namespace esvo_core
 		emvs_mapper_.configDSI(emvs_dsi_shape_);
 
 		// invDepth_INIT_ = 1.0;
-		mAllPoses_.clear();
 		isKeyframe_ = false;
+		T_w_frame_.setIdentity();
+		T_w_keyframe_.setIdentity();
+		meanDepth_ = 0.0;
 
+		mAllPoses_.clear();
 		emvs_pc_.reset(new pcl::PointCloud<pcl::PointXYZI>);
 		emvs_pc_->header.frame_id = world_frame_id_;
 		emvs_pc_pub_ = nh_.advertise<PointCloud>("/esvo_mapping/pointcloud_emvs", 1);
@@ -289,9 +292,6 @@ namespace esvo_core
 					if (InitializationAtTime(TS_obs_.first))
 					{
 						LOG(INFO) << "Initialization is successfully done!"; //(" << INITIALIZATION_COUNTER_ << ").";
-						isKeyframe_ = true;
-						T_w_frame_.setIdentity();
-						T_w_keyframe_.setIdentity();
 					}
 					else
 						LOG(INFO) << "Initialization fails once.";
@@ -302,8 +302,8 @@ namespace esvo_core
 					MappingAtTime(TS_obs_.first);
 
 					// monocular mapping
-					MonoMappingAtTime(TS_obs_.first);
 					insertKeyframe();
+					MonoMappingAtTime(TS_obs_.first);
 
 					std::thread tpublishEventMap(&esvo_Mapping::publishEventMap, this, TS_obs_.first);
 					tpublishEventMap.detach();
@@ -677,7 +677,7 @@ namespace esvo_core
 		emvs_mapper_.getDepthMapFromDSI(depth_map, confidence_map, semidense_mask, emvs_opts_depth_map_);
 		
 		std::vector<DepthPoint> vdp; // depth points on the current stereo observations
-		emvs_mapper_.getDepthPoint(depth_map, semidense_mask, vdp);
+		emvs_mapper_.getDepthPoint(depth_map, semidense_mask, vdp, meanDepth_);
 		t_ray_counting = tt_mapping.toc();
 		LOG(INFO) << "Number of depth points: " << vdp.size();
 		LOG(INFO) << "Ray counting costs: " << t_ray_counting << "ms"; // 25-30ms
@@ -788,10 +788,12 @@ namespace esvo_core
 		// a new key-frame is taken.
 		T_w_frame_ = TS_obs_.second.tr_.getTransformationMatrix();
 		double dis = (T_w_frame_.topRightCorner<3, 1>() - T_w_keyframe_.topRightCorner<3, 1>()).norm();
-		if (dis > KEYFRAME_LINEAR_DIS_)
+		// if (dis > KEYFRAME_LINEAR_DIS_)
+		if (meanDepth_ == 0 || dis > 0.15 * meanDepth_)
 		{
 			isKeyframe_ = true;
 			T_w_keyframe_ = T_w_frame_;
+			LOG(INFO) << "mean depth: " << meanDepth_ << "m";
 		} 
 		else
 		{

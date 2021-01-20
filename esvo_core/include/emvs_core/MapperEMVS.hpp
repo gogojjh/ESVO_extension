@@ -84,7 +84,7 @@ namespace EMVS
 		{
 
 		}
-		
+
 		// Outlier removal parameters
 		float radius_search_;
 		int min_num_neighbors_;
@@ -109,7 +109,8 @@ namespace EMVS
 
 		void getDepthPoint(const cv::Mat &depth_map,
 						   const cv::Mat &mask,
-						   std::vector<esvo_core::container::DepthPoint> &vdp);
+						   std::vector<esvo_core::container::DepthPoint> &vdp,
+						   double &mean_depth);
 
 		void getPointcloud(const cv::Mat &depth_map,
 						   const cv::Mat &mask,

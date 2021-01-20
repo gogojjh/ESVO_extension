@@ -276,6 +276,7 @@ namespace esvo_core
         pcl::PointCloud<pcl::PointXYZI>::Ptr emvs_pc_;
 
         std::string resultPath_;
+        double meanDepth_;
         double KEYFRAME_LINEAR_DIS_, KEYFRAME_ORIENTATION_DIS_;
     };
 } // namespace esvo_core

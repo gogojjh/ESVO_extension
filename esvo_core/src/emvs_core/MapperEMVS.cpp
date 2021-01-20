@@ -242,9 +242,11 @@ namespace EMVS
 
 		void MapperEMVS::getDepthPoint(const cv::Mat &depth_map,
 									   const cv::Mat &mask,
-									   std::vector<esvo_core::container::DepthPoint> &vdp)
+									   std::vector<esvo_core::container::DepthPoint> &vdp,
+									   double &mean_depth)
 		{
 			vdp.clear();
+			mean_depth = 0;
 			for (size_t y = 0; y < depth_map.rows; ++y)
 			{
 				for (size_t x = 0; x < depth_map.cols; ++x)
@@ -265,9 +267,12 @@ namespace EMVS
 						dp.update_p_cam(xyz_rv);
 						dp.updatePose(T_w_rv_);
 						vdp.push_back(dp);
+						mean_depth += xyz_rv.z();
 					}
 				}
 			}
+			if (vdp.size() != 0)
+				mean_depth /= vdp.size();
 		}
 
 		void MapperEMVS::getPointcloud(const cv::Mat &depth_map,
