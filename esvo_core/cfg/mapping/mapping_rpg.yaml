@@ -18,7 +18,7 @@ visualize_range: 5.0
 PROCESS_EVENT_NUM: 1000
 TS_HISTORY_LENGTH: 100
 INIT_SGM_DP_NUM_THRESHOLD: 500
-mapping_rate_hz: 20
+mapping_rate_hz: 100
 # DepthProblemConfig
 patch_size_X: 15
 patch_size_Y: 7
@@ -33,3 +33,14 @@ BM_max_disparity: 40
 BM_step: 1
 BM_ZNCC_Threshold: 0.1
 BM_bUpDownConfiguration: False
+
+# Monocular Mapping
+opts_depth_map_kernal_size: 5 # Size of the Gaussian kernel used for adaptive thresholding"
+opts_depth_map_threshold_c: 7 # A value in [0, 255]. The smaller the noisier and more dense reconstruction"
+opts_depth_map_median_filter_size: 5 # Size of the median filter used to clean the depth map"
+opts_pc_radius_search: 0.03
+opts_pc_min_num_neighbors: 3
+CAM_CALIB_PATH: "/home/jjiao/catkin_ws/src/localization/ESVO/esvo_core/calib/rpg/left_pinhole.yaml"
+PATH_TO_SAVE_RESULT: "/home/jjiao/ESVO_result/rpg/" # CHANGE THIS PATH
+KEYFRAME_LINEAR_DIS: 0.15 # m
+KEYFRAME_ORIENTATION_DIS: 5 # degree

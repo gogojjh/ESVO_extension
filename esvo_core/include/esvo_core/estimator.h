@@ -256,14 +256,12 @@ namespace esvo_core
         image_transport::Publisher invDepthMap_pub_, stdVarMap_pub_, ageMap_pub_, costMap_pub_;
         image_transport::Publisher depthMap_pub_, confidenceMap_pub_, semiDenseMask_pub_;
         image_transport::Publisher eventMap_pub_;
-
         ros::Publisher emvs_pc_pub_;
 
         // For counting the total number of fusion
         size_t TotalNumFusion_;
-
+        
         double invDepth_INIT_;
-
         camodocal::CameraPtr camPtr_, camVirtualPtr_;
         EMVS::MapperEMVS emvs_mapper_;
         EMVS::ShapeDSI emvs_dsi_shape_;
@@ -276,6 +274,9 @@ namespace esvo_core
         bool isKeyframe_;
         Eigen::Matrix4d T_w_keyframe_, T_w_frame_;
         pcl::PointCloud<pcl::PointXYZI>::Ptr emvs_pc_;
+
+        std::string resultPath_;
+        double KEYFRAME_LINEAR_DIS_, KEYFRAME_ORIENTATION_DIS_;
     };
 } // namespace esvo_core
 

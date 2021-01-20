@@ -59,16 +59,32 @@ namespace EMVS
 
 	struct OptionsDepthMap
 	{
+	public:
+		OptionsDepthMap(const int &adaptive_threshold_kernel_size,
+						const double &adaptive_threshold_c,
+						const int &median_filter_size) : adaptive_threshold_kernel_size_(adaptive_threshold_kernel_size),
+														 adaptive_threshold_c_(adaptive_threshold_c),
+														 median_filter_size_(median_filter_size)
+		{
+
+		}
+
 		// Adaptive Gaussian Thresholding parameters
 		int adaptive_threshold_kernel_size_;
 		double adaptive_threshold_c_;
-
 		// Kernel size of median filter
 		int median_filter_size_;
 	};
 
 	struct OptionsPointCloud
 	{
+	public:
+		OptionsPointCloud(const float &radius_search, const int &min_num_neighbors) : radius_search_(radius_search),
+																					  min_num_neighbors_(min_num_neighbors)
+		{
+
+		}
+		
 		// Outlier removal parameters
 		float radius_search_;
 		int min_num_neighbors_;

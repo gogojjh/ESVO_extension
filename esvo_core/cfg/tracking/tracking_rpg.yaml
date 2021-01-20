@@ -14,5 +14,5 @@ huber_threshold: 50
 MIN_NUM_EVENTS: 1000
 RegProblemType: 1 #( 0 numerical; 1 analytical)
 SAVE_TRAJECTORY: False
-PATH_TO_SAVE_TRAJECTORY: "/home/jjiao/ESVO_result/rpg_bin/" # CHANGE THIS PATH
+PATH_TO_SAVE_TRAJECTORY: "/home/jjiao/ESVO_result/rpg/" # CHANGE THIS PATH
 VISUALIZE_TRAJECTORY: True

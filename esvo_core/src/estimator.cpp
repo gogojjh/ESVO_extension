@@ -51,12 +51,18 @@ namespace esvo_core
 		  pc_near_(new PointCloud()),
 		  pc_global_(new PointCloud()),
 		  depthFramePtr_(new DepthFrame(camSysPtr_->cam_left_ptr_->height_, camSysPtr_->cam_left_ptr_->width_)),
-		  // added by jjiao
-		  camPtr_(camodocal::CameraFactory::instance()->generateCameraFromYamlFile("/home/jjiao/catkin_ws/src/localization/ESVO/esvo_core/calib/upenn/left_pinhole.yaml")),
-		  camVirtualPtr_(camodocal::CameraFactory::instance()->generateCameraFromYamlFile("/home/jjiao/catkin_ws/src/localization/ESVO/esvo_core/calib/upenn/left_pinhole.yaml")),
-		  //   emvs_dsi_shape_(0, 0, 100, 1.0 / invDepth_max_range_, 1.0 / invDepth_min_range_, 0.0),
-		  emvs_dsi_shape_(0, 0, 100, 0.5, 5, 0.0),
-		  emvs_mapper_(camPtr_, camVirtualPtr_)
+		  // Monocular Mapping
+		  camPtr_(camodocal::CameraFactory::instance()->generateCameraFromYamlFile(
+			  tools::param(pnh_, "CAM_CALIB_PATH", std::string("left_pinhold.yaml")))),
+		  camVirtualPtr_(camodocal::CameraFactory::instance()->generateCameraFromYamlFile(
+			  tools::param(pnh_, "CAM_CALIB_PATH", std::string("left_pinhold.yaml")))),
+		  emvs_dsi_shape_(0, 0, 100, 1.0 / invDepth_max_range_, 1.0 / invDepth_min_range_, 0.0),
+		  emvs_mapper_(camPtr_, camVirtualPtr_),
+		  emvs_opts_depth_map_(tools::param(pnh_, "opts_depth_map_kernal_size", 5),
+							   tools::param(pnh_, "opts_depth_map_threshold_c", 5),
+							   tools::param(pnh_, "opts_depth_map_median_filter_size", 5)),
+		  emvs_opts_pc_(tools::param(pnh_, "opts_pc_radius_search", 0.05), 
+		  				tools::param(pnh_, "opts_pc_min_num_neighbors", 3))
 	{
 		// frame id
 		dvs_frame_id_ = tools::param(pnh_, "dvs_frame_id", std::string("dvs"));
@@ -101,6 +107,10 @@ namespace esvo_core
 		BM_step_ = tools::param(pnh_, "BM_step", 1);
 		BM_ZNCC_Threshold_ = tools::param(pnh_, "BM_ZNCC_Threshold", 0.1);
 		BM_bUpDownConfiguration_ = tools::param(pnh_, "BM_bUpDownConfiguration", false);
+
+		resultPath_ = tools::param(pnh_, "PATH_TO_SAVE_RESULT", std::string());
+		KEYFRAME_LINEAR_DIS_ = tools::param(pnh_, "KEYFRAME_LINEAR_DIS", 0.2);
+		KEYFRAME_ORIENTATION_DIS_ = tools::param(pnh_, "KEYFRAME_ORIENTATION_DIS", 5); // deg
 
 		// SGM parameters (Used by Initialization)
 		num_disparities_ = 16 * 3;
@@ -179,18 +189,10 @@ namespace esvo_core
 
 		// DSI_Mapper configure
 		emvs_mapper_.configDSI(emvs_dsi_shape_);
-		emvs_opts_depth_map_.adaptive_threshold_kernel_size_ = 5; // Size of the Gaussian kernel used for adaptive thresholding"
-		emvs_opts_depth_map_.adaptive_threshold_c_ = 7;           // A value in [0, 255]. The smaller the noisier and more dense reconstruction"
-		emvs_opts_depth_map_.median_filter_size_ = 7;             // Size of the median filter used to clean the depth map"
-
-		emvs_opts_pc_.radius_search_ = 0.05;
-		emvs_opts_pc_.min_num_neighbors_ = 3;
 
 		// invDepth_INIT_ = 1.0;
 		mAllPoses_.clear();
 		isKeyframe_ = false;
-		// T_w_keyframe_.setIdentity();
-		// T_w_frame_.setIdentity();
 
 		emvs_pc_.reset(new pcl::PointCloud<pcl::PointXYZI>);
 		emvs_pc_->header.frame_id = world_frame_id_;
@@ -616,8 +618,7 @@ namespace esvo_core
 
 			// Extract denoised events (appear on edges likely).
 			vDenoisedEventsPtr_left_.clear();
-			extractDenoisedEvents(vCloseEventsPtr_left_, vDenoisedEventsPtr_left_, denoising_mask, PROCESS_EVENT_NUM_ * 2);
-			// extractDenoisedEvents(vCloseEventsPtr_left_, vDenoisedEventsPtr_left_, denoising_mask, 10000);
+			extractDenoisedEvents(vCloseEventsPtr_left_, vDenoisedEventsPtr_left_, denoising_mask, 0);
 			totalNumCount_ = vDenoisedEventsPtr_left_.size();
 			t_denoising = tt_mapping.toc();
 		}
@@ -625,10 +626,10 @@ namespace esvo_core
 		{
 			vDenoisedEventsPtr_left_.clear();
 			vDenoisedEventsPtr_left_.reserve(PROCESS_EVENT_NUM_ * 2);
-			vDenoisedEventsPtr_left_.insert(vDenoisedEventsPtr_left_.end(), vCloseEventsPtr_left_.begin(),
-											vCloseEventsPtr_left_.begin() + min(vCloseEventsPtr_left_.size(), PROCESS_EVENT_NUM_ * 2));
 			// vDenoisedEventsPtr_left_.insert(vDenoisedEventsPtr_left_.end(), vCloseEventsPtr_left_.begin(),
-			// 								vCloseEventsPtr_left_.end());
+			// 								vCloseEventsPtr_left_.begin() + min(vCloseEventsPtr_left_.size(), PROCESS_EVENT_NUM_ * 2));
+			vDenoisedEventsPtr_left_.insert(vDenoisedEventsPtr_left_.end(), vCloseEventsPtr_left_.begin(),
+											vCloseEventsPtr_left_.end());
 		}
 		LOG(INFO) << "Process events: " << vDenoisedEventsPtr_left_.size();
 
@@ -641,7 +642,8 @@ namespace esvo_core
 		if (isKeyframe_)
 		{
 			LOG(INFO) << "insert a keyframe";
-			emvs_mapper_.initializeDSI(TS_obs_.second.tr_.getTransformationMatrix());
+			emvs_mapper_.dsi_.writeGridNpy(std::string(resultPath_ + "dsi.npy").c_str());
+			emvs_mapper_.initializeDSI(T_w_keyframe_);
 			emvs_mapper_.updateDSI(mVirtualPoses_, vDenoisedEventsPtr_left_);
 		}
 		else
@@ -668,14 +670,7 @@ namespace esvo_core
 #endif
 
 		// ******************************** Ray Counting on DSI
-		// emvs_mapper_.dsi_.writeGridNpy("/tmp/dsi.npy");
-		// double t_optimization = 0;
-		// double t_solve, t_fusion, t_regularization;
-		// t_solve = t_fusion = t_regularization = 0;
-		// size_t numFusionCount = 0; // To count the total number of fusion (in terms of fusion between two estimates, i.e. a priori and a propagated one).
-		// tt_mapping.tic();
 		// maximizeContrast(depth_map); 
-
 		double t_ray_counting;
 		tt_mapping.tic();
 		cv::Mat depth_map, confidence_map, semidense_mask;
@@ -793,7 +788,7 @@ namespace esvo_core
 		// a new key-frame is taken.
 		T_w_frame_ = TS_obs_.second.tr_.getTransformationMatrix();
 		double dis = (T_w_frame_.topRightCorner<3, 1>() - T_w_keyframe_.topRightCorner<3, 1>()).norm();
-		if (dis > 0.2)
+		if (dis > KEYFRAME_LINEAR_DIS_)
 		{
 			isKeyframe_ = true;
 			T_w_keyframe_ = T_w_frame_;
@@ -1468,7 +1463,7 @@ namespace esvo_core
 		vEdgeEventsPtr.reserve(vCloseEventsPtr.size());
 		for (size_t i = 0; i < vCloseEventsPtr.size(); i++)
 		{
-			if (vEdgeEventsPtr.size() >= maxNum)
+			if (maxNum != 0 && vEdgeEventsPtr.size() >= maxNum)
 				break;
 			size_t x = vCloseEventsPtr[i]->x;
 			size_t y = vCloseEventsPtr[i]->y;
