@@ -102,42 +102,43 @@ bool RegProblemSolverLM::solve_numerical()
 
     iteration++;
     nfev += lm.nfev;
-
-    /*************************** Visualization ************************/
-    if(bVisualize_)// will slow down the tracker's performance a little bit
-    {
-      size_t width = camSysPtr_->cam_left_ptr_->width_;
-      size_t height = camSysPtr_->cam_left_ptr_->height_;
-      cv::Mat reprojMap_left = cv::Mat(cv::Size(width, height), CV_8UC1, cv::Scalar(0));
-      cv::eigen2cv(numDiff_regProblemPtr_->cur_->pTsObs_->TS_negative_left_, reprojMap_left);
-      reprojMap_left.convertTo(reprojMap_left, CV_8UC1);
-      cv::cvtColor(reprojMap_left, reprojMap_left, CV_GRAY2BGR);
-
-      // project 3D points to current frame
-      Eigen::Matrix3d R_cur_ref =  numDiff_regProblemPtr_->R_.transpose();
-      Eigen::Vector3d t_cur_ref = -numDiff_regProblemPtr_->R_.transpose() * numDiff_regProblemPtr_->t_;
-
-      size_t numVisualization = std::min(numDiff_regProblemPtr_->ResItems_.size(), (size_t)2000);
-      for(size_t i = 0; i < numVisualization; i++)
-      {
-        ResidualItem & ri = numDiff_regProblemPtr_->ResItems_[i];
-        Eigen::Vector3d p_3D = R_cur_ref * ri.p_ + t_cur_ref;
-        Eigen::Vector2d p_img_left;
-        camSysPtr_->cam_left_ptr_->world2Cam(p_3D, p_img_left);
-        double z = ri.p_[2];
-        visualizor_.DrawPoint(1.0 / z, 1.0 / z_min_, 1.0 / z_max_,
-                              Eigen::Vector2d(p_img_left(0), p_img_left(1)), reprojMap_left);
-      }
-      std_msgs::Header header;
-      header.stamp = numDiff_regProblemPtr_->cur_->t_;
-      sensor_msgs::ImagePtr msg = cv_bridge::CvImage(header, "bgr8", reprojMap_left).toImageMsg();
-      reprojMap_pub_->publish(msg);
-    }
-    /*************************** Visualization ************************/
     if(status == 2 || status == 3)
       break;
   }
-//  LOG(INFO) << "LM Finished ...................";
+  
+  /*************************** Visualization ************************/
+  if(bVisualize_)// will slow down the tracker's performance a little bit
+  {
+    size_t width = camSysPtr_->cam_left_ptr_->width_;
+    size_t height = camSysPtr_->cam_left_ptr_->height_;
+    cv::Mat reprojMap_left = cv::Mat(cv::Size(width, height), CV_8UC1, cv::Scalar(0));
+    cv::eigen2cv(numDiff_regProblemPtr_->cur_->pTsObs_->TS_negative_left_, reprojMap_left);
+    reprojMap_left.convertTo(reprojMap_left, CV_8UC1);
+    cv::cvtColor(reprojMap_left, reprojMap_left, CV_GRAY2BGR);
+
+    // project 3D points to current frame
+    Eigen::Matrix3d R_cur_ref =  numDiff_regProblemPtr_->R_.transpose();
+    Eigen::Vector3d t_cur_ref = -numDiff_regProblemPtr_->R_.transpose() * numDiff_regProblemPtr_->t_;
+
+    size_t numVisualization = std::min(numDiff_regProblemPtr_->ResItems_.size(), (size_t)2000);
+    for(size_t i = 0; i < numVisualization; i++)
+    {
+      ResidualItem & ri = numDiff_regProblemPtr_->ResItems_[i];
+      Eigen::Vector3d p_3D = R_cur_ref * ri.p_ + t_cur_ref;
+      Eigen::Vector2d p_img_left;
+      camSysPtr_->cam_left_ptr_->world2Cam(p_3D, p_img_left);
+      double z = ri.p_[2];
+      visualizor_.DrawPoint(1.0 / z, 1.0 / z_min_, 1.0 / z_max_,
+                            Eigen::Vector2d(p_img_left(0), p_img_left(1)), reprojMap_left);
+    }
+    std_msgs::Header header;
+    header.stamp = numDiff_regProblemPtr_->cur_->t_;
+    sensor_msgs::ImagePtr msg = cv_bridge::CvImage(header, "bgr8", reprojMap_left).toImageMsg();
+    reprojMap_pub_->publish(msg);
+  }
+  /*************************** Visualization ************************/
+
+  //  LOG(INFO) << "LM Finished ...................";
   numDiff_regProblemPtr_->setPose();
   lmStatics_.nPoints_ = numDiff_regProblemPtr_->numPoints_;
   lmStatics_.nfev_ = nfev;
@@ -158,8 +159,7 @@ bool RegProblemSolverLM::solve_analytical()
   {
     if(iteration >= rpConfigPtr_->MAX_ITERATION_)
       break;
-    regProblemPtr_->setStochasticSampling(
-      (iteration % regProblemPtr_->numBatches_) * rpConfigPtr_->BATCH_SIZE_, rpConfigPtr_->BATCH_SIZE_);
+    regProblemPtr_->setStochasticSampling((iteration % regProblemPtr_->numBatches_) * rpConfigPtr_->BATCH_SIZE_, rpConfigPtr_->BATCH_SIZE_);
     Eigen::VectorXd x(6);
     x.fill(0.0);
     if(lm.minimizeInit(x) == Eigen::LevenbergMarquardtSpace::ImproperInputParameters)

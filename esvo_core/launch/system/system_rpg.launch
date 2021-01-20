@@ -61,8 +61,8 @@
 	</node>
 
 	<!-- Visualization -->
-	<node pkg="rqt_gui" type="rqt_gui" name="rqt_gui"
-    args="--perspective-file $(find esvo_core)/esvo_system.perspective" />
+	<!-- <node pkg="rqt_gui" type="rqt_gui" name="rqt_gui"
+    args="-perspective-file $(find esvo_core)/esvo_system.perspective" />
 	<node pkg="rviz" type="rviz" name="rviz"
-    args="-d $(find esvo_core)/esvo_system.rviz" />
+    args="-d $(find esvo_core)/esvo_system.rviz" /> -->
 </launch>

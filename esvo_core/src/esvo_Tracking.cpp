@@ -157,7 +157,7 @@ namespace esvo_core
 
 					if (rpType_ == REG_NUMERICAL)
 						rpSolver_.solve_numerical();
-					if (rpType_ == REG_ANALYTICAL)
+					if (rpType_ == REG_ANALYTICAL) // default: analytical
 						rpSolver_.solve_analytical();
 
 					T_world_cur_ = cur_.tr_.getTransformationMatrix();

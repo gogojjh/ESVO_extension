@@ -227,7 +227,7 @@ namespace esvo_core
           Eigen::MatrixXd gx, gy;
           patchInterpolation(pTsObs_->dTS_negative_du_left_, x1_s, gx);
           patchInterpolation(pTsObs_->dTS_negative_dv_left_, x1_s, gy);
-          Eigen::Vector2d grad = Eigen::Vector2d(gx(0, 0) / 8, gy(0, 0) / 8); //8 is the normalization factor for 3x3 sobel filter.
+          Eigen::Vector2d grad = Eigen::Vector2d(gx(0, 0) / 8, gy(0, 0) / 8); // 8 is the normalization factor for 3x3 sobel filter.
 
           Eigen::Matrix<double, 2, 3> dPi_dT;
           dPi_dT.setZero();
@@ -254,7 +254,7 @@ namespace esvo_core
       // Thus, R_.transpose() is used as dT_dInvPi. Besides, J_theta = dPi_dT * dT_dG' * dG'_dG * dG_dtheta. G'(dtheta) recovers
       // the motion for the warping, namely R_.transpose(), -R.transpose() * t.
       //          /                                 \
-  //          | 1 0 0 0 0 0 0 0 0       | 0 0 0 |
+      //          | 1 0 0 0 0 0 0 0 0       | 0 0 0 |
       //          | 0 0 0 1 0 0 0 0 0       | 0 0 0 |
       //          | 0 0 0 0 0 0 1 0 0       | 0 0 0 |
       //          | 0 1 0 0 0 0 0 0 0       | 0 0 0 |

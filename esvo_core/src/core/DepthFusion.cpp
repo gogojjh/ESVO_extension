@@ -89,6 +89,7 @@ namespace esvo_core
                             int fusion_radius)
     {
       int numFusion = 0;
+      
       // get neighbour pixels involved in fusion
       std::vector<std::pair<size_t, size_t>> vpCoordinate; // pair: <row, col>
       if (fusion_radius == 0)
@@ -111,6 +112,7 @@ namespace esvo_core
           for (int dx = -1; dx <= 1; dx++)
             vpCoordinate.push_back(std::make_pair(row_centre + dy, col_centre + dx));
       }
+
       // fusion
       for (size_t i = 0; i < vpCoordinate.size(); i++)
       {
@@ -182,6 +184,7 @@ namespace esvo_core
           }
         }
       }
+
       return numFusion;
     }
 

@@ -56,13 +56,16 @@ namespace esvo_core
 			  tools::param(pnh_, "CAM_CALIB_PATH", std::string("left_pinhold.yaml")))),
 		  camVirtualPtr_(camodocal::CameraFactory::instance()->generateCameraFromYamlFile(
 			  tools::param(pnh_, "CAM_CALIB_PATH", std::string("left_pinhold.yaml")))),
-		  emvs_dsi_shape_(0, 0, 100, 1.0 / invDepth_max_range_, 1.0 / invDepth_min_range_, 0.0),
+		  emvs_dsi_shape_(tools::param(pnh_, "opts_dim_x", 0),
+						  tools::param(pnh_, "opts_dim_y", 0),
+						  tools::param(pnh_, "opts_dim_z", 100),
+						  1.0 / invDepth_max_range_, 1.0 / invDepth_min_range_, 0.0),
 		  emvs_mapper_(camPtr_, camVirtualPtr_),
 		  emvs_opts_depth_map_(tools::param(pnh_, "opts_depth_map_kernal_size", 5),
 							   tools::param(pnh_, "opts_depth_map_threshold_c", 5),
 							   tools::param(pnh_, "opts_depth_map_median_filter_size", 5)),
-		  emvs_opts_pc_(tools::param(pnh_, "opts_pc_radius_search", 0.05), 
-		  				tools::param(pnh_, "opts_pc_min_num_neighbors", 3))
+		  emvs_opts_pc_(tools::param(pnh_, "opts_pc_radius_search", 0.05),
+						tools::param(pnh_, "opts_pc_min_num_neighbors", 3))
 	{
 		// frame id
 		dvs_frame_id_ = tools::param(pnh_, "dvs_frame_id", std::string("dvs"));
@@ -157,6 +160,7 @@ namespace esvo_core
 
 		// result publishers
 		pc_pub_ = nh_.advertise<PointCloud>("/esvo_mapping/pointcloud_local", 1);
+		pc_mono_pub_ = nh_.advertise<PointCloud>("/esvo_mapping/pointcloud_mono", 1);
 		invDepthMap_pub_ = it_.advertise("Inverse_Depth_Map", 1);
 		stdVarMap_pub_ = it_.advertise("Standard_Variance_Map", 1);
 		ageMap_pub_ = it_.advertise("Age_Map", 1);
@@ -209,6 +213,8 @@ namespace esvo_core
 	esvo_Mapping::~esvo_Mapping()
 	{
 		pc_pub_.shutdown();
+		pc_mono_pub_.shutdown();
+		emvs_pc_pub_.shutdown();
 		invDepthMap_pub_.shutdown();
 		stdVarMap_pub_.shutdown();
 		ageMap_pub_.shutdown();
@@ -625,7 +631,7 @@ namespace esvo_core
 		else
 		{
 			vDenoisedEventsPtr_left_.clear();
-			vDenoisedEventsPtr_left_.reserve(PROCESS_EVENT_NUM_ * 2);
+			// vDenoisedEventsPtr_left_.reserve(PROCESS_EVENT_NUM_ * 2);
 			// vDenoisedEventsPtr_left_.insert(vDenoisedEventsPtr_left_.end(), vCloseEventsPtr_left_.begin(),
 			// 								vCloseEventsPtr_left_.begin() + min(vCloseEventsPtr_left_.size(), PROCESS_EVENT_NUM_ * 2));
 			vDenoisedEventsPtr_left_.insert(vDenoisedEventsPtr_left_.end(), vCloseEventsPtr_left_.begin(),
@@ -653,7 +659,6 @@ namespace esvo_core
 		}
 		t_DSI = tt_mapping.toc();
 		// LOG(INFO) << "update DSI costs: " << t_DSI << "ms"; // 2-3ms
-		t_overall_count += t_DSI;
 
 #ifdef EMVS_MAPPING_DEBUG
 		if (TS_id_ >= 20)
@@ -669,7 +674,7 @@ namespace esvo_core
 		std::cout << "vir pose: " << mVirtualPoses_.back().second.topRightCorner<3, 1>().cast<float>().transpose() << std::endl;
 #endif
 
-		// ******************************** Ray Counting on DSI
+		// ******************************** Ray Counting on DSI (not need to do frequently)
 		// maximizeContrast(depth_map); 
 		double t_ray_counting;
 		tt_mapping.tic();
@@ -677,38 +682,34 @@ namespace esvo_core
 		emvs_mapper_.getDepthMapFromDSI(depth_map, confidence_map, semidense_mask, emvs_opts_depth_map_);
 		
 		std::vector<DepthPoint> vdp; // depth points on the current stereo observations
-		emvs_mapper_.getDepthPoint(depth_map, semidense_mask, vdp, meanDepth_);
+		emvs_mapper_.getDepthPoint(depth_map, confidence_map, semidense_mask, vdp, meanDepth_); 
 		t_ray_counting = tt_mapping.toc();
 		LOG(INFO) << "Number of depth points: " << vdp.size();
 		LOG(INFO) << "Ray counting costs: " << t_ray_counting << "ms"; // 25-30ms
-		t_overall_count += t_ray_counting;
-
-		emvs_pc_->clear();
-		emvs_mapper_.getPointcloud(depth_map, semidense_mask, emvs_opts_pc_, emvs_pc_);
-		publishEMVSPointCloud(t, emvs_mapper_.T_w_rv_);
 
 		// ******************************** Fusion (strategy 1: const number of point)
 		// if (FusionStrategy_ == "CONST_POINTS")
 		// {
 		// 	size_t numFusionPoints = 0;
 		// 	tt_mapping.tic();
-		// 	dqvDepthPoints_.push_back(vdp);
-		// 	for (size_t n = 0; n < dqvDepthPoints_.size(); n++)
-		// 		numFusionPoints += dqvDepthPoints_[n].size();
-		// 	while (numFusionPoints > 1.5 * maxNumFusionPoints_)
+		// 	dqvMonoDepthPoints_.push_back(vdp);
+		// 	for (size_t n = 0; n < dqvMonoDepthPoints_.size(); n++)
+		// 		numFusionPoints += dqvMonoDepthPoints_[n].size();
+		// 	// while (numFusionPoints > 1.5 * maxNumFusionPoints_)
+		// 	while (numFusionPoints > 10000)
 		// 	{
-		// 		dqvDepthPoints_.pop_front();
+		// 		dqvMonoDepthPoints_.pop_front();
 		// 		numFusionPoints = 0;
-		// 		for (size_t n = 0; n < dqvDepthPoints_.size(); n++)
-		// 			numFusionPoints += dqvDepthPoints_[n].size();
+		// 		for (size_t n = 0; n < dqvMonoDepthPoints_.size(); n++)
+		// 			numFusionPoints += dqvMonoDepthPoints_[n].size();
 		// 	}
 		// }
 		// else if (FusionStrategy_ == "CONST_FRAMES") // (strategy 2: const number of frames)
 		// {
 		// 	tt_mapping.tic();
-		// 	dqvDepthPoints_.push_back(vdp); // all depth points on historical stereo observations
-		// 	while (dqvDepthPoints_.size() > maxNumFusionFrames_)
-		// 		dqvDepthPoints_.pop_front();
+		// 	dqvMonoDepthPoints_.push_back(vdp); // all depth points on historical stereo observations
+		// 	while (dqvMonoDepthPoints_.size() > maxNumFusionFrames_)
+		// 		dqvMonoDepthPoints_.pop_front();
 		// }
 		// else
 		// {
@@ -718,15 +719,16 @@ namespace esvo_core
 		// LOG(INFO) << "Fusion succeeds";
 
 		// // ******************************** apply fusion and count the total number of fusion.
-		// numFusionCount = 0;
-		// for (auto it = dqvDepthPoints_.rbegin(); it != dqvDepthPoints_.rend(); it++)
+		// double t_fusion, t_regularization;
+		// size_t numFusionCount = 0;
+		// for (auto it = dqvMonoDepthPoints_.rbegin(); it != dqvMonoDepthPoints_.rend(); it++)
 		// {
 		// 	numFusionCount += dFusor_.update(*it, depthFramePtr_, fusion_radius_); // fusing new points to update the depthmap
-		// 																		   // LOG(INFO) << "numFusionCount: " << numFusionCount;
+		// 	// LOG(INFO) << "numFusionCount: " << numFusionCount;
 		// }
 
 		// TotalNumFusion_ += numFusionCount;
-		// depthFramePtr_->dMap_->clean(pow(stdVar_vis_threshold_, 2), age_vis_threshold_, invDepth_max_range_, invDepth_min_range_);
+		// // depthFramePtr_->dMap_->clean(pow(stdVar_vis_threshold_, 2), age_vis_threshold_, invDepth_max_range_, invDepth_min_range_);
 		// t_fusion = tt_mapping.toc();
 
 		// // regularization
@@ -736,18 +738,22 @@ namespace esvo_core
 		// 	dRegularizor_.apply(depthFramePtr_->dMap_);
 		// 	t_regularization = tt_mapping.toc();
 		// }
-		// // count time
-		// t_optimization = t_solve + t_fusion + t_regularization;
-		// t_overall_count += t_optimization;
 
-		// // publish results
-		// std::thread tPublishMappingResult(&esvo_Mapping::publishMappingResults, this,
-		// 								  depthFramePtr_->dMap_, depthFramePtr_->T_world_frame_, t);
-		// tPublishMappingResult.detach();
+		// // count time
+		// t_overall_count += t_DSI + t_ray_counting + t_fusion + t_regularization;
+
+		// publish results
+		emvs_pc_->clear();
+		emvs_mapper_.getPointcloud(depth_map, semidense_mask, emvs_opts_pc_, emvs_pc_);
+		publishEMVSPointCloud(t, emvs_mapper_.T_w_rv_);
 
 		std::thread tPublishDSIResult(&esvo_Mapping::publishDSIResults, this,
 									  t, semidense_mask, depth_map, confidence_map);
 		tPublishDSIResult.detach();
+
+		// std::thread tPublishMappingResult(&esvo_Mapping::publishMonoMappingResults, this,
+		// 								  depthFramePtr_->dMap_, depthFramePtr_->T_world_frame_, t);
+		// tPublishMappingResult.detach();
 
 #ifdef ESVO_CORE_MAPPING_LOG
 		LOG(INFO) << "\n";
@@ -1143,6 +1149,7 @@ namespace esvo_core
 		TS_id_ = 0;
 		depthFramePtr_->clear();
 		dqvDepthPoints_.clear();
+		dqvMonoDepthPoints_.clear();
 
 		ebm_.resetParameters(BM_patch_size_X_, BM_patch_size_Y_,
 							 BM_min_disparity_, BM_max_disparity_, BM_step_, BM_ZNCC_Threshold_, BM_bUpDownConfiguration_);
@@ -1276,6 +1283,51 @@ namespace esvo_core
 		}
 	}
 
+	void esvo_Mapping::publishMonoMappingResults(DepthMap::Ptr depthMapPtr,
+												 Transformation tr,
+												 ros::Time t)
+	{
+		// cv::Mat invDepthImage, stdVarImage, ageImage, costImage, eventImage, confidenceMap;
+
+		// invDepthImage
+		// visualizor_.plot_map(depthMapPtr, tools::InvDepthMap, invDepthImage,
+		// 					 invDepth_max_range_, invDepth_min_range_, stdVar_vis_threshold_, age_vis_threshold_);
+		// publishImage(invDepthImage, t, invDepthMap_pub_);
+
+		// stdVarImage
+		// visualizor_.plot_map(depthMapPtr, tools::StdVarMap, stdVarImage,
+		// 					 stdVar_vis_threshold_, 0.0, stdVar_vis_threshold_);
+		// publishImage(stdVarImage, t, stdVarMap_pub_);
+
+		// ageImage
+		// visualizor_.plot_map(depthMapPtr, tools::AgeMap, ageImage, age_max_range_, 0, age_vis_threshold_);
+		// publishImage(ageImage, t, ageMap_pub_);
+
+		// costImage
+		// visualizor_.plot_map(depthMapPtr, tools::CostMap, costImage, cost_vis_threshold_, 0.0, cost_vis_threshold_);
+		// publishImage(costImage, t, costMap_pub_);
+
+		if (ESVO_System_Status_ == "INITIALIZATION")
+			publishMonoPointCloud(depthMapPtr, tr, t);
+
+		if (ESVO_System_Status_ == "WORKING")
+		{
+			if (FusionStrategy_ == "CONST_FRAMES")
+			{
+				if (dqvDepthPoints_.size() == maxNumFusionFrames_)
+					publishMonoPointCloud(depthMapPtr, tr, t);
+			}
+			if (FusionStrategy_ == "CONST_POINTS")
+			{
+				size_t numFusionPoints = 0;
+				for (size_t n = 0; n < dqvDepthPoints_.size(); n++)
+					numFusionPoints += dqvDepthPoints_[n].size();
+				if (numFusionPoints > 0.5 * maxNumFusionPoints_)
+					publishMonoPointCloud(depthMapPtr, tr, t);
+			}
+		}
+	}
+
 	void esvo_Mapping::publishEMVSPointCloud(const ros::Time &t, const Eigen::Matrix4d &T_w_rv)
 	{
 		pcl::PointCloud<pcl::PointXYZI> tmp_pc;
@@ -1354,10 +1406,72 @@ namespace esvo_core
 		}
 	}
 
+	void esvo_Mapping::publishMonoPointCloud(DepthMap::Ptr &depthMapPtr,
+											 Transformation &tr,
+											 ros::Time &t)
+	{
+		sensor_msgs::PointCloud2::Ptr pc_to_publish(new sensor_msgs::PointCloud2);
+		Eigen::Matrix<double, 4, 4> T_world_result = tr.getTransformationMatrix();
+
+		pc_->clear();
+		pc_->reserve(50000);
+		pc_near_->clear();
+		pc_near_->reserve(50000);
+
+		double FarthestDistance = 0.0;
+		Eigen::Vector3d FarthestPoint;
+
+		for (auto it = depthMapPtr->begin(); it != depthMapPtr->end(); it++)
+		{
+			Eigen::Vector3d p_world = T_world_result.block<3, 3>(0, 0) * it->p_cam() + T_world_result.block<3, 1>(0, 3);
+			pc_->push_back(pcl::PointXYZ(p_world(0), p_world(1), p_world(2)));
+
+			if (it->p_cam().norm() < visualize_range_)
+				pc_near_->push_back(pcl::PointXYZ(p_world(0), p_world(1), p_world(2)));
+
+			if (it->p_cam().norm() > FarthestDistance)
+			{
+				FarthestDistance = it->p_cam().norm();
+				FarthestPoint = it->p_cam();
+			}
+		}
+
+		if (!pc_->empty())
+		{
+			pcl::toROSMsg(*pc_, *pc_to_publish);
+			pc_to_publish->header.stamp = t;
+			pc_mono_pub_.publish(pc_to_publish);
+		}
+
+		// // publish global pointcloud
+		// if (bVisualizeGlobalPC_)
+		// {
+		// 	if (t.toSec() - t_last_pub_pc_ > visualizeGPC_interval_)
+		// 	{
+		// 		PointCloud::Ptr pc_filtered(new PointCloud());
+		// 		pcl::VoxelGrid<pcl::PointXYZ> sor;
+		// 		sor.setInputCloud(pc_near_);
+		// 		sor.setLeafSize(0.03, 0.03, 0.03);
+		// 		sor.filter(*pc_filtered);
+
+		// 		// copy the most current pc tp pc_global
+		// 		size_t pc_length = pc_filtered->size();
+		// 		size_t numAddedPC = min(pc_length, numAddedPC_threshold_) - 1;
+		// 		pc_global_->insert(pc_global_->end(), pc_filtered->end() - numAddedPC, pc_filtered->end());
+
+		// 		// publish point cloud
+		// 		pcl::toROSMsg(*pc_global_, *pc_to_publish);
+		// 		pc_to_publish->header.stamp = t;
+		// 		gpc_pub_.publish(pc_to_publish);
+		// 		t_last_pub_pc_ = t.toSec();
+		// 	}
+		// }
+	}
+
 	void esvo_Mapping::publishEventMap(const ros::Time &t)
 	{
 		cv::Mat eventMap;
-		visualizor_.plot_eventMap(vALLEventsPtr_left_,
+		visualizor_.plot_eventMap(vDenoisedEventsPtr_left_,
 								  eventMap,
 								  camSysPtr_->cam_left_ptr_->height_,
 								  camSysPtr_->cam_left_ptr_->width_);

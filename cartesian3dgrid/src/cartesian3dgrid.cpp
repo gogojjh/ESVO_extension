@@ -52,7 +52,9 @@ void Grid3D::resetGrid()
   std::fill(data_array_.begin(), data_array_.end(), 0.f);
 }
 
-
+/**
+ * @brief: record the position of the local maximum of each slice
+ */
 void Grid3D::collapseMaxZSlice(cv::Mat* max_val, cv::Mat* max_pos_idx) const
 {
   // Z-slice

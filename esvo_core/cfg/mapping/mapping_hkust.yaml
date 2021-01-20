@@ -22,7 +22,7 @@ mapping_rate_hz: 20
 # DepthProblemConfig
 patch_size_X: 15
 patch_size_Y: 7
-Lnorm: Tdist #(Tdist or l2)
+LSnorm: Tdist #(Tdist or l2)
 Tdist_nu: 2.1897
 Tdist_scale: 16.6397
 Tdist_stdvar: 56.5347

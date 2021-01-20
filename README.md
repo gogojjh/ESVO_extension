@@ -210,3 +210,7 @@ ESVO is licensed under the GNU General Public License Version 3 (GPLv3), see htt
 For commercial use, please contact Yi Zhou and Shaojie Shen. 
 
 Email addresses are available in the project page.
+
+# 7. Note
+1. This package solves nonliner problems using Eigen's [API](https://eigen.tuxfamily.org/dox/unsupported/group__NonLinearOptimization__Module.html)
+2. 

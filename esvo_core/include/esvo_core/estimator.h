@@ -90,13 +90,11 @@ namespace esvo_core
 
         /*** publish results ***/
         void publishMappingResults(DepthMap::Ptr depthMapPtr, Transformation tr, ros::Time t);
-        void publishPointCloud(
-            DepthMap::Ptr &depthMapPtr,
-            Transformation &tr,
-            ros::Time &t);
+        void publishPointCloud(DepthMap::Ptr &depthMapPtr, Transformation &tr, ros::Time &t);
 
+        void publishMonoMappingResults(DepthMap::Ptr depthMapPtr, Transformation tr, ros::Time t);
+        void publishMonoPointCloud(DepthMap::Ptr &depthMapPtr, Transformation &tr, ros::Time &t);
         void publishEMVSPointCloud(const ros::Time &t, const Eigen::Matrix4d &T_w_rv);
-
         void publishDSIResults(const ros::Time &t, const cv::Mat &semiDenseMask,
                                const cv::Mat &depthMap, const cv::Mat &confidenceMap);
 
@@ -194,7 +192,7 @@ namespace esvo_core
         PointCloud::Ptr pc_near_; // local depth map within the viable range
         PointCloud::Ptr pc_global_; // global depth map which is insert into the filtered pc_near_
         DepthFrame::Ptr depthFramePtr_;
-        std::deque<std::vector<DepthPoint>> dqvDepthPoints_;
+        std::deque<std::vector<DepthPoint>> dqvDepthPoints_, dqvMonoDepthPoints_;
 
         // inter-thread management
         std::mutex data_mutex_;
@@ -256,7 +254,7 @@ namespace esvo_core
         image_transport::Publisher invDepthMap_pub_, stdVarMap_pub_, ageMap_pub_, costMap_pub_;
         image_transport::Publisher depthMap_pub_, confidenceMap_pub_, semiDenseMask_pub_;
         image_transport::Publisher eventMap_pub_;
-        ros::Publisher emvs_pc_pub_;
+        ros::Publisher emvs_pc_pub_, pc_mono_pub_;
 
         // For counting the total number of fusion
         size_t TotalNumFusion_;

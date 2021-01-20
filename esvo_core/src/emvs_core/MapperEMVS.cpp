@@ -79,17 +79,17 @@ namespace EMVS
 			// Project the points on plane at distance z0
 			// Planar homography  (H_z0)^-1 that maps a point in the reference view to the event camera through plane Z = Z0 (Eq. (8) in the IJCV paper)
 			// Planar homography  (H_z0) transforms [u, v] to [X(Z0), Y(Z0), 1]
-			Eigen::Matrix3f H_z0_inv = R;
-			H_z0_inv *= z0;
-			H_z0_inv.col(2) += t;
+			// Planar homography  (H_zi) transforms [u, v] to [X(Zi), Y(Zi), 1]
+			Eigen::Matrix3f H_z0 = (R * z0 + t * Eigen::Vector3f(0, 0, 1).transpose()).inverse();
+			// H_z0_inv *= z0;
+			// H_z0_inv.col(2) += t;
+
 			// Compute H_z0 in pixel coordinates using the intrinsic parameters
-			Eigen::Matrix3f H_z0_px = K_virtual_.cast<float>() * H_z0_inv.inverse(); // transform [u, v] to [X(Z0), Y(Z0), 1]
+			Eigen::Matrix3f H_z0_px = K_virtual_.cast<float>() * H_z0; // transform [u, v] to [X(Z0), Y(Z0), 1]
 
 			// Use a 4x4 matrix to allow Eigen to optimize the speed
-			Eigen::Matrix4f H_z0_px_4x4;
+			Eigen::Matrix4f H_z0_px_4x4 = Eigen::Matrix4f::Zero();
 			H_z0_px_4x4.block<3, 3>(0, 0) = H_z0_px;
-			H_z0_px_4x4.col(3).setZero();
-			H_z0_px_4x4.row(3).setZero();
 
 			for (auto it_ev = it_ev_begin; it_ev != pvEventsPtr.rend(); it_ev++)
 			{
@@ -241,6 +241,7 @@ namespace EMVS
 		}
 
 		void MapperEMVS::getDepthPoint(const cv::Mat &depth_map,
+									   const cv::Mat &confidence_map,
 									   const cv::Mat &mask,
 									   std::vector<esvo_core::container::DepthPoint> &vdp,
 									   double &mean_depth)
@@ -260,11 +261,15 @@ namespace EMVS
 						if (xyz_rv.z() <= 1e-6)
 							continue;
 
-						double variance = 0.1;
+						double variance;
+						if (confidence_map.at<float>(y, x) >= 255)
+							variance = 0;
+						else 
+							variance = double(255 - confidence_map.at<float>(y, x));
 						esvo_core::container::DepthPoint dp(y, x);
 						dp.update_x(p);
-						dp.update(1.0 / xyz_rv.z(), variance);
 						dp.update_p_cam(xyz_rv);
+						dp.update(1.0 / xyz_rv.z(), variance);
 						dp.updatePose(T_w_rv_);
 						vdp.push_back(dp);
 						mean_depth += xyz_rv.z();
@@ -307,13 +312,13 @@ namespace EMVS
 			}
 
 			// Filter point cloud to remove outliers (Section 5.2.5 in the IJCV paper)
-			pcl::PointCloud<pcl::PointXYZI>::Ptr cloud_filtered(new pcl::PointCloud<pcl::PointXYZI>);
-			pcl::RadiusOutlierRemoval<pcl::PointXYZI> outlier_rm;
-			outlier_rm.setInputCloud(pc_);
-			outlier_rm.setRadiusSearch(options_pc.radius_search_);
-			outlier_rm.setMinNeighborsInRadius(options_pc.min_num_neighbors_);
-			outlier_rm.filter(*cloud_filtered);
-			pc_->swap(*cloud_filtered);
+			// pcl::PointCloud<pcl::PointXYZI>::Ptr cloud_filtered(new pcl::PointCloud<pcl::PointXYZI>);
+			// pcl::RadiusOutlierRemoval<pcl::PointXYZI> outlier_rm;
+			// outlier_rm.setInputCloud(pc_);
+			// outlier_rm.setRadiusSearch(options_pc.radius_search_);
+			// outlier_rm.setMinNeighborsInRadius(options_pc.min_num_neighbors_);
+			// outlier_rm.filter(*cloud_filtered);
+			// pc_->swap(*cloud_filtered);
 		}
 
 	} // namespace EMVS

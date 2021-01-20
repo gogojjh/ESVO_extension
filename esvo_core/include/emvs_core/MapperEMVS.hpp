@@ -108,6 +108,7 @@ namespace EMVS
 		void getDepthMapFromDSI(cv::Mat &depth_map, cv::Mat &confidence_map, cv::Mat &mask, const OptionsDepthMap &options_depth_map);
 
 		void getDepthPoint(const cv::Mat &depth_map,
+						   const cv::Mat &confidence_map,
 						   const cv::Mat &mask,
 						   std::vector<esvo_core::container::DepthPoint> &vdp,
 						   double &mean_depth);
