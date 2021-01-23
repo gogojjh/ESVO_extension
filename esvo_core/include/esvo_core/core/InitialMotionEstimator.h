@@ -51,7 +51,7 @@ enum
 struct MCAuxdata
 {
     double *ref_time;
-    std::vector<dvs_msgs::Event> *events;
+    std::vector<Eigen::Vector4d> *events_coor;
     Eigen::MatrixXd *TS;
 
     cv::Size img_size;
@@ -92,7 +92,7 @@ public:
     InitialMotionEstimator();
     ~InitialMotionEstimator();
 
-    bool resetProblem(const double &curTime,
+    bool setProblem(const double &curTime,
                       const Eigen::MatrixXd &TS,
                       const std::vector<dvs_msgs::Event *> vALLEventsPtr,
                       const esvo_core::container::PerspectiveCamera::Ptr &camPtr,
@@ -110,7 +110,7 @@ public:
     double *x_, *x_last_; // tx, ty, rz
     double curTime_, prevTime_;
     Eigen::MatrixXd TS_;
-    std::vector<dvs_msgs::Event> vEdgeletCoordinates_;
+    std::vector<Eigen::Vector4d> vEdgeletCoordinates_;
     MCAuxdata MCAuxdata_;
 };
 

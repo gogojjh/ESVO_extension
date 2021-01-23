@@ -132,7 +132,7 @@ namespace esvo_core
 
 				if (refPCMap_buf_.empty()) // Tracnking and Mapping are still in initialization
 				{
-					if (iniMotionEstimator_.resetProblem(cur_.t_.toSec(),
+					if (iniMotionEstimator_.setProblem(cur_.t_.toSec(),
 														 cur_.pTsObs_->TS_left_,
 														 vALLEventsPtr_left_,
 														 camSysPtr_->cam_left_ptr_,
@@ -141,13 +141,17 @@ namespace esvo_core
 						TicToc t_ini;
 						CMSummary summary = iniMotionEstimator_.solve();
 						LOG(INFO) << "initialization costs: " << t_ini.toc() << "ms";
+						LOG(INFO) << "all events last: "
+								  << 1000 * (vALLEventsPtr_left_.back()->ts.toSec() - vALLEventsPtr_left_.front()->ts.toSec()) << "ms";
 
 						Eigen::Matrix4d T_last_cur = iniMotionEstimator_.getMotion();
 						T_world_cur_ = T_world_cur_ * T_last_cur;
 						cur_.tr_ = Transformation(T_world_cur_);
-						vALLEventsPtr_left_.clear();
 						MCImage_ = iniMotionEstimator_.drawMCImage();
 						publishMCImage(cur_.t_);
+
+						vALLEventsPtr_left_.clear();
+						iniMotionEstimator_.vEdgeletCoordinates_.clear();;
 					}
 
 					publishTimeSurface(cur_.t_);

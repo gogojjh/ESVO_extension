@@ -41,7 +41,7 @@ void computeImageOfWarpedEvents(const double *v,
                                 MCAuxdata *poAux_data,
                                 cv::Mat *image_warped)
 {
-    CHECK_GT(*(poAux_data->ref_time), poAux_data->events->back().ts.toSec());
+    CHECK_GT(*(poAux_data->ref_time), poAux_data->events_coor->back()[2]);
 
     const int width = poAux_data->img_size.width;
     const int height = poAux_data->img_size.height;
@@ -49,7 +49,7 @@ void computeImageOfWarpedEvents(const double *v,
 
     const Eigen::Matrix3d K = poAux_data->K;
     std::vector<std::pair<double, Eigen::Matrix3d>> st_Hinv;
-    double t_begin = poAux_data->events->front().ts.toSec();
+    double t_begin = poAux_data->events_coor->front()[2];
     double t_end = *(poAux_data->ref_time);
     double t_cur = t_begin;
     // the last as the reference time
@@ -71,8 +71,8 @@ void computeImageOfWarpedEvents(const double *v,
 
     // size_t i = 0;
     // std::vector<size_t> mEventIdx;
-    // mEventIdx.reserve(poAux_data->events->size());
-    // for (const dvs_msgs::Event &ev : *(poAux_data->events))
+    // mEventIdx.reserve(poAux_data->events_coor->size());
+    // for (const dvs_msgs::Event &ev : *(poAux_data->events_coor))
     // {
     //     while ((ev.ts.toSec() > st_Hinv[i].first) && (i < st_Hinv.size() - 1))
     //         i++;
@@ -80,17 +80,17 @@ void computeImageOfWarpedEvents(const double *v,
     // }
 
     size_t j = 0;
-    for (size_t i = 0; i < poAux_data->events->size(); i++)
+    for (size_t i = 0; i < poAux_data->events_coor->size(); i++)
     {
-        const dvs_msgs::Event &ev = (*poAux_data->events)[i];
-        while ((ev.ts.toSec() > st_Hinv[j].first) && (j < st_Hinv.size() - 1))
+        const Eigen::Vector4d &ev = (*poAux_data->events_coor)[i];
+        while ((ev[2] > st_Hinv[j].first) && (j < st_Hinv.size() - 1))
             j++;
 
-        Eigen::Vector3d p(ev.x, ev.y, 1);
+        Eigen::Vector3d p(ev[0], ev[1], 1);
         Eigen::Vector3d warp_p = st_Hinv[j].second * p;
         warp_p /= warp_p(2);
 
-        const float polarity = (poAux_data->use_polarity) ? 2.f * static_cast<float>(ev.polarity) - 1.f : 1.f;
+        const float polarity = (poAux_data->use_polarity) ? 2.f * static_cast<float>(ev[3]) - 1.f : 1.f;
         const int xx = warp_p.x(), yy = warp_p.y();
         if (1 <= xx && xx < width - 2 && 1 <= yy && yy < height - 2)
         {
@@ -218,7 +218,7 @@ InitialMotionEstimator::~InitialMotionEstimator()
     delete[] x_last_;
 }
 
-bool InitialMotionEstimator::resetProblem(const double &curTime,
+bool InitialMotionEstimator::setProblem(const double &curTime,
                                           const Eigen::MatrixXd &TS,
                                           const std::vector<dvs_msgs::Event *> vALLEventsPtr,
                                           const esvo_core::container::PerspectiveCamera::Ptr &camPtr,
@@ -235,19 +235,18 @@ bool InitialMotionEstimator::resetProblem(const double &curTime,
             coor = camPtr->getRectifiedUndistortedCoordinate(vALLEventsPtr[i]->x, vALLEventsPtr[i]->y);
         else
             coor = Eigen::Matrix<double, 2, 1>(vALLEventsPtr[i]->x, vALLEventsPtr[i]->y);
-        int xcoor = std::floor(coor(0));
-        int ycoor = std::floor(coor(1));
-        dvs_msgs::Event tmp_ev;
-        tmp_ev.x = xcoor;
-        tmp_ev.y = ycoor;
-        tmp_ev.ts = vALLEventsPtr[i]->ts;
-        tmp_ev.polarity = vALLEventsPtr[i]->polarity;
-        vEdgeletCoordinates_.push_back(tmp_ev);
+        Eigen::Vector4d tmp_coor;
+        tmp_coor[0] = coor(0);
+        tmp_coor[1] = coor(1);
+        tmp_coor[2] = vALLEventsPtr[i]->ts.toSec();
+        tmp_coor[3] = double(vALLEventsPtr[i]->polarity);
+        vEdgeletCoordinates_.push_back(tmp_coor);
     }
+
     if (vEdgeletCoordinates_.size() / INI_DOWNSAMPLE_RATE < INI_NUM_EVENTS_INVOLVE)
     {
-        LOG(INFO) << "Not enough events for motion initialization: "
-                  << vEdgeletCoordinates_.size() << " < " << INI_NUM_EVENTS_INVOLVE;
+        // LOG(INFO) << "Not enough events for motion initialization: "
+        //           << vEdgeletCoordinates_.size() << " < " << INI_NUM_EVENTS_INVOLVE;
         return false;
     }
 
@@ -260,7 +259,7 @@ bool InitialMotionEstimator::resetProblem(const double &curTime,
     TS_ = TS;
 
     MCAuxdata_.ref_time = &curTime_;
-    MCAuxdata_.events = &vEdgeletCoordinates_;
+    MCAuxdata_.events_coor = &vEdgeletCoordinates_;
     MCAuxdata_.TS = &TS_;
     MCAuxdata_.img_size = cv::Size(row, col);
     MCAuxdata_.K = camPtr->K_;
@@ -294,8 +293,8 @@ CMSummary InitialMotionEstimator::solve()
     const double initial_cost = solver->f;
 
 #ifdef INI_MOT_EST_DEBUG
-    LOG(INFO) << "--- Initial cost = " << std::setprecision(8) << initial_cost;
-    LOG(INFO) << x_[0] << "m/s " << x_[1] << "m/s " << x_[2] / M_PI * 180 << "deg/s";
+    LOG(INFO) << "--- Initial cost = " << std::setprecision(8) << initial_cost
+              << "; ini: " << x_[0] << "m/s " << x_[1] << "m/s " << x_[2] / M_PI * 180 << "deg/s";
 #endif
 
     const int num_max_line_searches = INI_MAX_ITERATION;
@@ -316,7 +315,7 @@ CMSummary InitialMotionEstimator::solve()
             cost_new = gsl_multimin_fdfminimizer_minimum(solver);
             if (fabs(1 - cost_new / (cost_old + 1e-7)) < tolfun)
             {
-                LOG(INFO) << "progress tolerance reached.";
+                // LOG(INFO) << "progress tolerance reached.";
                 break;
             }
             else
@@ -326,14 +325,14 @@ CMSummary InitialMotionEstimator::solve()
         //Test convergence due to absolute norm of the gradient
         if (GSL_SUCCESS == gsl_multimin_test_gradient(solver->gradient, epsabs_grad))
         {
-                LOG(INFO) << "gradient tolerance reached.";
+            // LOG(INFO) << "gradient tolerance reached.";
             break;
         }
 
         if (status != GSL_CONTINUE)
         {
             // The iteration was not successful (did not reduce the function value)
-            LOG(INFO) << "stopped iteration; status = " << status;
+            // LOG(INFO) << "stopped iteration; status = " << status;
             break;
         }
     } while (status == GSL_CONTINUE && iter < num_max_line_searches);
@@ -345,8 +344,8 @@ CMSummary InitialMotionEstimator::solve()
     const double final_cost = gsl_multimin_fdfminimizer_minimum(solver);
 
 #ifdef INI_MOT_EST_DEBUG
-        LOG(INFO) << "--- Final cost   = " << std::setprecision(8) << final_cost;
-        LOG(INFO) << x_[0] << "m/s " << x_[1] << "m/s " << x_[2] / M_PI * 180 << "deg/s";
+        LOG(INFO) << "--- Final cost   = " << std::setprecision(8) << final_cost 
+                  << "; opt: " << x_[0] << "m/s " << x_[1] << "m/s " << x_[2] / M_PI * 180 << "deg/s";
 #endif
 
     gsl_multimin_fdfminimizer_free(solver);
@@ -364,10 +363,10 @@ Eigen::Matrix4d InitialMotionEstimator::getMotion()
 {
     double dt;
     if (prevTime_ == 0)
-        dt = curTime_ - vEdgeletCoordinates_.front().ts.toSec();
+        dt = curTime_ - vEdgeletCoordinates_.front()[2];
     else
         dt = curTime_ - prevTime_;
-    Eigen::Matrix4d T;
+    Eigen::Matrix4d T = Eigen::Matrix4d::Identity();
     double tx = -1 / INI_DEPTH * x_[0] * dt;
     double ty = -1 / INI_DEPTH * x_[1] * dt;
     double theta = x_[2] * dt;
