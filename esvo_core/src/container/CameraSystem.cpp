@@ -78,8 +78,7 @@ namespace esvo_core
       }
       else if (distortion_model_ == "equidistant")
       {
-        cv::fisheye::undistortPoints(
-            RawCoordinates, RectCoordinates, cvKmat, cvDistCoeff, cvRectMat, cvPmat);
+        cv::fisheye::undistortPoints(RawCoordinates, RectCoordinates, cvKmat, cvDistCoeff, cvRectMat, cvPmat);
 #if CV_MAJOR_VERSION >= 3
         cv::Size sensor_size(width_, height_);
         cv::fisheye::initUndistortRectifyMap(cvKmat, cvDistCoeff, cvRectMat, cvPmat,

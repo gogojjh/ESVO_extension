@@ -5,6 +5,7 @@
 
 #include <ros/ros.h>
 #include <image_transport/image_transport.h>
+#include <sensor_msgs/Image.h>
 
 #include <message_filters/subscriber.h>
 #include <message_filters/synchronizer.h>
@@ -14,6 +15,7 @@
 #include <std_msgs/Int16.h>
 
 #include <esvo_core/container/CameraSystem.h>
+#include <esvo_core/core/InitialMotionEstimator.h>
 #include <esvo_core/core/RegProblemLM.h>
 #include <esvo_core/core/RegProblemSolverLM.h>
 #include <esvo_core/tools/utils.h>
@@ -62,7 +64,8 @@ namespace esvo_core
     void publishPose(const ros::Time &t, Transformation &tr);
     void publishPath(const ros::Time &t, Transformation &tr);
     void saveTrajectory(const std::string &resultDir);
-    void publishTimeSurface();
+    void publishTimeSurface(const ros::Time &t);
+    void publishMCImage(const ros::Time &t);
 
     // utils
     void reset();
@@ -84,6 +87,7 @@ namespace esvo_core
     ros::Subscriber gtPose_sub_, stampedPose_sub_;
     image_transport::Publisher reprojMap_pub_left_;
     image_transport::Publisher time_surface_left_pub_, time_surface_right_pub_;
+    image_transport::Publisher mcimage_pub_;
 
     // publishers
     ros::Publisher pose_pub_, path_pub_, pose_gt_pub_, path_gt_pub_;
@@ -140,6 +144,10 @@ namespace esvo_core
     std::string ESVO_System_Status_;
     RegProblemConfig::Ptr rpConfigPtr_;
     RegProblemSolverLM rpSolver_;
+
+    InitialMotionEstimator iniMotionEstimator_;
+    std::vector<dvs_msgs::Event *> vALLEventsPtr_left_;
+    cv::Mat MCImage_;
   };
 } // namespace esvo_core
 

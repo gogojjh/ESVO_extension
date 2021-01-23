@@ -1514,6 +1514,9 @@ namespace esvo_core
 		pub.publish(msg);
 	}
 
+	/**
+	 * @brief: This function create an edge mask for valid events and undistorting each events
+	 */
 	void esvo_Mapping::createEdgeMask(std::vector<dvs_msgs::Event *> &vEventsPtr,
 									  PerspectiveCamera::Ptr &camPtr,
 									  cv::Mat &edgeMap,

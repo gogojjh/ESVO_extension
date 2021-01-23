@@ -75,6 +75,7 @@ namespace esvo_core
 
 		time_surface_left_pub_ = it_.advertise("/esvo_tracking/TS_left", 1);
 		time_surface_right_pub_ = it_.advertise("/esvo_tracking/TS_right", 1);
+		mcimage_pub_ = it_.advertise("/esvo_tracking/MC_Image", 1);
 	}
 
 	esvo_Tracking::~esvo_Tracking()
@@ -120,7 +121,7 @@ namespace esvo_core
 						LOG(INFO) << "The time_surface observation should be obtained after the reference frame";
 						exit(-1);
 					}
-					curDataTransferring();
+					curDataTransferring(); // set current data
 				}
 				else
 				{
@@ -129,9 +130,27 @@ namespace esvo_core
 					continue;
 				}
 
-				if (refPCMap_buf_.empty()) // Mapping is still in initialization
+				if (refPCMap_buf_.empty()) // Tracnking and Mapping are still in initialization
 				{
-					publishTimeSurface();
+					if (iniMotionEstimator_.resetProblem(cur_.t_.toSec(),
+														 cur_.pTsObs_->TS_left_,
+														 vALLEventsPtr_left_,
+														 camSysPtr_->cam_left_ptr_,
+														 true))
+					{
+						TicToc t_ini;
+						CMSummary summary = iniMotionEstimator_.solve();
+						LOG(INFO) << "initialization costs: " << t_ini.toc() << "ms";
+
+						Eigen::Matrix4d T_last_cur = iniMotionEstimator_.getMotion();
+						T_world_cur_ = T_world_cur_ * T_last_cur;
+						cur_.tr_ = Transformation(T_world_cur_);
+						vALLEventsPtr_left_.clear();
+						MCImage_ = iniMotionEstimator_.drawMCImage();
+						publishMCImage(cur_.t_);
+					}
+
+					publishTimeSurface(cur_.t_);
 					publishPose(cur_.t_, cur_.tr_); // publish identity pose
 					if (bVisualizeTrajectory_)
 						publishPath(cur_.t_, cur_.tr_);
@@ -141,7 +160,7 @@ namespace esvo_core
 				}
 				else if (ref_.t_.toSec() < refPCMap_buf_.back().first.toSec()) // new reference map arrived
 				{
-					refDataTransferring();
+					refDataTransferring(); // set reference data
 				}	
 				m_buf_.unlock();
 			
@@ -173,7 +192,7 @@ namespace esvo_core
 						lPose_.push_back(cur_.tr_.getTransformationMatrix());
 					}
 					m_buf_.lock();
-					publishTimeSurface();
+					publishTimeSurface(cur_.t_);
 					m_buf_.unlock();
 				}
 				else
@@ -182,7 +201,7 @@ namespace esvo_core
 					ets_ = IDLE;
 					LOG(INFO) << "Tracking thread is IDLE";
 					m_buf_.lock();
-					publishTimeSurface();
+					publishTimeSurface(cur_.t_);
 					m_buf_.unlock();
 				}
 
@@ -256,13 +275,23 @@ namespace esvo_core
 	bool esvo_Tracking::curDataTransferring()
 	{
 		// load current observation
-		auto ev_last_it = EventBuffer_lower_bound(events_left_, cur_.t_);
+		auto ev_begin_it = EventBuffer_lower_bound(events_left_, cur_.t_);
 		cur_.t_ = TS_buf_.back().first;
 		cur_.pTsObs_ = &TS_buf_.back().second;
 		cur_.tr_ = Transformation(T_world_cur_);
-		auto ev_cur_it = EventBuffer_lower_bound(events_left_, cur_.t_);
-		cur_.numEventsSinceLastObs_ = std::distance(ev_last_it, ev_cur_it) + 1; // Count the number of events occuring since the last observation.
+		auto ev_end_it = EventBuffer_lower_bound(events_left_, cur_.t_);
+		cur_.numEventsSinceLastObs_ = std::distance(ev_begin_it, ev_end_it) + 1; // Count the number of events occuring since the last observation.
 		// LOG(INFO) << "event number in 10ms: " << cur_.numEventsSinceLastObs_; // 2000-1400
+
+		// restore events for solving the initial motion estimation problem (time in ascending order)
+		if (ets_ == IDLE)
+		{
+			while (ev_begin_it != ev_end_it)
+			{
+				vALLEventsPtr_left_.push_back(ev_begin_it._M_cur); // all events within the time interval
+				ev_begin_it++;
+			}
+		}
 		return true;
 	}
 
@@ -277,6 +306,7 @@ namespace esvo_core
 		refPCMap_.clear();
 		refPCMap_buf_.clear();
 		events_left_.clear();
+		vALLEventsPtr_left_.clear();
 
 		path_.poses.clear();
 		path_gt_.poses.clear();
@@ -356,15 +386,29 @@ namespace esvo_core
 		m_buf_.unlock();
 	}
 
-	void esvo_Tracking::publishTimeSurface()
+	void esvo_Tracking::publishTimeSurface(const ros::Time &t)
 	{
 		if (TS_buf_.empty())
 			return;
-		time_surface_left_pub_.publish(TS_buf_.back().second.cvImagePtr_left_->toImageMsg());
-		time_surface_right_pub_.publish(TS_buf_.back().second.cvImagePtr_right_->toImageMsg());
+		sensor_msgs::ImagePtr aux_left = TS_buf_.back().second.cvImagePtr_left_->toImageMsg();
+		aux_left->header.stamp = t;
+		time_surface_left_pub_.publish(aux_left);
+		sensor_msgs::ImagePtr aux_right = TS_buf_.back().second.cvImagePtr_right_->toImageMsg();
+		aux_right->header.stamp = t;
+		time_surface_right_pub_.publish(aux_right);
 	}
 
-
+	void esvo_Tracking::publishMCImage(const ros::Time &t)
+	{
+		if (MCImage_.empty())
+			return;
+		cv_bridge::CvImage cv_image;
+		cv_image.encoding = "mono8";
+		MCImage_.convertTo(cv_image.image, CV_8UC1);
+		sensor_msgs::ImagePtr aux = cv_image.toImageMsg();
+		aux->header.stamp = t;
+		mcimage_pub_.publish(aux);
+	}
 
 	void esvo_Tracking::stampedPoseCallback(const geometry_msgs::PoseStampedConstPtr &msg)
 	{
