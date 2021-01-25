@@ -39,7 +39,8 @@ double computeContrast(const cv::Mat &image, const int contrast_measure)
 
 void computeImageOfWarpedEvents(const double *v,
                                 MCAuxdata *poAux_data,
-                                cv::Mat *image_warped)
+                                cv::Mat *image_warped,
+                                double &cost)
 {
     CHECK_GT(*(poAux_data->ref_time), poAux_data->events_coor->back()[2]);
 
@@ -102,6 +103,22 @@ void computeImageOfWarpedEvents(const double *v,
             image_warped->at<double>(yy, xx + 1) += polarity * dx * (1 - dy);
             image_warped->at<double>(yy + 1, xx + 1) += polarity * dx * dy;
         }
+
+        // compute cost using time surface
+        // if (1 <= xx && xx < width - 2 && 1 <= yy && yy < height - 2)
+        // {
+        //     // Accumulate warped events on the IWE
+        //     double dx = warp_p.x() - xx;
+        //     double dy = warp_p.y() - yy;
+        //     double r1 = (1 - dx) * (1 - dy);
+        //     double r2 = (1 - dx) * dy;
+        //     double r3 = dx * (1 - dy);
+        //     double r4 = dx * dy;
+        //     cost += (*poAux_data->TS_metric)(yy, xx) * r1 +
+        //             (*poAux_data->TS_metric)(yy + 1, xx) * r2 +
+        //             (*poAux_data->TS_metric)(yy, xx + 1) * r3 +
+        //             (*poAux_data->TS_metric)(yy + 1, xx + 1) * r4;
+        // }
     }
 
     if (poAux_data->blur_sigma > 0)
@@ -121,9 +138,11 @@ double contrast_f_numerical(const gsl_vector *v, void *adata)
     MCAuxdata *poAux_data = (MCAuxdata *)adata;
     double x[3] = {gsl_vector_get(v, 0), gsl_vector_get(v, 1), gsl_vector_get(v, 2)};
     cv::Mat image_warped;
-    computeImageOfWarpedEvents(x, poAux_data, &image_warped);
+    double cost = 0;
+    computeImageOfWarpedEvents(x, poAux_data, &image_warped, cost);
     double contrast = computeContrast(image_warped, poAux_data->contrast_measure);
     return -contrast;
+    // return -cost;
 }
 
 void contrast_fdf_numerical(const gsl_vector *v, void *adata, double *f, gsl_vector *df)
@@ -198,7 +217,7 @@ double vs_gsl_Gradient_Analytic(
 // ****************************************************************
 // InitialMotionEstimator
 // ****************************************************************
-InitialMotionEstimator::InitialMotionEstimator()
+InitialMotionEstimator::InitialMotionEstimator() 
 {
     x_ = new double[3];
     x_last_ = new double[3];
@@ -206,10 +225,6 @@ InitialMotionEstimator::InitialMotionEstimator()
     x_last_[0] = x_last_[1] = x_last_[2] = 0.0;
     
     prevTime_ = curTime_ = 0.0;
-
-    MCAuxdata_.contrast_measure = VARIANCE_CONTRAST;
-    MCAuxdata_.use_polarity = false;
-    MCAuxdata_.blur_sigma = 1.0;
 }
 
 InitialMotionEstimator::~InitialMotionEstimator()
@@ -219,14 +234,14 @@ InitialMotionEstimator::~InitialMotionEstimator()
 }
 
 bool InitialMotionEstimator::setProblem(const double &curTime,
-                                          const Eigen::MatrixXd &TS,
-                                          const std::vector<dvs_msgs::Event *> vALLEventsPtr,
-                                          const esvo_core::container::PerspectiveCamera::Ptr &camPtr,
-                                          bool bUndistortEvents)
+                                        const Eigen::MatrixXd &TS_metric,
+                                        const std::vector<dvs_msgs::Event *> vALLEventsPtr,
+                                        const esvo_core::container::PerspectiveCamera::Ptr &camPtr,
+                                        bool bUndistortEvents)
 {
     size_t step = size_t(1.0 / INI_DOWNSAMPLE_RATE);
-    size_t col = camPtr->width_;
     size_t row = camPtr->height_;
+    size_t col = camPtr->width_;
     for (size_t i = 0; i < vALLEventsPtr.size(); i += step)
     {
         // undistortion + rectification
@@ -256,13 +271,10 @@ bool InitialMotionEstimator::setProblem(const double &curTime,
     prevTime_ = curTime_;
 
     curTime_ = curTime;
-    TS_ = TS;
-
-    MCAuxdata_.ref_time = &curTime_;
-    MCAuxdata_.events_coor = &vEdgeletCoordinates_;
-    MCAuxdata_.TS = &TS_;
-    MCAuxdata_.img_size = cv::Size(row, col);
-    MCAuxdata_.K = camPtr->K_;
+    TS_metric_ = TS_metric;
+    MCAuxdata_ = MCAuxdata(&curTime_, &vEdgeletCoordinates_, &TS_metric_,
+                           cv::Size(col, row), camPtr->K_,
+                           VARIANCE_CONTRAST, false, 1.0);
     return true;
 }
 
@@ -337,16 +349,22 @@ CMSummary InitialMotionEstimator::solve()
         }
     } while (status == GSL_CONTINUE && iter < num_max_line_searches);
 
-    gsl_vector *final_x = gsl_multimin_fdfminimizer_x(solver);
-    x_[0] = gsl_vector_get(final_x, 0);
-    x_[1] = gsl_vector_get(final_x, 1);
-    x_[2] = gsl_vector_get(final_x, 2);
     const double final_cost = gsl_multimin_fdfminimizer_minimum(solver);
-
+    if (final_cost < initial_cost)
+    {
+        gsl_vector *final_x = gsl_multimin_fdfminimizer_x(solver);
+        x_[0] = gsl_vector_get(final_x, 0);
+        x_[1] = gsl_vector_get(final_x, 1);
+        x_[2] = gsl_vector_get(final_x, 2);
 #ifdef INI_MOT_EST_DEBUG
         LOG(INFO) << "--- Final cost   = " << std::setprecision(8) << final_cost 
                   << "; opt: " << x_[0] << "m/s " << x_[1] << "m/s " << x_[2] / M_PI * 180 << "deg/s";
 #endif
+    }
+    else
+    {
+        LOG(INFO) << "--- Fail to optimize";
+    }
 
     gsl_multimin_fdfminimizer_free(solver);
     gsl_vector_free(vx);
@@ -396,8 +414,9 @@ cv::Mat InitialMotionEstimator::drawMCImage()
 {
     cv::Mat image_original, image_warped, image_stacked;
     double x_ini[4] = {0., 0., 0., 0.};
-    computeImageOfWarpedEvents(x_ini, &MCAuxdata_, &image_original);
-    computeImageOfWarpedEvents(x_, &MCAuxdata_, &image_warped);
+    double cost = 0;
+    computeImageOfWarpedEvents(x_ini, &MCAuxdata_, &image_original, cost);
+    computeImageOfWarpedEvents(x_, &MCAuxdata_, &image_warped, cost);
     concatHorizontal(image_original, image_warped, &image_stacked);
     if (MCAuxdata_.use_polarity)
     {

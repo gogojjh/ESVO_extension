@@ -132,17 +132,23 @@ namespace esvo_core
 
 				if (refPCMap_buf_.empty()) // Tracnking and Mapping are still in initialization
 				{
+					// cur_.pTsObs_->getTimeSurfaceNegative(0);
+					// cv::Mat TS_negative_vis;
+					// cv::eigen2cv(cur_.pTsObs_->TS_negative_left_, TS_negative_vis);
+					// cv::normalize(TS_negative_vis, TS_negative_vis, 0, 255.0, cv::NORM_MINMAX, CV_8UC1);
+					// cv::imshow("TS_negative", TS_negative_vis);
+					// cv::waitKey(10);
 					if (iniMotionEstimator_.setProblem(cur_.t_.toSec(),
-														 cur_.pTsObs_->TS_left_,
-														 vALLEventsPtr_left_,
-														 camSysPtr_->cam_left_ptr_,
-														 true))
+													   cur_.pTsObs_->TS_left_,
+													   vALLEventsPtr_left_,
+													   camSysPtr_->cam_left_ptr_,
+													   true))
 					{
 						TicToc t_ini;
 						CMSummary summary = iniMotionEstimator_.solve();
-						LOG(INFO) << "initialization costs: " << t_ini.toc() << "ms";
-						LOG(INFO) << "all events last: "
-								  << 1000 * (vALLEventsPtr_left_.back()->ts.toSec() - vALLEventsPtr_left_.front()->ts.toSec()) << "ms";
+						double t_event_dis = 1000 * (vALLEventsPtr_left_.back()->ts.toSec() - vALLEventsPtr_left_.front()->ts.toSec());
+						LOG(INFO) << "initialization costs: " << t_ini.toc() << "ms <=> "
+								  << "all events last: " << t_event_dis << "ms";
 
 						Eigen::Matrix4d T_last_cur = iniMotionEstimator_.getMotion();
 						T_world_cur_ = T_world_cur_ * T_last_cur;

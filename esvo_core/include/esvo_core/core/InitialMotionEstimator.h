@@ -25,12 +25,13 @@ const int INI_MAX_ITERATION = 10;
 const double INI_DEPTH = 1.0;
 const double INI_TIME_INTERVAL = 0.001;
 
-typedef struct
+class CMSummary
 {
+public:
     size_t iteration;
     double initial_cost, final_cost;
     int status;
-} CMSummary;
+};
 
 enum
 {
@@ -48,11 +49,38 @@ enum
 /**
  * @brief Options and Auxiliary data structure for optimization algorithm
  */
-struct MCAuxdata
+class MCAuxdata
 {
+public:
+    EIGEN_MAKE_ALIGNED_OPERATOR_NEW
+
+    MCAuxdata(double *ref_time_, std::vector<Eigen::Vector4d> *events_coor_,
+              Eigen::MatrixXd *TS_metric_, cv::Size img_size_, Eigen::Matrix3d K_,
+              int contrast_measure_, bool use_polarity_, double blur_sigma_)
+        : ref_time(ref_time_),
+          events_coor(events_coor_),
+          TS_metric(TS_metric_),
+          img_size(img_size_),
+          K(K_),
+          contrast_measure(contrast_measure_),
+          use_polarity(use_polarity_),
+          blur_sigma(blur_sigma_)
+    {}
+
+    MCAuxdata()
+        : ref_time(nullptr),
+          events_coor(nullptr),
+          TS_metric(nullptr),
+          img_size(cv::Size(0, 0)),
+          K(Eigen::Matrix3d::Zero()),
+          contrast_measure(VARIANCE_CONTRAST),
+          use_polarity(false),
+          blur_sigma(1.0)
+    {}
+
     double *ref_time;
     std::vector<Eigen::Vector4d> *events_coor;
-    Eigen::MatrixXd *TS;
+    Eigen::MatrixXd *TS_metric;
 
     cv::Size img_size;
     Eigen::Matrix3d K;
@@ -66,7 +94,7 @@ struct MCAuxdata
 double contrast_MeanSquare(const cv::Mat &image);
 double contrast_Variance(const cv::Mat &image);
 double computeContrast(const cv::Mat &image, const int contrast_measure);
-void computeImageOfWarpedEvents(const double *v, MCAuxdata *poAux_data, cv::Mat *image_warped);
+void computeImageOfWarpedEvents(const double *v, MCAuxdata *poAux_data, cv::Mat *image_warped, double &energy);
 
 /** gsl function **/
 double contrast_f_numerical(const gsl_vector *v, void *adata);
@@ -93,11 +121,11 @@ public:
     ~InitialMotionEstimator();
 
     bool setProblem(const double &curTime,
-                      const Eigen::MatrixXd &TS,
-                      const std::vector<dvs_msgs::Event *> vALLEventsPtr,
-                      const esvo_core::container::PerspectiveCamera::Ptr &camPtr,
-                      bool bUndistortEvents);
-    
+                    const Eigen::MatrixXd &TS_metric,
+                    const std::vector<dvs_msgs::Event *> vALLEventsPtr,
+                    const esvo_core::container::PerspectiveCamera::Ptr &camPtr,
+                    bool bUndistortEvents);
+
     /** problem solver **/
     CMSummary solve();
 
@@ -109,7 +137,7 @@ public:
     /** online data **/
     double *x_, *x_last_; // tx, ty, rz
     double curTime_, prevTime_;
-    Eigen::MatrixXd TS_;
+    Eigen::MatrixXd TS_metric_;
     std::vector<Eigen::Vector4d> vEdgeletCoordinates_;
     MCAuxdata MCAuxdata_;
 };
