@@ -61,27 +61,17 @@ void computeImageOfWarpedEvents(const double *v,
         double ty = -1 / INI_DEPTH * v[1] * dt;
         double theta = v[2] * dt;
         Eigen::Matrix3d H_inv;
-        H_inv << cos(theta), -sin(theta), tx,
-                 sin(theta), cos(theta), ty,
-                 0, 0, 1;
-        // H_inv << cos(0.0), -sin(0.0), tx,
-        //          sin(0.0), cos(0.0), ty,
+        // H_inv << cos(theta), -sin(theta), tx,
+        //          sin(theta), cos(theta), ty,
         //          0, 0, 1;
+        H_inv << cos(0.0), -sin(0.0), tx,
+            sin(0.0), cos(0.0), ty,
+            0, 0, 1;
         H_inv = K * H_inv * K.inverse();
         st_Hinv.emplace_back(t_cur, H_inv);
         t_cur += INI_TIME_INTERVAL;
     }
     // LOG(INFO) << "H_inv size: " << st_Hinv.size(); // 60
-
-    // size_t i = 0;
-    // std::vector<size_t> mEventIdx;
-    // mEventIdx.reserve(poAux_data->events_coor->size());
-    // for (const dvs_msgs::Event &ev : *(poAux_data->events_coor))
-    // {
-    //     while ((ev.ts.toSec() > st_Hinv[i].first) && (i < st_Hinv.size() - 1))
-    //         i++;
-    //     mEventIdx.push_back(i);
-    // }
 
     size_t j = 0;
     for (size_t i = 0; i < poAux_data->events_coor->size(); i++)
@@ -276,7 +266,7 @@ bool InitialMotionEstimator::setProblem(const double &curTime,
     curTime_ = curTime;
     TS_metric_ = TS_metric;
     MCAuxdata_ = MCAuxdata(&curTime_, &vEdgeletCoordinates_, &TS_metric_,
-                           cv::Size(col, row), camPtr->K_,
+                           cv::Size(col, row), camPtr->P_.topLeftCorner<3, 3>(),
                            VARIANCE_CONTRAST, false, 1.0);
     return true;
 }

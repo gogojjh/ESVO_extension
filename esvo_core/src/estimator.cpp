@@ -921,7 +921,7 @@ namespace esvo_core
 			vEventsPtr_left_SGM_.clear();
 			t_end = TS_obs_.first;
 #ifdef MONOCULAR_DEBUG
-			t_begin = ros::Time(std::max(0.0, t_end.toSec() - 2 * BM_half_slice_thickness_)); // 2ms
+			t_begin = ros::Time(std::max(0.0, t_end.toSec() - 10 * BM_half_slice_thickness_)); // 2ms
 #else
 			t_begin = ros::Time(std::max(0.0, t_end.toSec() - 2 * BM_half_slice_thickness_)); // 2ms
 #endif

@@ -50,7 +50,7 @@
 #include <pcl_ros/point_cloud.h>
 
 #define ESTIMATOR_DEBUG
-// #define MONOCULAR_DEBUG
+#define MONOCULAR_DEBUG
 // #define EMVS_MAPPING_DEBUG
 
 const double VAR_RANDOM_INIT_INITIAL_ = 0.2;

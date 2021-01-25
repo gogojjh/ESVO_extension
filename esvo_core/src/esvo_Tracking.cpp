@@ -132,27 +132,27 @@ namespace esvo_core
 
 				if (refPCMap_buf_.empty()) // Tracnking and Mapping are still in initialization
 				{
-					// if (iniMotionEstimator_.setProblem(cur_.t_.toSec(),
-					// 								   cur_.pTsObs_->TS_left_,
-					// 								   vALLEventsPtr_left_,
-					// 								   camSysPtr_->cam_left_ptr_,
-					// 								   true))
-					// {
-					// 	TicToc t_ini;
-					// 	CMSummary summary = iniMotionEstimator_.solve();
-					// 	double t_event_dis = 1000 * (vALLEventsPtr_left_.back()->ts.toSec() - vALLEventsPtr_left_.front()->ts.toSec());
-					// 	// LOG(INFO) << "initialization costs: " << t_ini.toc() << "ms <=> "
-					// 	// 		  << "all events last: " << t_event_dis << "ms";
+					if (iniMotionEstimator_.setProblem(cur_.t_.toSec(),
+													   cur_.pTsObs_->TS_left_,
+													   vALLEventsPtr_left_,
+													   camSysPtr_->cam_left_ptr_,
+													   true))
+					{
+						TicToc t_ini;
+						CMSummary summary = iniMotionEstimator_.solve();
+						double t_event_dis = 1000 * (vALLEventsPtr_left_.back()->ts.toSec() - vALLEventsPtr_left_.front()->ts.toSec());
+						// LOG(INFO) << "initialization costs: " << t_ini.toc() << "ms <=> "
+						// 		  << "all events last: " << t_event_dis << "ms";
 
-					// 	Eigen::Matrix4d T_last_cur = iniMotionEstimator_.getMotion();
-					// 	T_world_cur_ = T_world_cur_ * T_last_cur;
-					// 	cur_.tr_ = Transformation(T_world_cur_);
-					// 	MCImage_ = iniMotionEstimator_.drawMCImage();
-					// 	publishMCImage(cur_.t_);
+						Eigen::Matrix4d T_last_cur = iniMotionEstimator_.getMotion();
+						T_world_cur_ = T_world_cur_ * T_last_cur;
+						cur_.tr_ = Transformation(T_world_cur_);
+						MCImage_ = iniMotionEstimator_.drawMCImage();
+						publishMCImage(cur_.t_);
 
-					// 	vALLEventsPtr_left_.clear();
-					// 	iniMotionEstimator_.vEdgeletCoordinates_.clear();;
-					// }
+						vALLEventsPtr_left_.clear();
+						iniMotionEstimator_.vEdgeletCoordinates_.clear();;
+					}
 
 					publishTimeSurface(cur_.t_);
 					publishPose(cur_.t_, cur_.tr_); // publish identity pose
