@@ -193,6 +193,7 @@ namespace esvo_core
 
 		// DSI_Mapper configure
 		emvs_mapper_.configDSI(emvs_dsi_shape_);
+		emvs_mapper_.initializeDSI(Eigen::Matrix4d::Identity());
 
 		// invDepth_INIT_ = 1.0;
 		isKeyframe_ = false;
@@ -289,6 +290,11 @@ namespace esvo_core
 				if (ESVO_System_Status_ == "WORKING") // do tracking & mapping
 				{
 					MappingAtTime(TS_obs_.first);
+
+					// monocular mapping
+					insertKeyframe();
+					MonoMappingAtTime(TS_obs_.first);
+
 					std::thread tpublishEventMap(&esvo_Mapping::publishEventMap, this, TS_obs_.first);
 					tpublishEventMap.detach();
 				}
@@ -318,51 +324,6 @@ namespace esvo_core
 			}
 			r.sleep();
 		}
-	}
-
-	// follow LSD-SLAM to initialize the map
-	bool esvo_Mapping::MonoInitializationAtTime(const ros::Time &t)
-	{
-		cv::Mat edgeMap;
-		std::vector<std::pair<size_t, size_t>> vEdgeletCoordinates;
-		createEdgeMask(vEventsPtr_left_SGM_, camSysPtr_->cam_left_ptr_,
-					   edgeMap, vEdgeletCoordinates, true, 0);
-
-		std::vector<DepthPoint> vdp;
-		vdp.reserve(vEdgeletCoordinates.size());
-		double var_SGM = VAR_RANDOM_INIT_INITIAL_;
-		for (size_t i = 0; i < vEdgeletCoordinates.size(); i++)
-		{
-			size_t x = vEdgeletCoordinates[i].first;
-			size_t y = vEdgeletCoordinates[i].second;
-			DepthPoint dp(x, y);
-			Eigen::Vector2d p_img(x * 1.0, y * 1.0);
-			dp.update_x(p_img);
-			double invDepth = 1.0 / (0.5 + 1.0 * ((rand() % 100001) / 100000.0));
-
-			Eigen::Vector3d p_cam;
-			camSysPtr_->cam_left_ptr_->cam2World(p_img, invDepth, p_cam);
-			dp.update_p_cam(p_cam);
-			dp.update(invDepth, var_SGM);
-			dp.residual() = 0.0;
-			dp.age() = age_vis_threshold_;
-			Eigen::Matrix<double, 4, 4> T_world_cam = TS_obs_.second.tr_.getTransformationMatrix();
-			dp.updatePose(T_world_cam);
-			vdp.push_back(dp);
-		}
-		LOG(INFO) << "********** Initialization returns " << vdp.size() << " points.";
-		if (vdp.size() < INIT_DP_NUM_Threshold_)
-			return false;
-
-		// push the "masked" SGM results to the depthFrame
-		dqvDepthPoints_.push_back(vdp);
-		dFusor_.naive_propagation(vdp, depthFramePtr_);
-
-		// publish the invDepth map
-		std::thread tPublishMappingResult(&esvo_Mapping::publishMappingResults, this,
-										  depthFramePtr_->dMap_, depthFramePtr_->T_world_frame_, t);
-		tPublishMappingResult.detach();
-		return true;
 	}
 
 	bool esvo_Mapping::InitializationAtTime(const ros::Time &t)
@@ -426,6 +387,90 @@ namespace esvo_core
 										  depthFramePtr_->dMap_, depthFramePtr_->T_world_frame_, t);
 		tPublishMappingResult.detach();
 		return true;
+	}
+
+	bool esvo_Mapping::MonoInitializationAtTime(const ros::Time &t)
+	{
+		// create a new depth frame
+		DepthFrame::Ptr depthFramePtr_new = std::make_shared<DepthFrame>(
+			camSysPtr_->cam_left_ptr_->height_, camSysPtr_->cam_left_ptr_->width_);
+		depthFramePtr_new->setId(TS_obs_.second.id_);
+		depthFramePtr_new->setTransformation(TS_obs_.second.tr_); // identity
+		depthFramePtr_ = depthFramePtr_new;
+
+		// undistort events' coordinates
+		vEdgeletCoordinates_.clear();
+		for (size_t i = 0; i < vEventsPtr_left_SGM_.size(); i++)
+		{
+			// undistortion + rectification
+			Eigen::Vector2d coor;
+			// if (true)
+			// 	// coor = camSysPtr_->cam_left_ptr_->getRectifiedUndistortedCoordinate(vDenoisedEventsPtr_left_[i]->x, vDenoisedEventsPtr_left_[i]->y);
+			// 	coor = Eigen::Vector2d(vEventsPtr_left_SGM_[i]->x, vEventsPtr_left_SGM_[i]->y);
+			// else
+			coor = Eigen::Vector2d(vEventsPtr_left_SGM_[i]->x, vEventsPtr_left_SGM_[i]->y);
+			Eigen::Vector4d tmp_coor;
+			tmp_coor[0] = coor[0];
+			tmp_coor[1] = coor[1];
+			tmp_coor[2] = vEventsPtr_left_SGM_[i]->ts.toSec();
+			tmp_coor[3] = double(vEventsPtr_left_SGM_[i]->polarity);
+			vEdgeletCoordinates_.push_back(tmp_coor);
+		}
+		LOG(INFO) << "Process events: " << vEdgeletCoordinates_.size();
+
+		emvs_mapper_.updateDSI(mVirtualPoses_, vEdgeletCoordinates_);
+		cv::Mat depth_map, confidence_map, semidense_mask;
+		emvs_mapper_.getDepthMapFromDSI(depth_map, confidence_map, semidense_mask, emvs_opts_depth_map_);
+
+		std::vector<DepthPoint> vdp; // depth points on the current stereo observations
+		emvs_mapper_.getDepthPoint(depth_map, confidence_map, semidense_mask, vdp, meanDepth_);
+
+		emvs_pc_->clear();
+		emvs_mapper_.getPointcloud(depth_map, semidense_mask, emvs_opts_pc_, emvs_pc_);
+		publishEMVSPointCloud(t, Eigen::Matrix4d::Identity());
+		LOG(INFO) << "********** Initialization returns " << vdp.size() << " points.";
+
+		std::thread tPublishDSIResult(&esvo_Mapping::publishDSIResults, this,
+									  t, semidense_mask, depth_map, confidence_map);
+		tPublishDSIResult.detach();
+
+		return false;
+
+		// std::vector<DepthPoint> vdp;
+		// vdp.reserve(vEdgeletCoordinates.size());
+		// double var_SGM = VAR_RANDOM_INIT_INITIAL_;
+		// for (size_t i = 0; i < vEdgeletCoordinates.size(); i++)
+		// {
+		// 	size_t x = vEdgeletCoordinates[i].first;
+		// 	size_t y = vEdgeletCoordinates[i].second;
+		// 	DepthPoint dp(x, y);
+		// 	Eigen::Vector2d p_img(x * 1.0, y * 1.0);
+		// 	dp.update_x(p_img);
+		// 	double invDepth = 1.0 / (0.5 + 1.0 * ((rand() % 100001) / 100000.0));
+
+		// 	Eigen::Vector3d p_cam;
+		// 	camSysPtr_->cam_left_ptr_->cam2World(p_img, invDepth, p_cam);
+		// 	dp.update_p_cam(p_cam);
+		// 	dp.update(invDepth, var_SGM);
+		// 	dp.residual() = 0.0;
+		// 	dp.age() = age_vis_threshold_;
+		// 	Eigen::Matrix<double, 4, 4> T_world_cam = TS_obs_.second.tr_.getTransformationMatrix();
+		// 	dp.updatePose(T_world_cam);
+		// 	vdp.push_back(dp);
+		// }
+		// LOG(INFO) << "********** Initialization returns " << vdp.size() << " points.";
+		// if (vdp.size() < INIT_DP_NUM_Threshold_)
+		// 	return false;
+
+		// // push the "masked" SGM results to the depthFrame
+		// dqvDepthPoints_.push_back(vdp);
+		// dFusor_.naive_propagation(vdp, depthFramePtr_);
+
+		// // publish the invDepth map
+		// std::thread tPublishMappingResult(&esvo_Mapping::publishMappingResults, this,
+		// 								  depthFramePtr_->dMap_, depthFramePtr_->T_world_frame_, t);
+		// tPublishMappingResult.detach();
+		// return true;
 	}
 
 	// TODO: how to initialize depth of a frame
@@ -637,7 +682,25 @@ namespace esvo_core
 			vDenoisedEventsPtr_left_.insert(vDenoisedEventsPtr_left_.end(), vCloseEventsPtr_left_.begin(),
 											vCloseEventsPtr_left_.end());
 		}
-		LOG(INFO) << "Process events: " << vDenoisedEventsPtr_left_.size();
+
+		// undistort events' coordinates
+		vEdgeletCoordinates_.clear();
+		for (size_t i = 0; i < vDenoisedEventsPtr_left_.size(); i++)
+		{
+			// undistortion + rectification
+			Eigen::Vector2d coor;
+			if (true)
+				coor = camSysPtr_->cam_left_ptr_->getRectifiedUndistortedCoordinate(vDenoisedEventsPtr_left_[i]->x, vDenoisedEventsPtr_left_[i]->y);
+			else
+				coor = Eigen::Vector2d(vDenoisedEventsPtr_left_[i]->x, vDenoisedEventsPtr_left_[i]->y);
+			Eigen::Vector4d tmp_coor;
+			tmp_coor[0] = coor[0];
+			tmp_coor[1] = coor[1];
+			tmp_coor[2] = vDenoisedEventsPtr_left_[i]->ts.toSec();
+			tmp_coor[3] = double(vDenoisedEventsPtr_left_[i]->polarity);
+			vEdgeletCoordinates_.push_back(tmp_coor);
+		}	
+		LOG(INFO) << "Process events: " << vEdgeletCoordinates_.size();
 
 		/******************************************************/
 		/*************** Mapping with the Disparity Space Image ****************/
@@ -650,12 +713,12 @@ namespace esvo_core
 			LOG(INFO) << "insert a keyframe";
 			emvs_mapper_.dsi_.writeGridNpy(std::string(resultPath_ + "dsi.npy").c_str());
 			emvs_mapper_.initializeDSI(T_w_keyframe_);
-			emvs_mapper_.updateDSI(mVirtualPoses_, vDenoisedEventsPtr_left_);
+			emvs_mapper_.updateDSI(mVirtualPoses_, vEdgeletCoordinates_);
 		}
 		else
 		{
 			LOG(INFO) << "insert an non-keyframe";
-			emvs_mapper_.updateDSI(mVirtualPoses_, vDenoisedEventsPtr_left_);
+			emvs_mapper_.updateDSI(mVirtualPoses_, vEdgeletCoordinates_);
 		}
 		t_DSI = tt_mapping.toc();
 		// LOG(INFO) << "update DSI costs: " << t_DSI << "ms"; // 2-3ms
@@ -852,11 +915,16 @@ namespace esvo_core
 
 		/****** Load involved events *****/
 		// SGM
+		ros::Time t_begin, t_end, t_tmp;
 		if (ESVO_System_Status_ == "INITIALIZATION")
 		{
 			vEventsPtr_left_SGM_.clear();
-			ros::Time t_end = TS_obs_.first;
-			ros::Time t_begin(std::max(0.0, t_end.toSec() - 2 * BM_half_slice_thickness_)); // 2ms
+			t_end = TS_obs_.first;
+#ifdef MONOCULAR_DEBUG
+			t_begin = ros::Time(std::max(0.0, t_end.toSec() - 2 * BM_half_slice_thickness_)); // 2ms
+#else
+			t_begin = ros::Time(std::max(0.0, t_end.toSec() - 2 * BM_half_slice_thickness_)); // 2ms
+#endif
 			auto ev_end_it = tools::EventBuffer_lower_bound(events_left_, t_end);
 			auto ev_begin_it = tools::EventBuffer_lower_bound(events_left_, t_begin);
 			const size_t MAX_NUM_Event_INVOLVED = 30000;
@@ -866,8 +934,8 @@ namespace esvo_core
 				vEventsPtr_left_SGM_.push_back(ev_end_it._M_cur);
 				ev_end_it--;
 			}
-		}
-
+		} 
+		else
 		// BM
 		if (ESVO_System_Status_ == "WORKING")
 		{
@@ -876,8 +944,8 @@ namespace esvo_core
 			vCloseEventsPtr_left_.clear(); // Will be denoised using the mask above.
 
 			// load allEvent
-			ros::Time t_end = TS_obs_.first;
-			ros::Time t_begin(std::max(0.0, t_end.toSec() - 10 * BM_half_slice_thickness_)); // 10ms
+			t_end = TS_obs_.first;
+			t_begin = ros::Time(std::max(0.0, t_end.toSec() - 10 * BM_half_slice_thickness_)); // 10ms
 			auto ev_end_it = tools::EventBuffer_lower_bound(events_left_, t_end);
 			auto ev_begin_it = tools::EventBuffer_lower_bound(events_left_, t_begin);
 			const size_t MAX_NUM_Event_INVOLVED = 10000;
@@ -901,7 +969,7 @@ namespace esvo_core
 			// We made a trade off by assuming that events occurred within (0.05 * BM_half_slice_thickness_) ms share an identical pose (virtual view).
 			// Here we load transformations for all virtual views.
 			st_map_.clear();
-			ros::Time t_tmp = t_begin;
+			t_tmp = t_begin;
 			while (t_tmp.toSec() <= t_end.toSec())
 			{
 				Transformation tr;
@@ -918,43 +986,45 @@ namespace esvo_core
 #ifdef ESVO_CORE_MAPPING_DEBUG
 			LOG(INFO) << "Data Transferring (stampTransformation map): " << st_map_.size();
 #endif
+		}
 
-			// using inherent linear interpolation
-			// t0 <= ev.ts <= t1
-			// pose_0 (t0), pose_1 (t1), ..., pose_N (tN)
-			// t_begin, t_tmp, ..., t_end
-			mVirtualPoses_.clear();
-			t_tmp = t_begin;
-			while (t_tmp.toSec() <= t_end.toSec())
+		// using inherent linear interpolation
+		// t0 <= ev.ts <= t1
+		// pose_0 (t0), pose_1 (t1), ..., pose_N (tN)
+		// t_begin, t_tmp, ..., t_end
+		mVirtualPoses_.clear();
+		t_tmp = t_begin;
+		while (t_tmp.toSec() <= t_end.toSec())
+		{
+			Eigen::Matrix4d T;
+			if (trajectory_.getPoseAt(mAllPoses_, t_tmp, T))
 			{
-				Eigen::Matrix4d T;
-				if (trajectory_.getPoseAt(mAllPoses_, t_tmp, T)) 
-					mVirtualPoses_.push_back(std::make_pair(t_tmp, T));
-				else
-				{
-					nh_.getParam("/ESVO_SYSTEM_STATUS", ESVO_System_Status_);
-					if (ESVO_System_Status_ != "WORKING")
-						return false;
-				}
-				t_tmp = ros::Time(t_tmp.toSec() + 0.05 * BM_half_slice_thickness_);
+				mVirtualPoses_.push_back(std::make_pair(t_tmp, T));
 			}
+			else
+			{
+				LOG(INFO) << "waiting for new poses for events";
+				return false;
+			}
+			t_tmp = ros::Time(t_tmp.toSec() + 0.05 * BM_half_slice_thickness_);
+		}
 
 #ifdef EMVS_MAPPING_DEBUG
-			t_tmp = t_begin;
-			size_t cnt = 0;
-			while (t_tmp.toSec() <= t_end.toSec())
-			{
-				Eigen::Matrix4d T0 = st_map_[t_tmp].getTransformationMatrix();
-				Eigen::Matrix4d T1 = mVirtualPoses_[t_tmp];
-				std::cout << "st_map: " << T0.topRightCorner<3, 1>().transpose()
-							<< "; vp: " << T1.topRightCorner<3, 1>().transpose() << std::endl;
-				t_tmp = ros::Time(t_tmp.toSec() + 0.05 * BM_half_slice_thickness_);
-				cnt++;
-				if (cnt >= 3)
-					break;
-			}
-#endif
+		t_tmp = t_begin;
+		size_t cnt = 0;
+		while (t_tmp.toSec() <= t_end.toSec())
+		{
+			Eigen::Matrix4d T0 = st_map_[t_tmp].getTransformationMatrix();
+			Eigen::Matrix4d T1 = mVirtualPoses_[t_tmp];
+			std::cout << "st_map: " << T0.topRightCorner<3, 1>().transpose()
+					  << "; vp: " << T1.topRightCorner<3, 1>().transpose() << std::endl;
+			t_tmp = ros::Time(t_tmp.toSec() + 0.05 * BM_half_slice_thickness_);
+			cnt++;
+			if (cnt >= 3)
+				break;
 		}
+#endif
+
 		return true;
 	} // namespace esvo_core
 

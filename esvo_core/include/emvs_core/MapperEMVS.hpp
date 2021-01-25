@@ -102,8 +102,8 @@ namespace EMVS
 
 		void initializeDSI(const Eigen::Matrix4d &T_w_rv);
 
-		bool updateDSI(const std::vector<std::pair<ros::Time, Eigen::Matrix4d>> pVirtualPoses,
-					   const std::vector<dvs_msgs::Event *> pvEventsPtr);
+		bool updateDSI(const std::vector<std::pair<ros::Time, Eigen::Matrix4d>> &pVirtualPoses,
+					   const std::vector<Eigen::Vector4d> &pvEventsPtr);
 
 		void getDepthMapFromDSI(cv::Mat &depth_map, cv::Mat &confidence_map, cv::Mat &mask, const OptionsDepthMap &options_depth_map);
 
@@ -122,7 +122,7 @@ namespace EMVS
 
 		Eigen::Matrix4d T_w_rv_;
 
-	private:
+	// private:
 		void precomputeRectifiedPoints();
 		void fillVoxelGrid(const std::vector<Eigen::Vector4f> &event_locations_z0,
 						   const std::vector<Eigen::Vector3f> &camera_centers);
@@ -136,7 +136,7 @@ namespace EMVS
 		std::vector<double> camera_params_;
 		std::vector<double> camera_virtual_params_;
 
-		Eigen::Matrix3f K_virtual_;
+		Eigen::Matrix3f K_virtual_, K_;
 		int width_;
 		int height_;
 

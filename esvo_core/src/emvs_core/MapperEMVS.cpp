@@ -31,9 +31,12 @@ namespace EMVS
 													 0.5 * dsi_shape.dimX_,
 													 0.5 * dsi_shape.dimY_};
 		camera_virtual_ptr_->readParameters(camera_virtual_params_);
+		K_ << camera_params_[4], 0.0, camera_params_[6],
+			0.0, camera_params_[5], camera_params_[7],
+			0.0, 0.0, 1.0;
 		K_virtual_ << camera_virtual_params_[4], 0.0, camera_virtual_params_[6],
-   			          0.0, camera_virtual_params_[5], camera_virtual_params_[7],
-   			          0.0, 0.0, 1.0;
+			0.0, camera_virtual_params_[5], camera_virtual_params_[7],
+			0.0, 0.0, 1.0;
 		dsi_ = Grid3D(dsi_shape.dimX_, dsi_shape.dimY_, dsi_shape.dimZ_);
 		std::cout << camera_ptr_->parametersToString() << std::endl;
 		std::cout << camera_virtual_ptr_->parametersToString() << std::endl;
@@ -49,11 +52,11 @@ namespace EMVS
 	 * @brief: This functionj use the latest events with discrete poses to update the DSI
 	 * pvEventsPtr: events, pvEventsPtr.front() is the latest event, pvEventsPtr.back() is the eariest event
 	 */
-	bool MapperEMVS::updateDSI(const std::vector<std::pair<ros::Time, Eigen::Matrix4d>> pVirtualPoses,
-  							   const std::vector<dvs_msgs::Event *> pvEventsPtr)
+	bool MapperEMVS::updateDSI(const std::vector<std::pair<ros::Time, Eigen::Matrix4d>> &pVirtualPoses,
+  							   const std::vector<Eigen::Vector4d> &pvEventsPtr)
 	{
 		CHECK_GT(pVirtualPoses.size(), 1);
-		CHECK_GE(pVirtualPoses.back().first.toSec(), pvEventsPtr.back()->ts.toSec());
+		CHECK_GE(pVirtualPoses.back().first.toSec(), pvEventsPtr.back()[2]);
 
 		// 2D coordinates of the events transferred to reference view using plane Z = Z_0.
 		// We use Vector4f because Eigen is optimized for matrix multiplications with inputs whose size is a multiple of 4
@@ -70,22 +73,23 @@ namespace EMVS
 		auto it_ev_begin = pvEventsPtr.rbegin();
 		for (auto it_vp = pVirtualPoses.begin(); it_vp != pVirtualPoses.end(); it_vp++)
 		{
-			Eigen::Matrix4f T_w_ev = it_vp->second.cast<float>();
-			Eigen::Matrix4f T_ev_rv = T_w_ev.inverse() * T_w_rv_.cast<float>();
-			Eigen::Matrix3f R = T_ev_rv.topLeftCorner<3, 3>();
-			Eigen::Vector3f t = T_ev_rv.topRightCorner<3, 1>();
-			Eigen::Vector3f c = -R.transpose() * t;
+			Eigen::Matrix4d T_w_ev = it_vp->second;
+			Eigen::Matrix4d T_ev_rv = T_w_ev.inverse() * T_w_rv_;
+			Eigen::Matrix3d R = T_ev_rv.topLeftCorner<3, 3>();
+			Eigen::Vector3d t = T_ev_rv.topRightCorner<3, 1>();
+			Eigen::Vector3d c = -R.transpose() * t;
 
 			// Project the points on plane at distance z0
 			// Planar homography  (H_z0)^-1 that maps a point in the reference view to the event camera through plane Z = Z0 (Eq. (8) in the IJCV paper)
 			// Planar homography  (H_z0) transforms [u, v] to [X(Z0), Y(Z0), 1]
 			// Planar homography  (H_zi) transforms [u, v] to [X(Zi), Y(Zi), 1]
-			Eigen::Matrix3f H_z0 = (R * z0 + t * Eigen::Vector3f(0, 0, 1).transpose()).inverse();
+			Eigen::Matrix3f H_z0 = (R.cast<float>() * z0 + 
+									t.cast<float>() * Eigen::Vector3f(0, 0, 1).transpose()).inverse();
 			// H_z0_inv *= z0;
 			// H_z0_inv.col(2) += t;
 
 			// Compute H_z0 in pixel coordinates using the intrinsic parameters
-			Eigen::Matrix3f H_z0_px = K_virtual_.cast<float>() * H_z0; // transform [u, v] to [X(Z0), Y(Z0), 1]
+			Eigen::Matrix3f H_z0_px = K_virtual_ * H_z0 * K_.inverse(); // transform [u, v] to [X(Z0), Y(Z0), 1]
 
 			// Use a 4x4 matrix to allow Eigen to optimize the speed
 			Eigen::Matrix4f H_z0_px_4x4 = Eigen::Matrix4f::Zero();
@@ -93,26 +97,31 @@ namespace EMVS
 
 			for (auto it_ev = it_ev_begin; it_ev != pvEventsPtr.rend(); it_ev++)
 			{
-				if ((*it_ev)->ts.toSec() > it_vp->first.toSec())
+				if ((*it_ev)[2] > it_vp->first.toSec())
 				{
 					it_ev_begin = it_ev;
 					break;
 				}
 
-				if ((*it_ev)->y * width_ + (*it_ev)->x < 0 || 
-					(*it_ev)->y * width_ + (*it_ev)->x >= precomputed_rectified_points_.cols())
-					continue;
+				// if ((*it_ev)->y * width_ + (*it_ev)->x < 0 || 
+				// 	(*it_ev)->y * width_ + (*it_ev)->x >= precomputed_rectified_points_.cols())
+				// 	continue;
+
+				// if ((*it_ev)[1] * width_ + (*it_ev)[0] < 0 ||
+				// 	(*it_ev)[1] * width_ + (*it_ev)[0] >= precomputed_rectified_points_.cols())
+				// 	continue;
 
 				// For each event, precompute the warped event locations according to Eq. (11) in the IJCV paper.
 				Eigen::Vector4f p;
-				p.head<2>() = precomputed_rectified_points_.col((*it_ev)->y * width_ + (*it_ev)->x);
+				p.head<2>() = it_ev->head<2>().cast<float>();
+				// p.head<2>() = precomputed_rectified_points_.col((*it_ev)[1] * width_ + (*it_ev)[0]);
 				p[2] = 1.;
 				p[3] = 0.;
 				p = H_z0_px_4x4 * p;
 				p /= p[2];
 				event_locations_z0.push_back(p);
 				// Optical center of the event camera in the coordinate frame of the reference view
-				camera_centers.push_back(c);
+				camera_centers.push_back(c.cast<float>());
 			}
 		}
 		// LOG(INFO) << "No. virtual cam: " << pVirtualPoses.size() << ", No. events: " << pvEventsPtr.size();

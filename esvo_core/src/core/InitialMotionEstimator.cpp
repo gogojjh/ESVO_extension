@@ -62,8 +62,11 @@ void computeImageOfWarpedEvents(const double *v,
         double theta = v[2] * dt;
         Eigen::Matrix3d H_inv;
         H_inv << cos(theta), -sin(theta), tx,
-            sin(theta), cos(theta), ty,
-            0, 0, 1;
+                 sin(theta), cos(theta), ty,
+                 0, 0, 1;
+        // H_inv << cos(0.0), -sin(0.0), tx,
+        //          sin(0.0), cos(0.0), ty,
+        //          0, 0, 1;
         H_inv = K * H_inv * K.inverse();
         st_Hinv.emplace_back(t_cur, H_inv);
         t_cur += INI_TIME_INTERVAL;

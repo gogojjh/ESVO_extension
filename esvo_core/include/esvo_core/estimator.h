@@ -184,6 +184,7 @@ namespace esvo_core
         std::vector<dvs_msgs::Event *> vALLEventsPtr_left_;      // for BM
         std::vector<dvs_msgs::Event *> vCloseEventsPtr_left_;    // for BM
         std::vector<dvs_msgs::Event *> vDenoisedEventsPtr_left_; // for BM
+        std::vector<Eigen::Vector4d> vEdgeletCoordinates_;
         size_t totalNumCount_;                                   // count the number of events involved
         std::vector<dvs_msgs::Event *> vEventsPtr_left_SGM_;     // for SGM
 

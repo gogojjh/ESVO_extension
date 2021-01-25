@@ -9,13 +9,16 @@ distortion_parameters:
    k2: 0.111789
    p1: -0.00140053
    p2: -0.000459594
+# projection_parameters:
+#    fx: 196.639
+#    fy: 196.733
+#    cx: 105.064
+#    cy: 72.4717
 projection_parameters:
-   fx: 196.639
-   fy: 196.733
-   cx: 105.064
-   cy: 72.4717
-
-
+   fx: 156.925
+   fy: 156.925
+   cx: 108.167
+   cy: 78.4205
 
 
 
