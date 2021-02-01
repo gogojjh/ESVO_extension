@@ -76,6 +76,7 @@ include_directories(include)
 ###############
 set(HEADERS
   include/esvo_core/core/DepthFusion.h
+  include/esvo_core/core/DepthMonoFusion.h
   include/esvo_core/core/DepthRegularization.h
   include/esvo_core/core/DepthProblem.h
   include/esvo_core/core/DepthProblemSolver.h
@@ -99,6 +100,7 @@ set(HEADERS
 
 set(SOURCES
   src/core/DepthFusion.cpp
+  src/core/DepthMonoFusion.cpp
   src/core/DepthRegularization.cpp
   src/core/DepthProblem.cpp
   src/core/DepthProblemSolver.cpp

@@ -17,6 +17,7 @@
 #include <esvo_core/container/DepthMap.h>
 #include <esvo_core/container/EventMatchPair.h>
 #include <esvo_core/core/DepthFusion.h>
+#include <esvo_core/core/DepthMonoFusion.h>
 #include <esvo_core/core/DepthRegularization.h>
 #include <esvo_core/core/DepthProblem.h>
 #include <esvo_core/core/DepthProblemSolver.h>
@@ -50,7 +51,7 @@
 #include <pcl_ros/point_cloud.h>
 
 #define ESTIMATOR_DEBUG
-#define MONOCULAR_DEBUG
+// #define MONOCULAR_DEBUG
 // #define EMVS_MAPPING_DEBUG
 
 const double VAR_RANDOM_INIT_INITIAL_ = 0.2;
@@ -94,7 +95,7 @@ namespace esvo_core
 
         void publishMonoMappingResults(DepthMap::Ptr depthMapPtr, Transformation tr, ros::Time t);
         void publishMonoPointCloud(DepthMap::Ptr &depthMapPtr, Transformation &tr, ros::Time &t);
-        void publishEMVSPointCloud(const ros::Time &t, const Eigen::Matrix4d &T_w_rv);
+        void publishEMVSPointCloud(const ros::Time &t);
         void publishDSIResults(const ros::Time &t, const cv::Mat &semiDenseMask,
                                const cv::Mat &depthMap, const cv::Mat &confidenceMap);
 
@@ -176,6 +177,7 @@ namespace esvo_core
         DepthProblemConfig::Ptr dpConfigPtr_;
         DepthProblemSolver dpSolver_;
         DepthFusion dFusor_;
+        DepthMonoFusion dMonoFusor_;
         DepthRegularization dRegularizor_;
         Visualization visualizor_;
         EventBM ebm_;
@@ -272,7 +274,7 @@ namespace esvo_core
         EMVS::LinearTrajectory trajectory_;
         bool isKeyframe_;
         Eigen::Matrix4d T_w_keyframe_, T_w_frame_;
-        pcl::PointCloud<pcl::PointXYZI>::Ptr emvs_pc_;
+        pcl::PointCloud<pcl::PointXYZI>::Ptr emvs_pc_, pc_map_;
 
         std::string resultPath_;
         double meanDepth_;

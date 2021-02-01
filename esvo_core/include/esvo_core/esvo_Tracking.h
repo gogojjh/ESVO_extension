@@ -34,6 +34,8 @@
 #include <pcl/point_types.h>
 #include <pcl_ros/point_cloud.h>
 
+// #define ESVO_TRACKING_MC
+
 namespace esvo_core
 {
   using namespace core;

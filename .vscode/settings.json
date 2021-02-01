@@ -71,7 +71,11 @@
         "forward_list": "cpp",
         "filesystem": "cpp",
         "matrixfunctions": "cpp",
-        "future": "cpp"
+        "future": "cpp",
+        "regex": "cpp",
+        "*.txx": "cpp",
+        "*.cuh": "cpp",
+        "__tree": "cpp"
     },
     "cmake.configureOnOpen": true,
     "C_Cpp.errorSquiggles": "Disabled"

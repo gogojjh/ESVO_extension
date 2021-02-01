@@ -150,6 +150,8 @@ namespace EMVS
 
 		// Precomputed (normalized) bearing vectors for each pixel of the reference image
 		Eigen::Matrix2Xf precomputed_rectified_points_;
+
+		size_t accumulate_events_;
 	};
 
 } // namespace EMVS

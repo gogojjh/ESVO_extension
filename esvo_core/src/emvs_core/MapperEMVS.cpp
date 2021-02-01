@@ -45,6 +45,7 @@ namespace EMVS
 	void MapperEMVS::initializeDSI(const Eigen::Matrix4d &T_w_rv)
 	{
 		T_w_rv_ = T_w_rv;
+		accumulate_events_ = 0;
 		dsi_.resetGrid();
 	}
 
@@ -127,6 +128,7 @@ namespace EMVS
 		// LOG(INFO) << "No. virtual cam: " << pVirtualPoses.size() << ", No. events: " << pvEventsPtr.size();
 		// LOG(INFO) << "No. camera centers: " << camera_centers.size();
 
+		accumulate_events_ += event_locations_z0.size();
 		fillVoxelGrid(event_locations_z0, camera_centers);
 		return true;
 	}
@@ -274,12 +276,15 @@ namespace EMVS
 						if (confidence_map.at<float>(y, x) >= 255)
 							variance = 0;
 						else 
-							variance = double(255 - confidence_map.at<float>(y, x));
+							// variance = double(255 - confidence_map.at<float>(y, x));
+							variance = 0.01;
 						esvo_core::container::DepthPoint dp(y, x);
 						dp.update_x(p);
 						dp.update_p_cam(xyz_rv);
 						dp.update(1.0 / xyz_rv.z(), variance);
 						dp.updatePose(T_w_rv_);
+						dp.residual() = 0.1;
+						dp.age() = 1;
 						vdp.push_back(dp);
 						mean_depth += xyz_rv.z();
 					}
