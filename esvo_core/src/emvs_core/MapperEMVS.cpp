@@ -5,41 +5,56 @@
 
 namespace EMVS
 {
-	MapperEMVS::MapperEMVS(const camodocal::CameraPtr &camera_ptr,
-						   const camodocal::CameraPtr &camera_virtual_ptr)
-		: camera_ptr_(camera_ptr),
-		  camera_virtual_ptr_(camera_virtual_ptr)
+	void MapperEMVS::configDSI(const esvo_core::container::PerspectiveCamera::Ptr &camPtr,
+							   ShapeDSI &dsi_shape)
 	{
-		width_ = camera_ptr_->imageWidth();
-		height_ = camera_ptr_->imageHeight();
-		camera_ptr_->writeParameters(camera_params_);
-		precomputeRectifiedPoints();
-	}
+		// CHECK_GT(dsi_shape.min_depth_, 0.0);
+		// CHECK_GT(dsi_shape.max_depth_, dsi_shape.min_depth_);
+		// depths_vec_ = TypeDepthVector(float(dsi_shape.min_depth_), float(dsi_shape.max_depth_), float(dsi_shape.dimZ_));
+		// raw_depths_vec_ = depths_vec_.getDepthVector();
+		// dsi_shape.dimX_ = (dsi_shape.dimX_ > 0) ? dsi_shape.dimX_ : camera_ptr_->imageWidth();
+		// dsi_shape.dimY_ = (dsi_shape.dimY_ > 0) ? dsi_shape.dimY_ : camera_ptr_->imageHeight();
+		// dsi_shape.fov_ = (dsi_shape.fov_ > 0) ? dsi_shape.fov_ : 45.0; // using event camera's fov
+		// camera_virtual_params_ = std::vector<double>{0, 0, 0, 0,
+		// 											 camera_params_[4],
+		// 											 camera_params_[4],
+		// 											 0.5 * dsi_shape.dimX_,
+		// 											 0.5 * dsi_shape.dimY_};
+		// camera_virtual_ptr_->readParameters(camera_virtual_params_);
+		// K_ << camera_params_[4], 0.0, camera_params_[6],
+		// 	0.0, camera_params_[5], camera_params_[7],
+		// 	0.0, 0.0, 1.0;
+		// K_virtual_ << camera_virtual_params_[4], 0.0, camera_virtual_params_[6],
+		// 	0.0, camera_virtual_params_[5], camera_virtual_params_[7],
+		// 	0.0, 0.0, 1.0;
+		// dsi_ = Grid3D(dsi_shape.dimX_, dsi_shape.dimY_, dsi_shape.dimZ_);
+		// std::cout << camera_ptr_->parametersToString() << std::endl;
+		// std::cout << camera_virtual_ptr_->parametersToString() << std::endl;
 
-	void MapperEMVS::configDSI(ShapeDSI &dsi_shape)
-	{
+		// width_ = camera_ptr_->imageWidth();
+		// height_ = camera_ptr_->imageHeight();
+		// camera_ptr_->writeParameters(camera_params_);
+		// precomputeRectifiedPoints();
+
+		width_ = camPtr->width_;
+		height_ = camPtr->height_;
+
+		// config dsi
 		CHECK_GT(dsi_shape.min_depth_, 0.0);
 		CHECK_GT(dsi_shape.max_depth_, dsi_shape.min_depth_);
 		depths_vec_ = TypeDepthVector(float(dsi_shape.min_depth_), float(dsi_shape.max_depth_), float(dsi_shape.dimZ_));
 		raw_depths_vec_ = depths_vec_.getDepthVector();
-		dsi_shape.dimX_ = (dsi_shape.dimX_ > 0) ? dsi_shape.dimX_ : camera_ptr_->imageWidth();
-		dsi_shape.dimY_ = (dsi_shape.dimY_ > 0) ? dsi_shape.dimY_ : camera_ptr_->imageHeight();
+		dsi_shape.dimX_ = (dsi_shape.dimX_ > 0) ? dsi_shape.dimX_ : width_;
+		dsi_shape.dimY_ = (dsi_shape.dimY_ > 0) ? dsi_shape.dimY_ : height_;
 		dsi_shape.fov_ = (dsi_shape.fov_ > 0) ? dsi_shape.fov_ : 45.0; // using event camera's fov
-		camera_virtual_params_ = std::vector<double>{0, 0, 0, 0,
-													 camera_params_[4],
-													 camera_params_[4],
-													 0.5 * dsi_shape.dimX_,
-													 0.5 * dsi_shape.dimY_};
-		camera_virtual_ptr_->readParameters(camera_virtual_params_);
-		K_ << camera_params_[4], 0.0, camera_params_[6],
-			0.0, camera_params_[5], camera_params_[7],
-			0.0, 0.0, 1.0;
-		K_virtual_ << camera_virtual_params_[4], 0.0, camera_virtual_params_[6],
-			0.0, camera_virtual_params_[5], camera_virtual_params_[7],
-			0.0, 0.0, 1.0;
 		dsi_ = Grid3D(dsi_shape.dimX_, dsi_shape.dimY_, dsi_shape.dimZ_);
-		std::cout << camera_ptr_->parametersToString() << std::endl;
-		std::cout << camera_virtual_ptr_->parametersToString() << std::endl;
+
+		K_ = camPtr->P_.cast<float>().topLeftCorner<3, 3>();
+		K_virtual_ << K_(0, 0), 0.0, 0.5 * static_cast<float>(dsi_shape.dimX_),
+ 			          0.0, K_(1, 1), 0.5 * static_cast<float>(dsi_shape.dimY_),
+ 			          0.0, 0.0, 1.0;
+		std::cout << "K_: " << std::endl << K_ << std::endl;
+		std::cout << "K_virtual_: " << std::endl << K_virtual_ << std::endl;
 	}
 
 	void MapperEMVS::initializeDSI(const Eigen::Matrix4d &T_w_rv)
@@ -86,8 +101,6 @@ namespace EMVS
 			// Planar homography  (H_zi) transforms [u, v] to [X(Zi), Y(Zi), 1]
 			Eigen::Matrix3f H_z0 = (R.cast<float>() * z0 + 
 									t.cast<float>() * Eigen::Vector3f(0, 0, 1).transpose()).inverse();
-			// H_z0_inv *= z0;
-			// H_z0_inv.col(2) += t;
 
 			// Compute H_z0 in pixel coordinates using the intrinsic parameters
 			Eigen::Matrix3f H_z0_px = K_virtual_ * H_z0 * K_.inverse(); // transform [u, v] to [X(Z0), Y(Z0), 1]
@@ -98,24 +111,15 @@ namespace EMVS
 
 			for (auto it_ev = it_ev_begin; it_ev != pvEventsPtr.rend(); it_ev++)
 			{
-				if ((*it_ev)[2] > it_vp->first.toSec())
+				if ((*it_ev)[2] > it_vp->first.toSec()) // check the timestamp
 				{
 					it_ev_begin = it_ev;
 					break;
 				}
 
-				// if ((*it_ev)->y * width_ + (*it_ev)->x < 0 || 
-				// 	(*it_ev)->y * width_ + (*it_ev)->x >= precomputed_rectified_points_.cols())
-				// 	continue;
-
-				// if ((*it_ev)[1] * width_ + (*it_ev)[0] < 0 ||
-				// 	(*it_ev)[1] * width_ + (*it_ev)[0] >= precomputed_rectified_points_.cols())
-				// 	continue;
-
 				// For each event, precompute the warped event locations according to Eq. (11) in the IJCV paper.
 				Eigen::Vector4f p;
 				p.head<2>() = it_ev->head<2>().cast<float>();
-				// p.head<2>() = precomputed_rectified_points_.col((*it_ev)[1] * width_ + (*it_ev)[0]);
 				p[2] = 1.;
 				p[3] = 0.;
 				p = H_z0_px_4x4 * p;
@@ -127,7 +131,6 @@ namespace EMVS
 		}
 		// LOG(INFO) << "No. virtual cam: " << pVirtualPoses.size() << ", No. events: " << pvEventsPtr.size();
 		// LOG(INFO) << "No. camera centers: " << camera_centers.size();
-
 		accumulate_events_ += event_locations_z0.size();
 		fillVoxelGrid(event_locations_z0, camera_centers);
 		return true;
@@ -160,8 +163,8 @@ namespace EMVS
 					const Eigen::Vector3f &C = camera_centers[i];
 					const float zi = static_cast<float>(raw_depths_vec_[depth_plane]);
 					const float a = z0 * (zi - C[2]);
-					const float bx = (z0 - zi) * (C[0] * camera_virtual_params_[4] + C[2] * camera_virtual_params_[6]);
-					const float by = (z0 - zi) * (C[1] * camera_virtual_params_[5] + C[2] * camera_virtual_params_[7]);
+					const float bx = (z0 - zi) * (C[0] * K_virtual_(0, 0) + C[2] * K_virtual_(0, 2));
+					const float by = (z0 - zi) * (C[1] * K_virtual_(1, 1) + C[2] * K_virtual_(1, 2));
 					const float d = zi * (z0 - C[2]);
 					float X = (event_locations_z0[i][0] * a + bx) / d;
 					float Y = (event_locations_z0[i][1] * a + by) / d;
@@ -174,19 +177,19 @@ namespace EMVS
 		void MapperEMVS::precomputeRectifiedPoints()
 		{
 			// (Mono) Create a lookup table that maps pixel coordinates to undistorted pixel coordinates
-			precomputed_rectified_points_ = Eigen::Matrix2Xf(2, height_ * width_);
-			for (int y = 0; y < height_; y++)
-			{
-				for (int x = 0; x < width_; ++x)
-				{
-					Eigen::Vector2d p_d(x, y);
-					Eigen::Vector3d P_u;
+			// precomputed_rectified_points_ = Eigen::Matrix2Xf(2, height_ * width_);
+			// for (int y = 0; y < height_; y++)
+			// {
+			// 	for (int x = 0; x < width_; ++x)
+			// 	{
+			// 		Eigen::Vector2d p_d(x, y);
+			// 		Eigen::Vector3d P_u;
 
-					camera_ptr_->liftProjective(p_d, P_u);
-					P_u /= P_u.z();
-					precomputed_rectified_points_.col(y * width_ + x) = P_u.head<2>().cast<float>(); // lift a point on its projective ray
-				}
-			}
+			// 		camera_ptr_->liftProjective(p_d, P_u);
+			// 		P_u /= P_u.z();
+			// 		precomputed_rectified_points_.col(y * width_ + x) = P_u.head<2>().cast<float>(); // lift a point on its projective ray
+			// 	}
+			// }
 		}
 
 		void MapperEMVS::convertDepthIndicesToValues(const cv::Mat &depth_cell_indices, cv::Mat &depth_map)
@@ -284,10 +287,9 @@ namespace EMVS
 				{
 					if (mask.at<uint8_t>(y, x) > 0)
 					{
-						Eigen::Vector2d p(x, y);
-						Eigen::Vector3d P;
-						camera_virtual_ptr_->liftProjective(p, P);
-						Eigen::Vector3d xyz_rv = (P / P.z() * depth_map.at<float>(y, x));
+						Eigen::Vector3f p(x, y, 1);
+						Eigen::Vector3f P = K_virtual_.inverse() * p;
+						Eigen::Vector3f xyz_rv = (P / P.z() * depth_map.at<float>(y, x));
 						if (xyz_rv.z() <= 1e-6)
 							continue;
 
@@ -298,8 +300,8 @@ namespace EMVS
 						// 	// variance = double(255 - confidence_map.at<float>(y, x));
 						// 	variance = 0.01;
 						esvo_core::container::DepthPoint dp(y, x);
-						dp.update_x(p);
-						dp.update_p_cam(xyz_rv);
+						dp.update_x(p.head<2>().cast<double>());
+						dp.update_p_cam(xyz_rv.cast<double>());
 						dp.update_confidence(1.0 / xyz_rv.z(), static_cast<double>(confidence_map.at<float>(y, x)));
 						dp.updatePose(T_w_rv_);
 						dp.age() = 1;
@@ -325,10 +327,9 @@ namespace EMVS
 				{
 					if (mask.at<uint8_t>(y, x) > 0)
 					{
-						Eigen::Vector2d p(x, y);
-						Eigen::Vector3d P;
-						camera_virtual_ptr_->liftProjective(p, P);
-						Eigen::Vector3d xyz_rv = (P / P.z() * depth_map.at<float>(y, x));
+						Eigen::Vector3f p(x, y, 1);
+						Eigen::Vector3f P = K_virtual_.inverse() * p;
+						Eigen::Vector3f xyz_rv = (P / P.z() * depth_map.at<float>(y, x));
 
 						pcl::PointXYZI p_rv; // 3D point in reference view
 						p_rv.x = xyz_rv.x();

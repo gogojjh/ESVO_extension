@@ -11,6 +11,7 @@
 #include <pcl_ros/point_cloud.h>
 
 #include "esvo_core/container/DepthPoint.h"
+#include "esvo_core/container/CameraSystem.h"
 #include "camodocal/camera_models/CameraFactory.h"
 #include "camodocal/camera_models/PinholeCamera.h"
 #include "cartesian3dgrid/cartesian3dgrid.h"
@@ -95,10 +96,8 @@ namespace EMVS
 	public:
 		MapperEMVS() {}
 
-		MapperEMVS(const camodocal::CameraPtr &camera_ptr,
-				   const camodocal::CameraPtr &camera_virtual_ptr);
-
-		void configDSI(ShapeDSI &dsi_shape);
+		void configDSI(const esvo_core::container::PerspectiveCamera::Ptr &camPtr,
+					   ShapeDSI &dsi_shape);
 
 		void initializeDSI(const Eigen::Matrix4d &T_w_rv);
 

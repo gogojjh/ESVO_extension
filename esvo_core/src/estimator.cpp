@@ -54,15 +54,14 @@ namespace esvo_core
 		  pc_map_(new pcl::PointCloud<pcl::PointXYZI>()),
 		  depthFramePtr_(new DepthFrame(camSysPtr_->cam_left_ptr_->height_, camSysPtr_->cam_left_ptr_->width_)),
 		  // Monocular Mapping
-		  camPtr_(camodocal::CameraFactory::instance()->generateCameraFromYamlFile(
-			  tools::param(pnh_, "CAM_CALIB_PATH", std::string("left_pinhold.yaml")))),
-		  camVirtualPtr_(camodocal::CameraFactory::instance()->generateCameraFromYamlFile(
-			  tools::param(pnh_, "CAM_CALIB_PATH", std::string("left_pinhold.yaml")))),
+		//   camPtr_(camodocal::CameraFactory::instance()->generateCameraFromYamlFile(
+		// 	  tools::param(pnh_, "CAM_CALIB_PATH", std::string("left_pinhold.yaml")))),
+		//   camVirtualPtr_(camodocal::CameraFactory::instance()->generateCameraFromYamlFile(
+		// 	  tools::param(pnh_, "CAM_CALIB_PATH", std::string("left_pinhold.yaml")))),
 		  emvs_dsi_shape_(tools::param(pnh_, "opts_dim_x", 0),
 						  tools::param(pnh_, "opts_dim_y", 0),
 						  tools::param(pnh_, "opts_dim_z", 100),
 						  1.0 / invDepth_max_range_, 1.0 / invDepth_min_range_, 0.0),
-		  emvs_mapper_(camPtr_, camVirtualPtr_),
 		  emvs_opts_depth_map_(tools::param(pnh_, "opts_depth_map_kernal_size", 5),
 							   tools::param(pnh_, "opts_depth_map_threshold_c", 5),
 							   tools::param(pnh_, "opts_depth_map_median_filter_size", 5)),
@@ -195,8 +194,8 @@ namespace esvo_core
 		server_->setCallback(dynamic_reconfigure_callback_);
 
 		// DSI_Mapper configure
-		emvs_mapper_.configDSI(emvs_dsi_shape_);
-		emvs_mapper_.initializeDSI(Eigen::Matrix4d::Identity());
+		emvs_mapper_.configDSI(camSysPtr_->cam_left_ptr_, emvs_dsi_shape_);
+		// emvs_mapper_.initializeDSI(Eigen::Matrix4d::Identity());
 
 		// invDepth_INIT_ = 1.0;
 		isKeyframe_ = false;
@@ -208,8 +207,6 @@ namespace esvo_core
 		emvs_pc_.reset(new pcl::PointCloud<pcl::PointXYZI>);
 		emvs_pc_->header.frame_id = world_frame_id_;
 		emvs_pc_pub_ = nh_.advertise<PointCloud>("/esvo_mapping/pointcloud_emvs", 1);
-
-		// dqvMonoDepthPoints_.push_back(std::vector<DepthPoint>());
 
 #ifdef EMVS_MAPPING_DEBUG
 		emvs_dsi_shape_.printDSIInfo();
@@ -785,7 +782,7 @@ namespace esvo_core
 			// 	exit(-1);
 			// }
 
-			while (dqvMonoDepthPoints_.size() > maxNumFusionFrames_)
+			while (dqvMonoDepthPoints_.size() > 1)
 				dqvMonoDepthPoints_.pop_front();
 
 			// LOG(INFO) << "Fusion succeeds";
