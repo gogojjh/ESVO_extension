@@ -217,7 +217,11 @@ namespace EMVS
 			}
 		}
 
-		void MapperEMVS::getDepthMapFromDSI(cv::Mat &depth_map, cv::Mat &confidence_map, cv::Mat &mask, const OptionsDepthMap &options_depth_map)
+		void MapperEMVS::getDepthMapFromDSI(cv::Mat &depth_map,
+											cv::Mat &confidence_map,
+											cv::Mat &mask,
+											const OptionsDepthMap &options_depth_map,
+											double &mean_depth)
 		{
 			// Reference: Section 5.2.3 in the IJCV paper.
 			// Maximum number of votes along optical ray
@@ -249,16 +253,31 @@ namespace EMVS
 
 			// Convert depth indices to depth values
 			convertDepthIndicesToValues(depth_cell_indices_filtered, depth_map);
+
+			// compute the mean depth
+			mean_depth = 0;
+			size_t depth_cnt = 0;
+			for (size_t y = 0; y < depth_map.rows; ++y)
+			{
+				for (size_t x = 0; x < depth_map.cols; ++x)
+				{
+					if (mask.at<uint8_t>(y, x) > 0)
+					{
+						mean_depth += static_cast<double>(depth_map.at<float>(y, x));
+						depth_cnt++;
+					}
+				}
+			}
+			if (depth_cnt != 0)
+				mean_depth /= depth_cnt;
 		}
 
 		void MapperEMVS::getDepthPoint(const cv::Mat &depth_map,
 									   const cv::Mat &confidence_map,
 									   const cv::Mat &mask,
-									   std::vector<esvo_core::container::DepthPoint> &vdp,
-									   double &mean_depth)
+									   std::vector<esvo_core::container::DepthPoint> &vdp)
 		{
 			vdp.clear();
-			mean_depth = 0;
 			for (size_t y = 0; y < depth_map.rows; ++y)
 			{
 				for (size_t x = 0; x < depth_map.cols; ++x)
@@ -272,26 +291,22 @@ namespace EMVS
 						if (xyz_rv.z() <= 1e-6)
 							continue;
 
-						double variance;
-						if (confidence_map.at<float>(y, x) >= 255)
-							variance = 0;
-						else 
-							// variance = double(255 - confidence_map.at<float>(y, x));
-							variance = 0.01;
+						// double variance;
+						// if (confidence_map.at<float>(y, x) >= 255)
+						// 	variance = 0;
+						// else 
+						// 	// variance = double(255 - confidence_map.at<float>(y, x));
+						// 	variance = 0.01;
 						esvo_core::container::DepthPoint dp(y, x);
 						dp.update_x(p);
 						dp.update_p_cam(xyz_rv);
-						dp.update(1.0 / xyz_rv.z(), variance);
+						dp.update_confidence(1.0 / xyz_rv.z(), static_cast<double>(confidence_map.at<float>(y, x)));
 						dp.updatePose(T_w_rv_);
-						dp.residual() = 0.1;
 						dp.age() = 1;
 						vdp.push_back(dp);
-						mean_depth += xyz_rv.z();
 					}
 				}
 			}
-			if (vdp.size() != 0)
-				mean_depth /= vdp.size();
 		}
 
 		void MapperEMVS::getPointcloud(const cv::Mat &depth_map,

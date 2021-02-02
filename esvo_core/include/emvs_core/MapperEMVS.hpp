@@ -105,13 +105,16 @@ namespace EMVS
 		bool updateDSI(const std::vector<std::pair<ros::Time, Eigen::Matrix4d>> &pVirtualPoses,
 					   const std::vector<Eigen::Vector4d> &pvEventsPtr);
 
-		void getDepthMapFromDSI(cv::Mat &depth_map, cv::Mat &confidence_map, cv::Mat &mask, const OptionsDepthMap &options_depth_map);
+		void getDepthMapFromDSI(cv::Mat &depth_map,
+								cv::Mat &confidence_map,
+								cv::Mat &mask,
+								const OptionsDepthMap &options_depth_map,
+								double &mean_depth);
 
 		void getDepthPoint(const cv::Mat &depth_map,
 						   const cv::Mat &confidence_map,
 						   const cv::Mat &mask,
-						   std::vector<esvo_core::container::DepthPoint> &vdp,
-						   double &mean_depth);
+						   std::vector<esvo_core::container::DepthPoint> &vdp);
 
 		void getPointcloud(const cv::Mat &depth_map,
 						   const cv::Mat &mask,

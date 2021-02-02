@@ -38,30 +38,31 @@ namespace esvo_core
       double invDepth = 1.0 / p_prop(2);
 
       // compute the jacobian
-      double denominator = T_prop_prior.block<1, 2>(2, 0) * dp_prior.p_cam().head(2) + T_prop_prior(2, 3);
-      denominator /= dp_prior.p_cam()(2);
-      denominator += T_prop_prior(2, 2);
-      double J = T_prop_prior(2, 2) / pow(denominator, 2);
+      // double denominator = T_prop_prior.block<1, 2>(2, 0) * dp_prior.p_cam().head(2) + T_prop_prior(2, 3);
+      // denominator /= dp_prior.p_cam()(2);
+      // denominator += T_prop_prior(2, 2);
+      // double J = T_prop_prior(2, 2) / pow(denominator, 2);
 
       // propagation
-      double variance, scale2, nu;
-      if (strcmp(dpConfigPtr_->LSnorm_.c_str(), "l2") == 0)
-      {
-        variance = J * J * dp_prior.variance();
-        dp_prop.update(invDepth, variance);
-      }
-      else if (strcmp(dpConfigPtr_->LSnorm_.c_str(), "Tdist") == 0)
-      {
-        scale2 = J * J * dp_prior.scaleSquared();
-        nu = dp_prior.nu();
-        variance = nu / (nu - 2) * scale2;
-        dp_prop.update_studentT(invDepth, scale2, variance, nu);
-      }
-      else
-        exit(-1);
+      // double variance, scale2, nu;
+      // if (strcmp(dpConfigPtr_->LSnorm_.c_str(), "l2") == 0)
+      // {
+      //   variance = J * J * dp_prior.variance();
+      //   dp_prop.update(invDepth, variance);
+      // }
+      // else if (strcmp(dpConfigPtr_->LSnorm_.c_str(), "Tdist") == 0)
+      // {
+      //   scale2 = J * J * dp_prior.scaleSquared();
+      //   nu = dp_prior.nu();
+      //   variance = nu / (nu - 2) * scale2;
+      //   dp_prop.update_studentT(invDepth, scale2, variance, nu);
+      // }
+      // else
+      //   exit(-1);
 
+      dp_prop.update_confidence(invDepth, dp_prior.confidence());
       dp_prop.update_p_cam(p_prop);
-      dp_prop.residual() = dp_prior.residual();
+      // dp_prop.residual() = dp_prior.residual();
       dp_prop.age() = dp_prior.age();
       return true;
     }
@@ -125,16 +126,16 @@ namespace esvo_core
         if (!dm->exists(row, col))
         {
           DepthPoint dp_new(row, col);
-          if (strcmp(dpConfigPtr_->LSnorm_.c_str(), "l2") == 0)
-            dp_new.update(dp_prop.invDepth(), dp_prop.variance());
-          else if (strcmp(dpConfigPtr_->LSnorm_.c_str(), "Tdist") == 0)
-          {
-            dp_new.update_studentT(dp_prop.invDepth(), dp_prop.scaleSquared(), dp_prop.variance(), dp_prop.nu());
-          }
-          else
-            exit(-1);
-
-          dp_new.residual() = dp_prop.residual();
+          // if (strcmp(dpConfigPtr_->LSnorm_.c_str(), "l2") == 0)
+          //   dp_new.update(dp_prop.invDepth(), dp_prop.variance());
+          // else if (strcmp(dpConfigPtr_->LSnorm_.c_str(), "Tdist") == 0)
+          // {
+          //   dp_new.update_studentT(dp_prop.invDepth(), dp_prop.scaleSquared(), dp_prop.variance(), dp_prop.nu());
+          // }
+          // else
+          //   exit(-1);
+          dp_new.update_confidence(dp_prop.invDepth(), dp_prop.confidence());
+          // dp_new.residual() = dp_prop.residual();
           Eigen::Vector3d p_cam;
           camSysPtr_->cam_left_ptr_->cam2World(dp_new.x(), dp_prop.invDepth(), p_cam);
           dp_new.update_p_cam(p_cam);
@@ -143,7 +144,7 @@ namespace esvo_core
         }
         else // case 2: occupied
         {
-          bool bCompatibility = false;
+          // bool bCompatibility = false;
           // if (strcmp(dpConfigPtr_->LSnorm_.c_str(), "l2") == 0)
           //   bCompatibility = chiSquareTest(dp_prop.invDepth(), dm->at(row, col).invDepth(),
           //                                  dp_prop.variance(), dm->at(row, col).variance());
@@ -155,23 +156,27 @@ namespace esvo_core
           // else
           //   exit(-1);
 
-          // // case 2.1 compatible
-          // if (bCompatibility)
-          // {
-          //   if (strcmp(dpConfigPtr_->LSnorm_.c_str(), "l2") == 0)
-          //     dm->get(row, col).update(dp_prop.invDepth(), dp_prop.variance());
-          //   else if (strcmp(dpConfigPtr_->LSnorm_.c_str(), "Tdist") == 0)
-          //     dm->get(row, col).update_studentT(dp_prop.invDepth(), dp_prop.scaleSquared(), dp_prop.variance(), dp_prop.nu());
-          //   else
-          //     exit(-1);
+          bool bCompatibility = true;
 
-          //   dm->get(row, col).age()++;
-          //   dm->get(row, col).residual() = min(dm->get(row, col).residual(), dp_prop.residual());
-          //   Eigen::Vector3d p_update;
-          //   camSysPtr_->cam_left_ptr_->cam2World(dm->get(row, col).x(), dp_prop.invDepth(), p_update);
-          //   dm->get(row, col).update_p_cam(p_update);
-          //   numFusion++;
-          // }
+          // case 2.1 compatible
+          if (bCompatibility)
+          {
+            // if (strcmp(dpConfigPtr_->LSnorm_.c_str(), "l2") == 0)
+            //   dm->get(row, col).update(dp_prop.invDepth(), dp_prop.variance());
+            // else if (strcmp(dpConfigPtr_->LSnorm_.c_str(), "Tdist") == 0)
+            //   dm->get(row, col).update_studentT(dp_prop.invDepth(), dp_prop.scaleSquared(), dp_prop.variance(), dp_prop.nu());
+            // else
+            //   exit(-1);
+
+            dm->get(row, col).update_confidence(dp_prop.invDepth(), dp_prop.confidence());
+
+            dm->get(row, col).age()++;
+            // dm->get(row, col).residual() = min(dm->get(row, col).residual(), dp_prop.residual());
+            Eigen::Vector3d p_update;
+            camSysPtr_->cam_left_ptr_->cam2World(dm->get(row, col).x(), dp_prop.invDepth(), p_update);
+            dm->get(row, col).update_p_cam(p_update);
+            numFusion++;
+          }
           // else // case 2.2 not compatible
           // {
           //   // consider occlusion (the pixel is already assigned with a point that is closer to the camera)

@@ -38,6 +38,9 @@ namespace esvo_core
       double &variance();
       const double &variance() const;
 
+      double &confidence();
+      const double &confidence() const;
+
       double &residual();
       const double &residual() const;
 
@@ -48,6 +51,7 @@ namespace esvo_core
 
       void update(double invDepth, double variance);                                    // Gaussian distribution
       void update_studentT(double invDepth, double scale2, double variance, double nu); // T distribution
+      void update_confidence(double invDepth, double confidence);
 
       void update_p_cam(const Eigen::Vector3d &p);
       const Eigen::Vector3d &p_cam() const;
@@ -79,6 +83,7 @@ namespace esvo_core
       double nu_;
       double variance_;
       double residual_;
+      double confidence_;
 
       // count the number of fusion has been applied on a depth point
       size_t age_;
