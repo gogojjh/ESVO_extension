@@ -215,7 +215,7 @@ namespace esvo_core
         invDepth_ = invDepth;
         confidence_ = confidence;
       }
-      confidence_ = std::min(confidence_, 1e3);
+      confidence_ = std::min(confidence_, 1e4);
     }
 
     void

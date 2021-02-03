@@ -549,6 +549,7 @@ namespace esvo_core
 		// ******************************** Nonlinear opitmization
 		std::vector<DepthPoint> vdp; // depth points on the current stereo observations
 		vdp.reserve(vEMP.size());
+		LOG(INFO) << "Optimizing point size: " << vEMP.size();
 		dpSolver_.solve(&vEMP, &TS_obs_, vdp); // hyper-thread version
 #ifdef ESVO_CORE_MAPPING_DEBUG
 		LOG(INFO) << "Nonlinear optimization returns: " << vdp.size() << " estimates.";
@@ -715,10 +716,13 @@ namespace esvo_core
 		if (isKeyframe_)
 		{
 			// LOG(INFO) << "insert a keyframe";
+			if (emvs_mapper_.accumulate_events_ < 2e5)
+				dqvMonoDepthPoints_.pop_back();
+			dqvMonoDepthPoints_.push_back(std::vector<DepthPoint>());
+
 			emvs_mapper_.dsi_.writeGridNpy(std::string(resultPath_ + "dsi.npy").c_str());
 			emvs_mapper_.initializeDSI(T_w_keyframe_);
 			emvs_mapper_.updateDSI(mVirtualPoses_, vEdgeletCoordinates_);
-			dqvMonoDepthPoints_.push_back(std::vector<DepthPoint>());
 		}
 		else
 		{
@@ -749,7 +753,7 @@ namespace esvo_core
 		cv::Mat depth_map, confidence_map, semidense_mask;
 		emvs_mapper_.getDepthMapFromDSI(depth_map, confidence_map, semidense_mask, emvs_opts_depth_map_, meanDepth_);
 		
-		if (emvs_mapper_.accumulate_events_ >= 1e5) // only enough point cloud to extract map
+		if (emvs_mapper_.accumulate_events_ >= 2e5) // only enough point cloud to extract map
 		{
 			std::vector<DepthPoint> &vdp = dqvMonoDepthPoints_.back(); // depth points on the current stereo observations
 			emvs_mapper_.getDepthPoint(depth_map, confidence_map, semidense_mask, vdp);
@@ -799,7 +803,7 @@ namespace esvo_core
 		}
 		// LOG(INFO) << "numFusionCount: " << numFusionCount;
 		TotalNumFusion_ += numFusionCount;
-		LOG(INFO) << "size of local map: " << dqvMonoDepthPoints_.size() << "; numPoints: " << numPoints;
+		// LOG(INFO) << "size of local map: " << dqvMonoDepthPoints_.size() << "; numPoints: " << numPoints;
 
 		// depthFramePtr_->dMap_->clean(pow(stdVar_vis_threshold_, 2), age_vis_threshold_, invDepth_max_range_, invDepth_min_range_);
 		/** clear criterion

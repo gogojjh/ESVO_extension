@@ -86,6 +86,7 @@ void DepthProblemSolver::solve_multiple_problems(Job & job)
   StampedTimeSurfaceObs* pStampedTsObs = job.pStamped_TS_obs_;
 
   // loop through vdp and call solve_single_problem
+  // each event is independently optimized
   for(size_t i = i_thread; i < numEvent; i+=NUM_THREAD_)
   {
     Eigen::Vector2d coor = (*job.pvEMP_)[i].x_left_;

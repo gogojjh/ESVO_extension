@@ -132,11 +132,11 @@ namespace EMVS
 		void removeMaskBoundary(cv::Mat &mask, int border_size);
 
 		// Intrinsics of the camera
-		camodocal::CameraPtr camera_ptr_;
-		camodocal::CameraPtr camera_virtual_ptr_;
+		// camodocal::CameraPtr camera_ptr_;
+		// camodocal::CameraPtr camera_virtual_ptr_;
 
-		std::vector<double> camera_params_;
-		std::vector<double> camera_virtual_params_;
+		// std::vector<double> camera_params_;
+		// std::vector<double> camera_virtual_params_;
 
 		Eigen::Matrix3f K_virtual_, K_;
 		int width_;
