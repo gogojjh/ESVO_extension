@@ -18,171 +18,200 @@
 
 namespace esvo_core
 {
-esvo_MVStereo::esvo_MVStereo(
-  const ros::NodeHandle &nh,
-  const ros::NodeHandle &nh_private)
-  : nh_(nh),
-    pnh_(nh_private),
-    TS_left_sub_(nh_, "time_surface_left", 10),
-    TS_right_sub_(nh_, "time_surface_right", 10),
-    TS_sync_(ExactSyncPolicy(10), TS_left_sub_, TS_right_sub_),
-    it_(nh),
-    calibInfoDir_(tools::param(pnh_, "calibInfoDir", std::string(""))),
-    camSysPtr_(new CameraSystem(calibInfoDir_, false)),
-    dpConfigPtr_(new DepthProblemConfig(
-        tools::param(pnh_, "patch_size_X", 25),
-        tools::param(pnh_, "patch_size_Y", 25),
-           tools::param(pnh_, "LSnorm", std::string("Tdist")),
+  esvo_MVStereo::esvo_MVStereo(
+      const ros::NodeHandle &nh,
+      const ros::NodeHandle &nh_private)
+      : nh_(nh),
+        pnh_(nh_private),
+        TS_left_sub_(nh_, "time_surface_left", 10),
+        TS_right_sub_(nh_, "time_surface_right", 10),
+        TS_sync_(ExactSyncPolicy(10), TS_left_sub_, TS_right_sub_),
+        it_(nh),
+        calibInfoDir_(tools::param(pnh_, "calibInfoDir", std::string(""))),
+        camSysPtr_(new CameraSystem(calibInfoDir_, false)),
+        dpConfigPtr_(new DepthProblemConfig(
+            tools::param(pnh_, "patch_size_X", 25),
+            tools::param(pnh_, "patch_size_Y", 25),
+            tools::param(pnh_, "LSnorm", std::string("Tdist")),
             tools::param(pnh_, "Tdist_nu", 0.0),
-          tools::param(pnh_, "Tdist_scale", 0.0),
-    tools::param(pnh_, "ITERATION_OPTIMIZATION", 10))),
-    dpSolver_(camSysPtr_, dpConfigPtr_, NUMERICAL, NUM_THREAD_MAPPING),
-    dFusor_(camSysPtr_, dpConfigPtr_),
-    dRegularizor_(dpConfigPtr_),
-    em_(camSysPtr_, NUM_THREAD_MAPPING),
-    ebm_(camSysPtr_, NUM_THREAD_MAPPING, tools::param(pnh_, "SmoothTimeSurface", false)),
-    pc_(new PointCloud()),
-    depthFramePtr_(new DepthFrame(camSysPtr_->cam_left_ptr_->height_, camSysPtr_->cam_left_ptr_->width_))
-{
-  // frame id
-  dvs_frame_id_        = tools::param(pnh_, "dvs_frame_id", std::string("dvs"));
-  world_frame_id_      = tools::param(pnh_, "world_frame_id", std::string("world"));
-  pc_->header.frame_id = world_frame_id_;
+            tools::param(pnh_, "Tdist_scale", 0.0),
+            tools::param(pnh_, "ITERATION_OPTIMIZATION", 10))),
+        dpSolver_(camSysPtr_, dpConfigPtr_, NUMERICAL, NUM_THREAD_MAPPING),
+        dFusor_(camSysPtr_, dpConfigPtr_),
+        dRegularizor_(dpConfigPtr_),
+        em_(camSysPtr_, NUM_THREAD_MAPPING),
+        ebm_(camSysPtr_, NUM_THREAD_MAPPING, tools::param(pnh_, "SmoothTimeSurface", false)),
+        pc_(new PointCloud()),
+        depthFramePtr_(new DepthFrame(camSysPtr_->cam_left_ptr_->height_, camSysPtr_->cam_left_ptr_->width_)),
+        // MapperEMVS
+        emvs_opts_depth_map_(tools::param(pnh_, "opts_depth_map_kernal_size", 5),
+                             tools::param(pnh_, "opts_depth_map_threshold_c", 5),
+                             tools::param(pnh_, "opts_depth_map_median_filter_size", 5)),
+        emvs_opts_pc_(tools::param(pnh_, "opts_pc_radius_search", 0.05),
+                      tools::param(pnh_, "opts_pc_min_num_neighbors", 3))
+  {
+    // frame id
+    dvs_frame_id_ = tools::param(pnh_, "dvs_frame_id", std::string("dvs"));
+    world_frame_id_ = tools::param(pnh_, "world_frame_id", std::string("world"));
+    pc_->header.frame_id = world_frame_id_;
 
-  /**** online parameters ***/
-  // mapping parameters
-  invDepth_min_range_   = tools::param(pnh_, "invDepth_min_range", 0.16);
-  invDepth_max_range_   = tools::param(pnh_, "invDepth_max_range", 2.0);
-  patch_area_           = tools::param(pnh_, "patch_size_X", 25) *  tools::param(pnh_, "patch_size_Y", 25);
-  residual_vis_threshold_ = tools::param(pnh_, "residual_vis_threshold", 15);
-  cost_vis_threshold_   = pow(residual_vis_threshold_,2) * patch_area_;
-  stdVar_vis_threshold_ = tools::param(pnh_, "stdVar_vis_threshold", 0.005);
-  age_max_range_        = tools::param(pnh_, "age_max_range", 5);
-  age_vis_threshold_    = tools::param(pnh_, "age_vis_threshold", 0);
-  fusion_radius_        = tools::param(pnh_, "fusion_radius", 0);
-  FusionStrategy_       = tools::param(pnh_, "FUSION_STRATEGY", std::string("CONST_FRAMES"));
-  maxNumFusionFrames_   = tools::param(pnh_, "maxNumFusionFrames", 20);
-  maxNumFusionPoints_   = tools::param(pnh_, "maxNumFusionPoints", 5000);
+    /**** online parameters ***/
+    // mapping parameters
+    invDepth_min_range_ = tools::param(pnh_, "invDepth_min_range", 0.16);
+    invDepth_max_range_ = tools::param(pnh_, "invDepth_max_range", 2.0);
+    patch_area_ = tools::param(pnh_, "patch_size_X", 25) * tools::param(pnh_, "patch_size_Y", 25);
+    residual_vis_threshold_ = tools::param(pnh_, "residual_vis_threshold", 15);
+    cost_vis_threshold_ = pow(residual_vis_threshold_, 2) * patch_area_;
+    stdVar_vis_threshold_ = tools::param(pnh_, "stdVar_vis_threshold", 0.005);
+    age_max_range_ = tools::param(pnh_, "age_max_range", 5);
+    age_vis_threshold_ = tools::param(pnh_, "age_vis_threshold", 0);
+    fusion_radius_ = tools::param(pnh_, "fusion_radius", 0);
+    FusionStrategy_ = tools::param(pnh_, "FUSION_STRATEGY", std::string("CONST_FRAMES"));
+    maxNumFusionFrames_ = tools::param(pnh_, "maxNumFusionFrames", 20);
+    maxNumFusionPoints_ = tools::param(pnh_, "maxNumFusionPoints", 5000);
 
-  // options
-  bDenoising_          = tools::param(pnh_, "Denoising", false);
-  bRegularization_     = tools::param(pnh_, "Regularization", false);
-  resetButton_         = tools::param(pnh_, "ResetButton", false);
+    // options
+    bDenoising_ = tools::param(pnh_, "Denoising", false);
+    bRegularization_ = tools::param(pnh_, "Regularization", false);
+    resetButton_ = tools::param(pnh_, "ResetButton", false);
 
-  // module parameters
-  PROCESS_EVENT_NUM_   = tools::param(pnh_, "PROCESS_EVENT_NUM", 500);
-  TS_HISTORY_LENGTH_   = tools::param(pnh_, "TS_HISTORY_LENGTH", 100);
-  mapping_rate_hz_     = tools::param(pnh_, "mapping_rate_hz", 20);
+    // module parameters
+    PROCESS_EVENT_NUM_ = tools::param(pnh_, "PROCESS_EVENT_NUM", 500);
+    TS_HISTORY_LENGTH_ = tools::param(pnh_, "TS_HISTORY_LENGTH", 100);
+    mapping_rate_hz_ = tools::param(pnh_, "mapping_rate_hz", 20);
 
-  // EM parameters [26]
-  EM_Slice_Thickness_ = tools::param(pnh_, "EM_Slice_Thickness", 1e-3);
-  EM_Time_THRESHOLD_  = tools::param(pnh_, "EM_Time_THRESHOLD", 5e-5);
-  EM_EPIPOLAR_THRESHOLD_ = tools::param(pnh_, "EM_EPIPOLAR_THRESHOLD", 0.5);
-  EM_TS_NCC_THRESHOLD_ = tools::param(pnh_, "EM_TS_NCC_THRESHOLD", 0.1);
-  EM_patch_size_X_ = tools::param(pnh_, "patch_size_X", 25);
-  EM_patch_size_Y_ = tools::param(pnh_, "patch_size_Y", 25);
-  EM_numEventMatching_ = tools::param(pnh_, "EM_NUM_EVENT_MATCHING", 3000);
-  EM_patch_intensity_threshold_ = tools::param(pnh_, "EM_PATCH_INTENSITY_THRESHOLD", 125);
-  EM_patch_valid_ratio_ = tools::param(pnh_, "EM_PATCH_VALID_RATIO", 0.1);
-  em_.resetParameters(EM_Time_THRESHOLD_, EM_EPIPOLAR_THRESHOLD_, EM_TS_NCC_THRESHOLD_,
-                      EM_patch_size_X_, EM_patch_size_Y_, EM_patch_intensity_threshold_, EM_patch_valid_ratio_);
-  // Event Block Matching (BM) parameters
-  BM_half_slice_thickness_ = tools::param(pnh_, "BM_half_slice_thickness", 0.001);
-  BM_MAX_NUM_EVENTS_PER_MATCHING_ = tools::param(pnh_, "BM_MAX_NUM_EVENTS_PER_MATCHING", 300);
-  BM_patch_size_X_ = tools::param(pnh_, "patch_size_X", 25);
-  BM_patch_size_Y_ = tools::param(pnh_, "patch_size_Y", 25);
-  BM_min_disparity_ = tools::param(pnh_, "BM_min_disparity", 3);
-  BM_max_disparity_ = tools::param(pnh_, "BM_max_disparity", 40);
-  BM_step_          = tools::param(pnh_, "BM_step", 1);
-  BM_ZNCC_Threshold_= tools::param(pnh_, "BM_ZNCC_Threshold", 0.1);
-  BM_bUpDownConfiguration_ = tools::param(pnh_, "BM_bUpDownConfiguration", false);
+    // EM parameters [26]
+    EM_Slice_Thickness_ = tools::param(pnh_, "EM_Slice_Thickness", 1e-3);
+    EM_Time_THRESHOLD_ = tools::param(pnh_, "EM_Time_THRESHOLD", 5e-5);
+    EM_EPIPOLAR_THRESHOLD_ = tools::param(pnh_, "EM_EPIPOLAR_THRESHOLD", 0.5);
+    EM_TS_NCC_THRESHOLD_ = tools::param(pnh_, "EM_TS_NCC_THRESHOLD", 0.1);
+    EM_patch_size_X_ = tools::param(pnh_, "patch_size_X", 25);
+    EM_patch_size_Y_ = tools::param(pnh_, "patch_size_Y", 25);
+    EM_numEventMatching_ = tools::param(pnh_, "EM_NUM_EVENT_MATCHING", 3000);
+    EM_patch_intensity_threshold_ = tools::param(pnh_, "EM_PATCH_INTENSITY_THRESHOLD", 125);
+    EM_patch_valid_ratio_ = tools::param(pnh_, "EM_PATCH_VALID_RATIO", 0.1);
+    em_.resetParameters(EM_Time_THRESHOLD_, EM_EPIPOLAR_THRESHOLD_, EM_TS_NCC_THRESHOLD_,
+                        EM_patch_size_X_, EM_patch_size_Y_, EM_patch_intensity_threshold_, EM_patch_valid_ratio_);
+    // Event Block Matching (BM) parameters
+    BM_half_slice_thickness_ = tools::param(pnh_, "BM_half_slice_thickness", 0.001);
+    BM_MAX_NUM_EVENTS_PER_MATCHING_ = tools::param(pnh_, "BM_MAX_NUM_EVENTS_PER_MATCHING", 300);
+    BM_patch_size_X_ = tools::param(pnh_, "patch_size_X", 25);
+    BM_patch_size_Y_ = tools::param(pnh_, "patch_size_Y", 25);
+    BM_min_disparity_ = tools::param(pnh_, "BM_min_disparity", 3);
+    BM_max_disparity_ = tools::param(pnh_, "BM_max_disparity", 40);
+    BM_step_ = tools::param(pnh_, "BM_step", 1);
+    BM_ZNCC_Threshold_ = tools::param(pnh_, "BM_ZNCC_Threshold", 0.1);
+    BM_bUpDownConfiguration_ = tools::param(pnh_, "BM_bUpDownConfiguration", false);
 
-  // SGM [45] parameters
-  num_disparities_ = 16 * 3;
-  block_size_ = 11;
-  P1_ =  8 * 1 * block_size_ * block_size_;
-  P2_ = 32 * 1 * block_size_ * block_size_;
-  uniqueness_ratio_ = 11;
-  sgbm_ = cv::StereoSGBM::create(0, num_disparities_, block_size_, P1_, P2_,
-                                 -1, 0, uniqueness_ratio_);
+    // SGM [45] parameters
+    num_disparities_ = 16 * 3;
+    block_size_ = 11;
+    P1_ = 8 * 1 * block_size_ * block_size_;
+    P2_ = 32 * 1 * block_size_ * block_size_;
+    uniqueness_ratio_ = 11;
+    sgbm_ = cv::StereoSGBM::create(0, num_disparities_, block_size_, P1_, P2_,
+                                   -1, 0, uniqueness_ratio_);
 
-  // calcualte the min,max disparity
-  double f = (camSysPtr_->cam_left_ptr_->P_(0,0) + camSysPtr_->cam_left_ptr_->P_(1,1))/2;
-  double b = camSysPtr_->baseline_;
-  size_t minDisparity = max(size_t(std::floor(f*b*invDepth_min_range_)), (size_t)0);
-  size_t maxDisparity = size_t(std::ceil(f*b*invDepth_max_range_));
-  minDisparity = max(minDisparity, BM_min_disparity_);
-  maxDisparity = min(maxDisparity, BM_max_disparity_);
+    // calcualte the min,max disparity
+    double f = (camSysPtr_->cam_left_ptr_->P_(0, 0) + camSysPtr_->cam_left_ptr_->P_(1, 1)) / 2;
+    double b = camSysPtr_->baseline_;
+    size_t minDisparity = max(size_t(std::floor(f * b * invDepth_min_range_)), (size_t)0);
+    size_t maxDisparity = size_t(std::ceil(f * b * invDepth_max_range_));
+    minDisparity = max(minDisparity, BM_min_disparity_);
+    maxDisparity = min(maxDisparity, BM_max_disparity_);
 
-#ifdef  ESVO_CORE_MVSTEREO_LOG
-  LOG(INFO) << "f: " << f << " " << " b: " << b;
-  LOG(INFO) << "invDepth_min_range_: " << invDepth_min_range_;
-  LOG(INFO) << "invDepth_max_range_: " << invDepth_max_range_;
-  LOG(INFO) << "minDisparity: " << minDisparity;
-  LOG(INFO) << "maxDisparity: " << maxDisparity;
+#ifdef ESVO_CORE_MVSTEREO_LOG
+    LOG(INFO) << "f: " << f << " "
+              << " b: " << b;
+    LOG(INFO) << "invDepth_min_range_: " << invDepth_min_range_;
+    LOG(INFO) << "invDepth_max_range_: " << invDepth_max_range_;
+    LOG(INFO) << "minDisparity: " << minDisparity;
+    LOG(INFO) << "maxDisparity: " << maxDisparity;
 #endif
 
-  // mvstereo mode
-  size_t MVStereoMode = tools::param(pnh_, "MVStereoMode", 1);
-  msm_ = (eMVStereoMode)MVStereoMode;
+    // mvstereo mode
+    size_t MVStereoMode = tools::param(pnh_, "MVStereoMode", 1);
+    msm_ = (eMVStereoMode)MVStereoMode;
 
-  // initialize Event Block Matcher
-  ebm_.resetParameters(BM_patch_size_X_, BM_patch_size_Y_, minDisparity, maxDisparity, 
-                       BM_step_, BM_ZNCC_Threshold_, BM_bUpDownConfiguration_);
+    // initialize Event Block Matcher
+    ebm_.resetParameters(BM_patch_size_X_, BM_patch_size_Y_, minDisparity, maxDisparity,
+                         BM_step_, BM_ZNCC_Threshold_, BM_bUpDownConfiguration_);
 
-  // callbacks functions
-  events_left_sub_  = nh_.subscribe<dvs_msgs::EventArray>("events_left", 0, boost::bind(&esvo_MVStereo::eventsCallback, this, _1, boost::ref(events_left_)));
-  events_right_sub_ = nh_.subscribe<dvs_msgs::EventArray>("events_right", 0, boost::bind(&esvo_MVStereo::eventsCallback, this, _1, boost::ref(events_right_)));
-  stampedPose_sub_  = nh_.subscribe("stamped_pose", 0, &esvo_MVStereo::stampedPoseCallback, this);
-  TS_sync_.registerCallback(boost::bind(&esvo_MVStereo::timeSurfaceCallback, this, _1, _2));
-  // TF
-  tf_ = std::make_shared<tf::Transformer>(true, ros::Duration(100.0));
+    // callbacks functions
+    events_left_sub_ = nh_.subscribe<dvs_msgs::EventArray>("events_left", 0, boost::bind(&esvo_MVStereo::eventsCallback, this, _1, boost::ref(events_left_)));
+    events_right_sub_ = nh_.subscribe<dvs_msgs::EventArray>("events_right", 0, boost::bind(&esvo_MVStereo::eventsCallback, this, _1, boost::ref(events_right_)));
+    stampedPose_sub_ = nh_.subscribe("stamped_pose", 0, &esvo_MVStereo::stampedPoseCallback, this);
+    TS_sync_.registerCallback(boost::bind(&esvo_MVStereo::timeSurfaceCallback, this, _1, _2));
+    // TF
+    tf_ = std::make_shared<tf::Transformer>(true, ros::Duration(100.0));
 
-  // result publishers
-  invDepthMap_pub_ = it_.advertise("Inverse_Depth_Map", 1);
-  stdVarMap_pub_ = it_.advertise("Standard_Variance_Map", 1);
-  ageMap_pub_ = it_.advertise("Age_Map", 1);
-  costMap_pub_ = it_.advertise("Cost_Map", 1);
-  pc_pub_ = nh_.advertise<PointCloud>("/esvo_mvstereo/pointcloud_world", 1);
-  pose_pub_ = nh_.advertise<geometry_msgs::PoseStamped>("/esvo_mvstereo/pose_pub", 1);
+    // result publishers
+    invDepthMap_pub_ = it_.advertise("Inverse_Depth_Map", 1);
+    stdVarMap_pub_ = it_.advertise("Standard_Variance_Map", 1);
+    ageMap_pub_ = it_.advertise("Age_Map", 1);
+    costMap_pub_ = it_.advertise("Cost_Map", 1);
+    pc_pub_ = nh_.advertise<PointCloud>("/esvo_mvstereo/pointcloud_world", 1);
+    pose_pub_ = nh_.advertise<geometry_msgs::PoseStamped>("/esvo_mvstereo/pose_pub", 1);
 
-  TotalNumFusion_ = 0;
+    TotalNumFusion_ = 0;
 
-  // multi-thread management
-  mapping_thread_future_ = mapping_thread_promise_.get_future();
-  reset_future_ = reset_promise_.get_future();
+    // multi-thread management
+    mapping_thread_future_ = mapping_thread_promise_.get_future();
+    reset_future_ = reset_promise_.get_future();
 
-  // stereo mapping detached thread
-  std::thread MappingThread(&esvo_MVStereo::MappingLoop, this,
-                            std::move(mapping_thread_promise_), std::move(reset_future_));
-  MappingThread.detach();
+    // stereo mapping detached thread
+    std::thread MappingThread(&esvo_MVStereo::MappingLoop, this,
+                              std::move(mapping_thread_promise_), std::move(reset_future_));
+    MappingThread.detach();
 
-  // Dynamic reconfigure
-  dynamic_reconfigure_callback_ = boost::bind(&esvo_MVStereo::onlineParameterChangeCallback, this, _1, _2);
-  server_.reset(new dynamic_reconfigure::Server<DVS_MappingStereoConfig>(nh_private));
-  server_->setCallback(dynamic_reconfigure_callback_);
-}
+    // Dynamic reconfigure
+    dynamic_reconfigure_callback_ = boost::bind(&esvo_MVStereo::onlineParameterChangeCallback, this, _1, _2);
+    server_.reset(new dynamic_reconfigure::Server<DVS_MappingStereoConfig>(nh_private));
+    server_->setCallback(dynamic_reconfigure_callback_);
 
-esvo_MVStereo::~esvo_MVStereo()
-{
-  pc_pub_.shutdown();
-  pose_pub_.shutdown();
-  invDepthMap_pub_.shutdown();
-  stdVarMap_pub_.shutdown();
-  ageMap_pub_.shutdown();
-  costMap_pub_.shutdown();
-}
+    resultPath_ = tools::param(pnh_, "PATH_TO_SAVE_RESULT", std::string());
+    KEYFRAME_LINEAR_DIS_ = tools::param(pnh_, "KEYFRAME_LINEAR_DIS", 0.2);
+    KEYFRAME_ORIENTATION_DIS_ = tools::param(pnh_, "KEYFRAME_ORIENTATION_DIS", 5); // deg
 
-void esvo_MVStereo::MappingLoop(
-  std::promise<void> prom_mapping,
-  std::future<void> future_reset)
-{
-  ros::Rate r(mapping_rate_hz_);
+    // DSI_Mapper configure
+    emvs_dsi_shape_ = EMVS::ShapeDSI(tools::param(pnh_, "opts_dim_x", 0),
+                                     tools::param(pnh_, "opts_dim_y", 0),
+                                     tools::param(pnh_, "opts_dim_z", 100),
+                                     1.0 / invDepth_max_range_, 1.0 / invDepth_min_range_, 0.0),
+    emvs_mapper_.configDSI(camSysPtr_->cam_left_ptr_, emvs_dsi_shape_);
+    emvs_dsi_shape_.printDSIInfo();
 
-  while (ros::ok())
+    isKeyframe_ = false;
+    T_w_frame_.setIdentity();
+    T_w_keyframe_.setIdentity();
+    meanDepth_ = 1e5;
+    mAllPoses_.clear();
+
+    depthMap_pub_ = it_.advertise("DSI_Depth_Map", 1);
+    confidenceMap_pub_ = it_.advertise("DSI_Confidence_Map", 1);
+    semiDenseMask_pub_ = it_.advertise("DSI_Semi_Dense_Mask", 1);
+  }
+
+  esvo_MVStereo::~esvo_MVStereo()
   {
-    if(changed_frame_rate_)
+    pc_pub_.shutdown();
+    pose_pub_.shutdown();
+    invDepthMap_pub_.shutdown();
+    stdVarMap_pub_.shutdown();
+    ageMap_pub_.shutdown();
+    costMap_pub_.shutdown();
+  }
+
+  void esvo_MVStereo::MappingLoop(
+      std::promise<void> prom_mapping,
+      std::future<void> future_reset)
+  {
+    ros::Rate r(mapping_rate_hz_);
+
+    while (ros::ok())
     {
+      if (changed_frame_rate_)
+      {
 #ifdef ESVO_CORE_MVSTEREO_LOG
       ROS_INFO("Changing mapping framerate to %d Hz", mapping_rate_hz_);
 #endif
@@ -219,6 +248,10 @@ void esvo_MVStereo::MappingLoop(
         continue;
       }
       publishKFPose(TS_obs_.first, TS_obs_.second.tr_);
+      if (msm_ == PURE_EMVS || msm_ == PURE_EMVS_PLUS_ESTIMATION)
+      {
+        insertKeyframe();
+      }
       MappingAtTime(TS_obs_.first);
     }
     else
@@ -235,6 +268,8 @@ void esvo_MVStereo::MappingLoop(
 
 void esvo_MVStereo::MappingAtTime(const ros::Time& t)
 {
+  std::string base_fold = "~/ESVO_result/";
+
   TicToc tt_mapping;
   double t_overall_count = 0;
 
@@ -294,8 +329,8 @@ void esvo_MVStereo::MappingAtTime(const ros::Time& t)
       if(false)
       {
         // For quantitative comparison.
-        std::string baseDir("/BASE_DIR_TO_SAVE/");
-        std::string saveDir(baseDir + "FOLDER_PATH/");
+        std::string baseDir(base_fold);
+        std::string saveDir(baseDir);
         saveDepthMap(depthFramePtr_->dMap_, saveDir, t);
       }
       return;
@@ -365,8 +400,8 @@ void esvo_MVStereo::MappingAtTime(const ros::Time& t)
     if(false)
     {
       // For quantitative comparison.
-      std::string baseDir("/BASE_DIR_TO_SAVE/");
-      std::string saveDir(baseDir + "FOLDER_PATH/");
+      std::string baseDir(base_fold);
+      std::string saveDir(baseDir);
       saveDepthMap(depthFramePtr_->dMap_, saveDir, t);
     }
     return;
@@ -431,91 +466,185 @@ void esvo_MVStereo::MappingAtTime(const ros::Time& t)
     }
   }
 
-  /**************************************************************/
-  /*************  Nonlinear Optimization & Fusion ***************/
-  /**************************************************************/
-  double t_optimization = 0;
-  double t_solve, t_fusion, t_regularization;
-  t_solve = t_fusion = t_regularization = 0.0;
-  size_t edgeMaskNum = 0;
-  size_t numFusionCount = 0;
-  if(msm_ == EM_PLUS_ESTIMATION || msm_ == BM_PLUS_ESTIMATION)
+  /******************************************************************/
+  /*************** Event Multi-Stereo Mapping (EMVS) ****************/
+  /******************************************************************/
+  if (msm_ == PURE_EMVS || msm_ == PURE_EMVS_PLUS_ESTIMATION)
   {
-    tt_mapping.tic();
-    // nonlinear opitmization
-    std::vector<DepthPoint> vdp;
-    vdp.reserve(vEMP.size());
-    dpSolver_.solve(&vEMP, &TS_obs_, vdp); // hyper-thread version
-    dpSolver_.pointCulling(vdp, stdVar_vis_threshold_, cost_vis_threshold_,
-                      invDepth_min_range_, invDepth_max_range_);
-//    LOG(INFO) << "---- Nonlinear optimization reserves: " << vdp.size();
-    t_solve = tt_mapping.toc();
-//    LOG(INFO) << "$$$$$$$$$$$$$$$$$$$ after culling vdp.size: " << vdp.size();
+    double t_denoising;
+    if (bDenoising_) // Set it to "True" to deal with flicker effect caused by VICON.
+    {
+      tt_mapping.tic();
+      // Draw one mask image for denoising.
+      cv::Mat denoising_mask;
+      createDenoisingMask(vALLEventsPtr_left_, denoising_mask,
+                          camSysPtr_->cam_left_ptr_->height_, camSysPtr_->cam_left_ptr_->width_);
 
-    // fusion (strategy 1: const number of point)
-    if(FusionStrategy_ == "CONST_POINTS")
-    {
-      size_t numFusionPoints = 0;
-      tt_mapping.tic();
-      dqvDepthPoints_.push_back(vdp);
-      for(size_t n = 0; n < dqvDepthPoints_.size(); n++)
-        numFusionPoints += dqvDepthPoints_[n].size();
-      while(numFusionPoints > 1.5 * maxNumFusionPoints_)
-      {
-        dqvDepthPoints_.pop_front();
-        numFusionPoints = 0;
-        for(size_t n = 0; n < dqvDepthPoints_.size(); n++)
-          numFusionPoints += dqvDepthPoints_[n].size();
-      }
-    }
-    else if(FusionStrategy_ == "CONST_FRAMES") // (strategy 2: const number of frames)
-    {
-      tt_mapping.tic();
-      dqvDepthPoints_.push_back(vdp);
-      while(dqvDepthPoints_.size() > maxNumFusionFrames_)
-        dqvDepthPoints_.pop_front();
+      // Extract denoised events (appear on edges likely).
+      vDenoisedEventsPtr_left_.clear();
+      extractDenoisedEvents(vCloseEventsPtr_left_, vDenoisedEventsPtr_left_, denoising_mask, 0);
+      totalNumCount_ = vDenoisedEventsPtr_left_.size();
+      t_denoising = tt_mapping.toc();
     }
     else
     {
-      LOG(INFO) << "Invalid FusionStrategy is assigned.";
-      exit(-1);
+      vDenoisedEventsPtr_left_.clear();
+      vDenoisedEventsPtr_left_.insert(vDenoisedEventsPtr_left_.end(), vCloseEventsPtr_left_.begin(),
+                                      vCloseEventsPtr_left_.end());
     }
 
-    // apply fusion and count the total number of fusion.
-    numFusionCount = 0;
-    for(auto it = dqvDepthPoints_.rbegin(); it != dqvDepthPoints_.rend(); it++)
+    // undistort events' coordinates
+    std::vector<Eigen::Vector4d> vEdgeletCoordinates;
+    for (size_t i = 0; i < vDenoisedEventsPtr_left_.size(); i++)
     {
-      numFusionCount += dFusor_.update(*it, depthFramePtr_, fusion_radius_);
-//    LOG(INFO) << "numFusionCount: " << numFusionCount;
+      // undistortion + rectification
+      bool bDistorted = true;
+      Eigen::Vector2d coor;
+      if (bDistorted)
+        coor = camSysPtr_->cam_left_ptr_->getRectifiedUndistortedCoordinate(vDenoisedEventsPtr_left_[i]->x, vDenoisedEventsPtr_left_[i]->y);
+      else
+        coor = Eigen::Vector2d(vDenoisedEventsPtr_left_[i]->x, vDenoisedEventsPtr_left_[i]->y);
+      Eigen::Vector4d tmp_coor;
+      tmp_coor[0] = coor[0];
+      tmp_coor[1] = coor[1];
+      tmp_coor[2] = vDenoisedEventsPtr_left_[i]->ts.toSec();
+      tmp_coor[3] = double(vDenoisedEventsPtr_left_[i]->polarity);
+      vEdgeletCoordinates.push_back(tmp_coor);
+    }
+    LOG(INFO) << "Process " << vEdgeletCoordinates.size() << " events";
+
+    if (isKeyframe_)
+    {
+      LOG(INFO) << "insert a keyframe";
+      if (emvs_mapper_.accumulate_events_ < 2e5)
+        if (!dqvDepthPoints_.empty())
+          dqvDepthPoints_.pop_back();
+      dqvDepthPoints_.push_back(std::vector<DepthPoint>());
+
+      emvs_mapper_.dsi_.writeGridNpy(std::string(resultPath_ + "dsi.npy").c_str());
+      emvs_mapper_.initializeDSI(T_w_keyframe_);
+      emvs_mapper_.updateDSI(mVirtualPoses_, vEdgeletCoordinates);
+    }
+    else
+    {
+      LOG(INFO) << "insert an non-keyframe";
+      emvs_mapper_.updateDSI(mVirtualPoses_, vEdgeletCoordinates);
     }
 
-    TotalNumFusion_ += numFusionCount;
-    depthFramePtr_->dMap_->clean(
-      pow(stdVar_vis_threshold_,2), age_vis_threshold_, invDepth_max_range_, invDepth_min_range_);
-    t_fusion = tt_mapping.toc();
+    cv::Mat depth_map, confidence_map, semidense_mask;
+    emvs_mapper_.getDepthMapFromDSI(depth_map, confidence_map, semidense_mask, emvs_opts_depth_map_, meanDepth_);
+    LOG(INFO) << "get depth map";
+    if (emvs_mapper_.accumulate_events_ >= 2e5) // only enough point cloud to extract map
+    {
+      std::vector<DepthPoint> &vdp = dqvDepthPoints_.back(); // depth points on the current stereo observations
+      emvs_mapper_.getDepthPoint(depth_map, confidence_map, semidense_mask, vdp);
+      while (dqvDepthPoints_.size() > 1) 
+        dqvDepthPoints_.pop_front();
+    }
+    for (auto it = dqvDepthPoints_.rbegin(); it != dqvDepthPoints_.rend(); it++)
+      dFusor_.naive_propagation(*it, depthFramePtr_);
 
-    // regularization
-    if(bRegularization_)
+    if (msm_ == PURE_EMVS || msm_ == PURE_EMVS_PLUS_ESTIMATION)
+    {
+      std::thread tPublishDSIResult(&esvo_MVStereo::publishDSIResults, this,
+                                    t, semidense_mask, depth_map, confidence_map);
+      tPublishDSIResult.detach();
+
+      // visualization
+      std::thread tPublishMappingResult(&esvo_MVStereo::publishMappingResults, this,
+                                        depthFramePtr_->dMap_, depthFramePtr_->T_world_frame_, t);
+      tPublishMappingResult.detach();
+      return;
+    }
+  }
+
+  /**************************************************************/
+  /*************  Nonlinear Optimization & Fusion ***************/
+  /**************************************************************/
+  if(msm_ == EM_PLUS_ESTIMATION || msm_ == BM_PLUS_ESTIMATION)
+  {
+    double t_optimization = 0;
+    double t_solve, t_fusion, t_regularization;
+    t_solve = t_fusion = t_regularization = 0.0;
+    size_t edgeMaskNum = 0;
+    size_t numFusionCount = 0;
     {
       tt_mapping.tic();
-      dRegularizor_.apply(depthFramePtr_->dMap_);
-      t_regularization = tt_mapping.toc();
-    }
-    t_optimization = t_solve + t_fusion + t_regularization;
-    t_overall_count += t_optimization;
+      // nonlinear opitmization
+      std::vector<DepthPoint> vdp;
+      vdp.reserve(vEMP.size());
+      dpSolver_.solve(&vEMP, &TS_obs_, vdp); // hyper-thread version
+      dpSolver_.pointCulling(vdp, stdVar_vis_threshold_, cost_vis_threshold_,
+                        invDepth_min_range_, invDepth_max_range_);
+  //    LOG(INFO) << "---- Nonlinear optimization reserves: " << vdp.size();
+      t_solve = tt_mapping.toc();
+  //    LOG(INFO) << "$$$$$$$$$$$$$$$$$$$ after culling vdp.size: " << vdp.size();
 
-    // Publishing resulting maps in an independent thread (save about 1ms)
-    std::thread tPublishMappingResult(&esvo_MVStereo::publishMappingResults, this,
-                                      depthFramePtr_->dMap_, depthFramePtr_->T_world_frame_, t);
-    tPublishMappingResult.detach();
+      // fusion (strategy 1: const number of point)
+      if(FusionStrategy_ == "CONST_POINTS")
+      {
+        size_t numFusionPoints = 0;
+        tt_mapping.tic();
+        dqvDepthPoints_.push_back(vdp);
+        for(size_t n = 0; n < dqvDepthPoints_.size(); n++)
+          numFusionPoints += dqvDepthPoints_[n].size();
+        while(numFusionPoints > 1.5 * maxNumFusionPoints_)
+        {
+          dqvDepthPoints_.pop_front();
+          numFusionPoints = 0;
+          for(size_t n = 0; n < dqvDepthPoints_.size(); n++)
+            numFusionPoints += dqvDepthPoints_[n].size();
+        }
+      }
+      else if(FusionStrategy_ == "CONST_FRAMES") // (strategy 2: const number of frames)
+      {
+        tt_mapping.tic();
+        dqvDepthPoints_.push_back(vdp);
+        while(dqvDepthPoints_.size() > maxNumFusionFrames_)
+          dqvDepthPoints_.pop_front();
+      }
+      else
+      {
+        LOG(INFO) << "Invalid FusionStrategy is assigned.";
+        exit(-1);
+      }
 
-    // To save the depth result, set it to true.
-    if(false)
-    {
-      // For quantitative comparison.
-      std::string baseDir("/BASE_DIR_TO_SAVE/");
-      std::string saveDir(baseDir + "FOLDER_PATH/");
-      saveDepthMap(depthFramePtr_->dMap_, saveDir, t);
+      // apply fusion and count the total number of fusion.
+      numFusionCount = 0;
+      for(auto it = dqvDepthPoints_.rbegin(); it != dqvDepthPoints_.rend(); it++)
+      {
+        numFusionCount += dFusor_.update(*it, depthFramePtr_, fusion_radius_);
+  //    LOG(INFO) << "numFusionCount: " << numFusionCount;
+      }
+
+      TotalNumFusion_ += numFusionCount;
+      depthFramePtr_->dMap_->clean(
+        pow(stdVar_vis_threshold_,2), age_vis_threshold_, invDepth_max_range_, invDepth_min_range_);
+      t_fusion = tt_mapping.toc();
+
+      // regularization
+      if(bRegularization_)
+      {
+        tt_mapping.tic();
+        dRegularizor_.apply(depthFramePtr_->dMap_);
+        t_regularization = tt_mapping.toc();
+      }
+      t_optimization = t_solve + t_fusion + t_regularization;
+      t_overall_count += t_optimization;
+
+      // Publishing resulting maps in an independent thread (save about 1ms)
+      std::thread tPublishMappingResult(&esvo_MVStereo::publishMappingResults, this,
+                                        depthFramePtr_->dMap_, depthFramePtr_->T_world_frame_, t);
+      tPublishMappingResult.detach();
+
+      // To save the depth result, set it to true.
+      if(false)
+      {
+        // For quantitative comparison.
+        std::string baseDir(base_fold);
+        std::string saveDir(baseDir);
+        saveDepthMap(depthFramePtr_->dMap_, saveDir, t);
+      }
     }
   }
 #ifdef  ESVO_CORE_MVSTEREO_LOG
@@ -544,6 +673,30 @@ void esvo_MVStereo::MappingAtTime(const ros::Time& t)
   LOG(INFO) << "------------------------------------------------------------";
   LOG(INFO) << "\n";
 #endif
+}
+
+/**
+ * @brief: This function defines xx criterias to indicate if insert new keyframe in Mapping
+ */
+void esvo_MVStereo::insertKeyframe()
+{
+  // criterion in LSD-SLAM or EVO
+  // This is done based on two weights, the relative distance to the current key-frame and
+  // the angle to the current key-frame. Is the weighted sum of these two larger than a certain threshold,
+  // a new key-frame is taken.
+  T_w_frame_ = TS_obs_.second.tr_.getTransformationMatrix();
+  double dis = (T_w_frame_.topRightCorner<3, 1>() - T_w_keyframe_.topRightCorner<3, 1>()).norm();
+  // if (dis > KEYFRAME_LINEAR_DIS_)
+  if (meanDepth_ == 1e5 || dis > 0.15 * meanDepth_) // 1e5: system just starts; > 0.15: move at a long distance
+  {
+    isKeyframe_ = true;
+    T_w_keyframe_ = T_w_frame_;
+    LOG(INFO) << "mean depth: " << meanDepth_ << "m";
+  }
+  else
+  {
+    isKeyframe_ = false;
+  }
 }
 
 bool esvo_MVStereo::dataTransferring()
@@ -661,11 +814,55 @@ bool esvo_MVStereo::dataTransferring()
     LOG(INFO) << "Data Transfering (stampTransformation map): " << st_map_.size();
 #endif
   }
+
+  if (msm_ == PURE_EMVS || msm_ == PURE_EMVS_PLUS_ESTIMATION)
+  {
+    // copy all involved events' pointers
+    vALLEventsPtr_left_.clear();   // to generate denoising mask (only used for ECCV 2018 dataset)
+    vCloseEventsPtr_left_.clear(); // will be denoised using the mask above.
+
+    // load allEvent
+    ros::Time t_end = TS_obs_.first;
+    ros::Time t_begin(std::max(0.0, t_end.toSec() - 10 * BM_half_slice_thickness_));
+    auto ev_end_it = tools::EventBuffer_lower_bound(events_left_, t_end);
+    auto ev_begin_it = tools::EventBuffer_lower_bound(events_left_, t_begin); //events_left_.begin();
+    const size_t MAX_NUM_Event_INVOLVED = 10000;
+    vALLEventsPtr_left_.reserve(MAX_NUM_Event_INVOLVED);
+    vCloseEventsPtr_left_.reserve(MAX_NUM_Event_INVOLVED);
+    while (ev_end_it != ev_begin_it && vALLEventsPtr_left_.size() < MAX_NUM_Event_INVOLVED)
+    {
+      vALLEventsPtr_left_.push_back(ev_end_it._M_cur);
+      vCloseEventsPtr_left_.push_back(ev_end_it._M_cur);
+      ev_end_it--;
+    }
+    totalNumCount_ = vCloseEventsPtr_left_.size();
+
+    // using inherent linear interpolation
+    // t0 <= ev.ts <= t1
+    // pose_0 (t0), pose_1 (t1), ..., pose_N (tN)
+    // t_begin, t_tmp, ..., t_end
+    mVirtualPoses_.clear();
+    ros::Time t_tmp = t_begin;
+    while (t_tmp.toSec() <= t_end.toSec())
+    {
+      Eigen::Matrix4d T;
+      if (trajectory_.getPoseAt(mAllPoses_, t_tmp, T))
+      {
+        mVirtualPoses_.push_back(std::make_pair(t_tmp, T));
+      }
+      else
+      {
+        LOG(INFO) << "waiting for new poses for events";
+        return false;
+      }
+      t_tmp = ros::Time(t_tmp.toSec() + 0.05 * BM_half_slice_thickness_);
+    }
+  }
+
   return true;
 }
 
-void esvo_MVStereo::stampedPoseCallback(
-  const geometry_msgs::PoseStampedConstPtr &ps_msg)
+void esvo_MVStereo::stampedPoseCallback(const geometry_msgs::PoseStampedConstPtr &ps_msg)
 {
   std::lock_guard<std::mutex> lock(data_mutex_);
   // To check inconsistent timestamps and reset.
@@ -700,6 +897,17 @@ void esvo_MVStereo::stampedPoseCallback(
       ps_msg->pose.position.z));
   tf::StampedTransform st(tf, ps_msg->header.stamp, ps_msg->header.frame_id, dvs_frame_id_.c_str());
   tf_->setTransform(st);
+
+  // add pose to mAllPoses_
+  Eigen::Matrix4d T = Eigen::Matrix4d::Identity();
+  T.topLeftCorner<3, 3>() = Eigen::Quaterniond(ps_msg->pose.orientation.w,
+                                               ps_msg->pose.orientation.x,
+                                               ps_msg->pose.orientation.y,
+                                               ps_msg->pose.orientation.z).toRotationMatrix();
+  T.topRightCorner<3, 1>() = Eigen::Vector3d(ps_msg->pose.position.x,
+                                             ps_msg->pose.position.y,
+                                             ps_msg->pose.position.z);
+  mAllPoses_.emplace(ps_msg->header.stamp, T);
 }
 
 // return the pose of the left event cam at time t.
@@ -727,9 +935,9 @@ bool esvo_MVStereo::getPoseAt(
     {
       Transformation ::TransformationMatrix T_marker_cam;
       T_marker_cam << 5.363262328777285e-01, -1.748374625145743e-02, -8.438296573030597e-01, -7.009849865398374e-02,
-        8.433577587813513e-01, -2.821937531845164e-02, 5.366109927684415e-01, 1.881333563905305e-02,
-        -3.319431623758162e-02, -9.994488408486204e-01, -3.897382049768972e-04, -6.966829200678797e-02,
-        0, 0, 0, 1;
+          8.433577587813513e-01, -2.821937531845164e-02, 5.366109927684415e-01, 1.881333563905305e-02,
+          -3.319431623758162e-02, -9.994488408486204e-01, -3.897382049768972e-04, -6.966829200678797e-02,
+          0, 0, 0, 1;
       Transformation::TransformationMatrix T_world_marker =
         Tr.getTransformationMatrix();
       Transformation::TransformationMatrix T_world_cam =
@@ -952,6 +1160,24 @@ void esvo_MVStereo::onlineParameterChangeCallback(DVS_MappingStereoConfig &confi
     LOG(INFO) << "onlineParameterChangeCallback ==============";
     reset();
   }
+}
+
+void esvo_MVStereo::publishDSIResults(const ros::Time &t, const cv::Mat &semiDenseMask,
+                                      const cv::Mat &depthMap, const cv::Mat &confidenceMap)
+{
+  publishImage(255 * semiDenseMask, t, semiDenseMask_pub_, "mono8");
+
+  cv::Mat depthMap255 = (depthMap - emvs_dsi_shape_.min_depth_) * (255.0 / (emvs_dsi_shape_.max_depth_ - emvs_dsi_shape_.min_depth_));
+  cv::Mat depthMap8Bit, depthMapColor;
+  depthMap255.convertTo(depthMap8Bit, CV_8U);
+  cv::applyColorMap(depthMap8Bit, depthMapColor, cv::COLORMAP_RAINBOW);
+  cv::Mat depthOnCanvas = cv::Mat(depthMap.rows, depthMap.cols, CV_8UC3, cv::Scalar(1, 1, 1) * 255);
+  depthMapColor.copyTo(depthOnCanvas, semiDenseMask);
+  publishImage(depthMapColor, t, depthMap_pub_, "bgr8");
+
+  cv::Mat confidenceMap255;
+  cv::normalize(confidenceMap, confidenceMap255, 0, 255.0, cv::NORM_MINMAX, CV_8UC1);
+  publishImage(confidenceMap255, t, confidenceMap_pub_, "mono8");
 }
 
 void esvo_MVStereo::publishMappingResults(

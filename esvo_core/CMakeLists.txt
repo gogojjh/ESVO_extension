@@ -158,5 +158,5 @@ cs_add_executable(esvo_MVStereo
     src/esvo_MVStereoNode.cpp
     src/esvo_MVStereo.cpp
     include/esvo_core/esvo_MVStereo.h)
-target_link_libraries(esvo_MVStereo ${PROJECT_NAME}_LIB
+target_link_libraries(esvo_MVStereo ${PROJECT_NAME}_LIB emvs_lib
     ${catkin_LIBRARIES} ${OpenCV_LIBRARIES} yaml-cpp)

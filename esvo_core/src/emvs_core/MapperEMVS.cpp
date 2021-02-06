@@ -293,17 +293,16 @@ namespace EMVS
 						if (xyz_rv.z() <= 1e-6)
 							continue;
 
-						// double variance;
-						// if (confidence_map.at<float>(y, x) >= 255)
-						// 	variance = 0;
-						// else 
-						// 	// variance = double(255 - confidence_map.at<float>(y, x));
-						// 	variance = 0.01;
-						esvo_core::container::DepthPoint dp(y, x);
-						dp.update_x(p.head<2>().cast<double>());
-						dp.update_p_cam(xyz_rv.cast<double>());
-						dp.update(1.0 / xyz_rv.z(), 0);
-						dp.update_confidence(1.0 / xyz_rv.z(), static_cast<double>(confidence_map.at<float>(y, x)));
+						double var_pseudo = 0; //pow(stdVar_vis_threshold_*0.99,2);
+						esvo_core::container::DepthPoint dp(x, y);
+						Eigen::Vector2d p_img(x * 1.0, y * 1.0);
+						dp.update_x(p_img);
+						Eigen::Vector3d p_cam;
+						p_cam = xyz_rv.cast<double>();
+						dp.update_p_cam(p_cam);
+						dp.update(1.0 / xyz_rv.z(), var_pseudo);
+						// dp.update_confidence(1.0 / xyz_rv.z(), static_cast<double>(confidence_map.at<float>(y, x)));
+						dp.residual() = 0.0;
 						dp.updatePose(T_w_rv_);
 						dp.age() = 1;
 						vdp.push_back(dp);

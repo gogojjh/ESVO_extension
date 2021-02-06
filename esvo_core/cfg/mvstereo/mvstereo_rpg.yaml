@@ -37,9 +37,24 @@ BM_step: 1
 BM_ZNCC_Threshold: 0.1
 BM_bUpDownConfiguration: False
 # MVStereo Mode
-MVStereoMode: 3
-#  PURE_EVENT_MATCHING  //0 EM [26]
-#  PURE_BLOCK_MATCHING  //1 BM
-#  EM_PLUS_ESTIMATION   //2 EM [26] + nonlinear opt.
-#  BM_PLUS_ESTIMATION   //3 ESVO's mapper
-#  SEMI_GLOBAL_MATCHING //4 [45]
+MVStereoMode: 5
+#  PURE_EVENT_MATCHING           //0 EM [26]
+#  PURE_BLOCK_MATCHING           //1 BM
+#  EM_PLUS_ESTIMATION            //2 EM [26] + nonlinear opt.
+#  BM_PLUS_ESTIMATION            //3 ESVO's mapper: BM + nonlinear opt.
+#  SEMI_GLOBAL_MATCHING          //4 [45]
+#  PURE_EMVS                     //5 [33]
+#  PURE_EMVS_PLUS_ESTIMATION     //6 [33] + nonlinear opt.
+
+# EMVS Mapping
+opts_dim_x: 0
+opts_dim_y: 0
+opts_dim_z: 100
+opts_depth_map_kernal_size: 5 # Size of the Gaussian kernel used for adaptive thresholding"
+opts_depth_map_threshold_c: 7 # A value in [0, 255]. The smaller the noisier and more dense reconstruction"
+opts_depth_map_median_filter_size: 15 # Size of the median filter used to clean the depth map"
+opts_pc_radius_search: 0.03
+opts_pc_min_num_neighbors: 3
+PATH_TO_SAVE_RESULT: "/home/jjiao/ESVO_result/rpg/" # CHANGE THIS PATH
+KEYFRAME_LINEAR_DIS: 0.15 # m
+KEYFRAME_ORIENTATION_DIS: 5 # degree

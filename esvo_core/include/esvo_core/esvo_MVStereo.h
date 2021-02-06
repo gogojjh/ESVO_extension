@@ -25,6 +25,9 @@
 #include <esvo_core/DVS_MappingStereoConfig.h>
 #include <dynamic_reconfigure/server.h>
 
+#include "emvs_core/MapperEMVS.hpp"
+#include "emvs_core/Trajectory.hpp"
+
 #include <opencv2/core/core.hpp>
 #include <opencv2/imgproc/imgproc.hpp>
 #include <opencv2/calib3d/calib3d.hpp>
@@ -43,11 +46,13 @@ namespace esvo_core
 using namespace core;
 enum eMVStereoMode
 {
-  PURE_EVENT_MATCHING,      //0 (this one implements GTS [26])
-  PURE_BLOCK_MATCHING,      //1 (this one implements BM)
-  EM_PLUS_ESTIMATION,       //2 (GTS [26] + nonliear opt.)
-  BM_PLUS_ESTIMATION,       //3 (this one is ESVO's mapping method, namely BM + nonliear opt.)
-  PURE_SEMI_GLOBAL_MATCHING //4 (this one implements SGM [45])
+  PURE_EVENT_MATCHING,       //0 (this one implements GTS [26])
+  PURE_BLOCK_MATCHING,       //1 (this one implements BM)
+  EM_PLUS_ESTIMATION,        //2 (GTS [26] + nonliear opt.)
+  BM_PLUS_ESTIMATION,        //3 (this one is ESVO's mapping method, namely BM + nonliear opt.)
+  PURE_SEMI_GLOBAL_MATCHING, //4 (this one implements SGM [45])
+  PURE_EMVS,
+  PURE_EMVS_PLUS_ESTIMATION
 };
 
 class esvo_MVStereo
@@ -240,6 +245,30 @@ class esvo_MVStereo
   image_transport::Publisher invDepthMap_pub_, stdVarMap_pub_, ageMap_pub_, costMap_pub_;
   // For counting the total number of fusion
   size_t TotalNumFusion_;
+
+  // EMVS_Mapping
+  void insertKeyframe();
+  void publishDSIResults(const ros::Time &t, const cv::Mat &semiDenseMask,
+                         const cv::Mat &depthMap, const cv::Mat &confidenceMap);
+
+  EMVS::MapperEMVS emvs_mapper_;
+  EMVS::ShapeDSI emvs_dsi_shape_;
+  EMVS::OptionsDepthMap emvs_opts_depth_map_;
+  EMVS::OptionsPointCloud emvs_opts_pc_;
+
+  std::map<ros::Time, Eigen::Matrix4d> mAllPoses_;
+  std::vector<std::pair<ros::Time, Eigen::Matrix4d>> mVirtualPoses_;
+  EMVS::LinearTrajectory trajectory_;
+  bool isKeyframe_;
+  Eigen::Matrix4d T_w_keyframe_, T_w_frame_;
+  pcl::PointCloud<pcl::PointXYZI>::Ptr emvs_pc_, pc_map_;
+
+  std::string resultPath_;
+  double meanDepth_;
+  double KEYFRAME_LINEAR_DIS_, KEYFRAME_ORIENTATION_DIS_;
+
+  std::vector<Eigen::Vector4d> vEdgeletCoordinates_;
+  image_transport::Publisher depthMap_pub_, confidenceMap_pub_, semiDenseMask_pub_;
 };
 
 }
