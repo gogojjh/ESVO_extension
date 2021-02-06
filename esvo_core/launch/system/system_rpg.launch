@@ -45,7 +45,7 @@
 	</node>
 
 	<!-- Tracking node -->
-	<node name="esvo_Tracking" pkg="esvo_core" type="esvo_Tracking" output="screen" required="true">
+	<node name="esvo_MonoTracking" pkg="esvo_core" type="esvo_MonoTracking" output="screen" required="true">
     <remap from="time_surface_left" to="/TS_left" />
     <remap from="time_surface_right" to="/TS_right" />
     <remap from="stamped_pose" to="/esvo_tracking/pose_pub" />

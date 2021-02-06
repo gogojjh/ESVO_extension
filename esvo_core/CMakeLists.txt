@@ -134,10 +134,10 @@ cs_add_executable(estimator src/estimator_node.cpp
 target_link_libraries(estimator estimator_lib emvs_lib
     ${catkin_LIBRARIES} ${OpenCV_LIBRARIES} yaml-cpp)
 
-# Node esvo_Tracking
-cs_add_executable(esvo_Tracking src/esvo_TrackingNode.cpp
-    src/esvo_Tracking.cpp include/esvo_core/esvo_Tracking.h)
-target_link_libraries(esvo_Tracking estimator_lib mc_lib
+# Node esvo_MonoTracking
+cs_add_executable(esvo_MonoTracking src/esvo_MonoTrackingNode.cpp
+    src/esvo_MonoTracking.cpp include/esvo_core/esvo_MonoTracking.h)
+target_link_libraries(esvo_MonoTracking estimator_lib mc_lib
     ${catkin_LIBRARIES} ${OpenCV_LIBRARIES} ${gsl_LIBRARIES} yaml-cpp)
 
 ###############
