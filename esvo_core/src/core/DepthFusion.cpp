@@ -188,18 +188,28 @@ namespace esvo_core
       return numFusion;
     }
 
-    bool
-    DepthFusion::boundaryCheck(
-        double xcoor,
-        double ycoor,
-        size_t width,
-        size_t height)
-    {
-      if (xcoor < 0 || xcoor >= width || ycoor < 0 || ycoor >= height)
-        return false;
-      else
-        return true;
-    }
+void
+DepthFusion::naive_propagation(
+  std::vector<DepthPoint> &dp_obs,
+  DepthFrame::Ptr &df)
+{
+  Eigen::Matrix<double, 4, 4> T_frame_world = df->T_world_frame_.inverse().getTransformationMatrix();
+  for (size_t i = 0; i < dp_obs.size(); i++)
+  {
+    Eigen::Matrix<double, 4, 4> T_frame_obs = T_frame_world * dp_obs[i].T_world_cam();
+    DepthPoint dp_prop;
+    if (!naive_propagate_one_point(dp_obs[i], dp_prop, T_frame_obs))
+      continue;
+
+    // determine the four neighbouring pixels
+    std::vector<std::pair<size_t, size_t> > vpCoordinate;
+    const size_t patchSize = 4;
+    vpCoordinate.reserve(patchSize);
+    size_t row_topleft = dp_prop.row();
+    size_t col_topleft = dp_prop.col();
+    for(int dy = 0; dy <= 1; dy++)
+      for(int dx = 0; dx <= 1; dx++)
+        vpCoordinate.push_back(std::make_pair(row_topleft + dy, col_topleft + dx));
 
     bool
     DepthFusion::chiSquareTest(
@@ -225,6 +235,19 @@ namespace esvo_core
       if (diff < 2 * stdvar1 || diff < 2 * stdvar2)
         return true;
       return false;
+    }
+
+    bool
+    DepthMonoFusion::boundaryCheck(
+        double xcoor,
+        double ycoor,
+        size_t width,
+        size_t height)
+    {
+      if (xcoor < 0 || xcoor >= width || ycoor < 0 || ycoor >= height)
+        return false;
+      else
+        return true;
     }
 
     void
@@ -284,5 +307,44 @@ namespace esvo_core
       }
     }
 
-  } // namespace core
-} // namespace esvo_core
+    bool
+    DepthFusion::naive_propagate_one_point(
+      DepthPoint &dp_prior,
+      DepthPoint &dp_prop,
+      Eigen::Matrix<double, 4, 4> &T_prop_prior)
+    {
+      Eigen::Vector3d p_prop = T_prop_prior.block<3, 3>(0, 0) * dp_prior.p_cam() +
+                              T_prop_prior.block<3, 1>(0, 3);
+
+      Eigen::Vector2d x_prop;
+      camSysPtr_->cam_left_ptr_->world2Cam(p_prop, x_prop);
+      if (!boundaryCheck(x_prop(0), x_prop(1),
+                        camSysPtr_->cam_left_ptr_->width_, camSysPtr_->cam_left_ptr_->height_))
+        return false;
+
+      // create a depth point with propagated attributes.
+      size_t row = std::floor(x_prop(1));
+      size_t col = std::floor(x_prop(0));
+      dp_prop = DepthPoint(row, col);
+      dp_prop.update_x(x_prop);
+
+      // compute the new inverse depth
+      double invDepth = 1.0 / p_prop(2);
+
+      // compute the jacobian
+      double denominator = T_prop_prior.block<1,2>(2,0) * dp_prior.p_cam().head(2) + T_prop_prior(2, 3);
+      denominator /= dp_prior.p_cam()(2);
+      denominator += T_prop_prior(2,2);
+      double J = T_prop_prior(2,2) / pow(denominator, 2);
+
+      // propagation
+      double variance = J * J * dp_prior.variance();
+      dp_prop.update(invDepth, variance);
+      dp_prop.update_p_cam(p_prop);
+      dp_prop.residual() = dp_prior.residual();
+      dp_prop.age() = dp_prior.age();
+      return true;
+    }
+
+}// namespace core
+}// namespace esvo_core

@@ -1,10 +1,13 @@
 cmake_minimum_required(VERSION 2.8.3)
 project(esvo_core)
+# explicitly set std=c++14 to remove errors from pcl library
+set(CMAKE_CXX_STANDARD 14)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+# SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11 -O3")
+set(CMAKE_CXX_FLAGS "-O3")
 
 find_package(catkin_simple REQUIRED)
 catkin_simple(ALL_DEPS_REQUIRED)
-
-SET(CMAKE_CXX_FLAGS  "${CMAKE_CXX_FLAGS} -std=c++11 -O3")
 
 find_package(OpenCV REQUIRED)
 find_package(yaml-cpp REQUIRED)
@@ -83,6 +86,7 @@ set(HEADERS
   include/esvo_core/core/EventBM.h
   include/esvo_core/core/RegProblemLM.h
   include/esvo_core/core/RegProblemSolverLM.h
+  include/esvo_core/core/EventMatcher.h
   include/esvo_core/optimization/OptimizationFunctor.h
   include/esvo_core/container/CameraSystem.h
   include/esvo_core/container/DepthPoint.h
@@ -107,6 +111,7 @@ set(SOURCES
   src/core/EventBM.cpp
   src/core/RegProblemLM.cpp
   src/core/RegProblemSolverLM.cpp
+  src/core/EventMatcher.cpp
   src/container/CameraSystem.cpp
   src/container/DepthPoint.cpp
   src/container/ResidualItem.cpp
@@ -140,8 +145,16 @@ cs_add_executable(esvo_MonoTracking src/esvo_MonoTrackingNode.cpp
 target_link_libraries(esvo_MonoTracking estimator_lib mc_lib
     ${catkin_LIBRARIES} ${OpenCV_LIBRARIES} ${gsl_LIBRARIES} yaml-cpp)
 
-###############
-##### Test ####
-###############
-cs_add_executable(test_transform test/test_transform.cpp)
-target_link_libraries(test_transform ${catkin_LIBRARIES})
+# Node esvo_Tracking
+cs_add_executable(esvo_Tracking src/esvo_TrackingNode.cpp
+    src/esvo_Tracking.cpp include/esvo_core/esvo_Tracking.h)
+target_link_libraries(esvo_Tracking ${PROJECT_NAME}_LIB
+    ${catkin_LIBRARIES} ${OpenCV_LIBRARIES} yaml-cpp)
+
+# Node esvo_MVS (newly added in branch "mvs")
+cs_add_executable(esvo_MVStereo
+    src/esvo_MVStereoNode.cpp
+    src/esvo_MVStereo.cpp
+    include/esvo_core/esvo_MVStereo.h)
+target_link_libraries(esvo_MVStereo ${PROJECT_NAME}_LIB
+    ${catkin_LIBRARIES} ${OpenCV_LIBRARIES} yaml-cpp)
