@@ -191,6 +191,7 @@ namespace esvo_core
     confidenceMap_pub_ = it_.advertise("DSI_Confidence_Map", 1);
     semiDenseMask_pub_ = it_.advertise("DSI_Semi_Dense_Mask", 1);
     EMVS_Accu_event_ = tools::param(pnh_, "EMVS_Accu_event", 2e5);
+    SAVE_RESULT_ = tools::param(pnh_, "SAVE_RESULT", false);
   }
 
   esvo_MVStereo::~esvo_MVStereo()
@@ -271,8 +272,6 @@ namespace esvo_core
 
 void esvo_MVStereo::MappingAtTime(const ros::Time& t)
 {
-  std::string base_fold = "~/ESVO_result/";
-
   TicToc tt_mapping;
   double t_overall_count = 0;
 
@@ -329,10 +328,10 @@ void esvo_MVStereo::MappingAtTime(const ros::Time& t)
 
 
       // To save the depth result, set it to true.
-      if(false)
+      if (SAVE_RESULT_)
       {
         // For quantitative comparison.
-        std::string baseDir(base_fold);
+        std::string baseDir(resultPath_);
         std::string saveDir(baseDir);
         saveDepthMap(depthFramePtr_->dMap_, saveDir, t);
       }
@@ -400,10 +399,10 @@ void esvo_MVStereo::MappingAtTime(const ros::Time& t)
     tPublishMappingResult.detach();
 
     // To save the depth result, set it to true.
-    if(false)
+    if (SAVE_RESULT_)
     {
       // For quantitative comparison.
-      std::string baseDir(base_fold);
+      std::string baseDir(resultPath_);
       std::string saveDir(baseDir);
       saveDepthMap(depthFramePtr_->dMap_, saveDir, t);
     }
@@ -577,6 +576,14 @@ void esvo_MVStereo::MappingAtTime(const ros::Time& t)
       }
       for (auto it = dqvDepthPoints_.rbegin(); it != dqvDepthPoints_.rend(); it++)
         dFusor_.naive_propagation(*it, depthFramePtr_);
+
+      // regularization
+      if (bRegularization_)
+      {
+        tt_mapping.tic();
+        dRegularizor_.apply(depthFramePtr_->dMap_);
+        t_regularization = tt_mapping.toc();
+      }
     } 
     else // TODO: since the depth point is not properly modeled as Guassian distribution
     {
@@ -628,15 +635,6 @@ void esvo_MVStereo::MappingAtTime(const ros::Time& t)
       }
       t_optimization = t_solve + t_fusion + t_regularization;
       t_overall_count += t_optimization;
-
-      // To save the depth result, set it to true.
-      if (false)
-      {
-        // For quantitative comparison.
-        std::string baseDir(base_fold);
-        std::string saveDir(baseDir);
-        saveDepthMap(depthFramePtr_->dMap_, saveDir, t);
-      }
     }
 
     std::thread tPublishDSIResult(&esvo_MVStereo::publishDSIResults, this,
@@ -647,6 +645,15 @@ void esvo_MVStereo::MappingAtTime(const ros::Time& t)
     std::thread tPublishMappingResult(&esvo_MVStereo::publishMappingResults, this,
                                       depthFramePtr_->dMap_, depthFramePtr_->T_world_frame_, t);
     tPublishMappingResult.detach();
+
+    // To save the depth result, set it to true.
+    if (SAVE_RESULT_)
+    {
+      // For quantitative comparison.
+      std::string baseDir(resultPath_);
+      std::string saveDir(baseDir);
+      saveDepthMap(depthFramePtr_->dMap_, saveDir, t);
+    }
     return;
   }
 
@@ -730,10 +737,10 @@ void esvo_MVStereo::MappingAtTime(const ros::Time& t)
       tPublishMappingResult.detach();
 
       // To save the depth result, set it to true.
-      if(false)
+      if (SAVE_RESULT_)
       {
         // For quantitative comparison.
-        std::string baseDir(base_fold);
+        std::string baseDir(resultPath_);
         std::string saveDir(baseDir);
         saveDepthMap(depthFramePtr_->dMap_, saveDir, t);
       }
@@ -978,46 +985,72 @@ void esvo_MVStereo::stampedPoseCallback(const geometry_msgs::PoseStampedConstPtr
     }
   }
 
+  // // add pose to tf
+  // tf::Transform tf(
+  //     tf::Quaternion(
+  //         ps_msg->pose.orientation.x,
+  //         ps_msg->pose.orientation.y,
+  //         ps_msg->pose.orientation.z,
+  //         ps_msg->pose.orientation.w),
+  //     tf::Vector3(
+  //         ps_msg->pose.position.x,
+  //         ps_msg->pose.position.y,
+  //         ps_msg->pose.position.z));
+  // tf::StampedTransform st(tf, ps_msg->header.stamp, ps_msg->header.frame_id, dvs_frame_id_.c_str());
+  // tf_->setTransform(st);
+
+  // compatitable to esvo_Tracking
+  // obtain T_world_cam
+  Eigen::Matrix4d T_world_marker = Eigen::Matrix4d::Identity();
+  T_world_marker.topLeftCorner<3, 3>() = Eigen::Quaterniond(ps_msg->pose.orientation.w,
+                                                            ps_msg->pose.orientation.x,
+                                                            ps_msg->pose.orientation.y,
+                                                            ps_msg->pose.orientation.z)
+                                            .toRotationMatrix();
+  T_world_marker.topRightCorner<3, 1>() = Eigen::Vector3d(ps_msg->pose.position.x,
+                                                          ps_msg->pose.position.y,
+                                                          ps_msg->pose.position.z);
+
+  // HARDCODED: The GT pose of rpg dataset is the pose of stereo rig, namely that of the marker.
+  Eigen::Matrix4d T_marker_cam;
+  T_marker_cam << 5.363262328777285e-01, -1.748374625145743e-02, -8.438296573030597e-01, -7.009849865398374e-02,
+      8.433577587813513e-01, -2.821937531845164e-02, 5.366109927684415e-01, 1.881333563905305e-02,
+      -3.319431623758162e-02, -9.994488408486204e-01, -3.897382049768972e-04, -6.966829200678797e-02,
+      0, 0, 0, 1;
+  Eigen::Matrix4d T_world_cam = T_world_marker * T_marker_cam;
+  static Eigen::Matrix4d T_world_map_ = Eigen::Matrix4d::Identity();
+  if (T_world_map_ == Eigen::Matrix4d::Identity())
+    T_world_map_ = T_world_cam;
+
+  Eigen::Matrix4d T_map_cam = T_world_map_.inverse() * T_world_cam;
+  Eigen::Matrix3d R_map_cam = T_map_cam.topLeftCorner<3, 3>();
+  Eigen::Quaterniond q_map_cam(R_map_cam);
+  Eigen::Vector3d t_map_cam = T_map_cam.topRightCorner<3, 1>();
+
   // add pose to tf
   tf::Transform tf(
-    tf::Quaternion(
-      ps_msg->pose.orientation.x,
-      ps_msg->pose.orientation.y,
-      ps_msg->pose.orientation.z,
-      ps_msg->pose.orientation.w),
-    tf::Vector3(
-      ps_msg->pose.position.x,
-      ps_msg->pose.position.y,
-      ps_msg->pose.position.z));
+      tf::Quaternion(
+          q_map_cam.x(),
+          q_map_cam.y(),
+          q_map_cam.z(),
+          q_map_cam.w()),
+      tf::Vector3(
+          t_map_cam.x(),
+          t_map_cam.y(),
+          t_map_cam.z()));
   tf::StampedTransform st(tf, ps_msg->header.stamp, ps_msg->header.frame_id, dvs_frame_id_.c_str());
   tf_->setTransform(st);
 
   if (msm_ == PURE_EMVS || msm_ == PURE_EMVS_PLUS_ESTIMATION)
   {
-    // HARDCODED: The GT pose of rpg dataset is the pose of stereo rig, namely that of the marker.
     // add pose to mAllPoses_
-    Eigen::Matrix4d T_world_marker = Eigen::Matrix4d::Identity();
-    T_world_marker.topLeftCorner<3, 3>() = Eigen::Quaterniond(ps_msg->pose.orientation.w,
-                                                              ps_msg->pose.orientation.x,
-                                                              ps_msg->pose.orientation.y,
-                                                              ps_msg->pose.orientation.z)
-                                              .toRotationMatrix();
-    T_world_marker.topRightCorner<3, 1>() = Eigen::Vector3d(ps_msg->pose.position.x,
-                                                            ps_msg->pose.position.y,
-                                                            ps_msg->pose.position.z);
-    Eigen::Matrix4d T_marker_cam;
-    T_marker_cam << 5.363262328777285e-01, -1.748374625145743e-02, -8.438296573030597e-01, -7.009849865398374e-02,
-        8.433577587813513e-01, -2.821937531845164e-02, 5.366109927684415e-01, 1.881333563905305e-02,
-        -3.319431623758162e-02, -9.994488408486204e-01, -3.897382049768972e-04, -6.966829200678797e-02,
-        0, 0, 0, 1;
-    Eigen::Matrix4d T_world_cam = T_world_marker * T_marker_cam;
-    mAllPoses_.emplace(ps_msg->header.stamp, T_world_cam);
+    mAllPoses_.emplace(ps_msg->header.stamp, T_map_cam);
+    // mAllPoses_.emplace(ps_msg->header.stamp, T_world_cam);
   }
 }
 
 // return the pose of the left event cam at time t.
-bool esvo_MVStereo::getPoseAt(
-  const ros::Time &t,
+bool esvo_MVStereo::getPoseAt(const ros::Time &t,
   esvo_core::Transformation &Tr,// T_world_virtual
   const std::string& source_frame )
 {
@@ -1035,6 +1068,7 @@ bool esvo_MVStereo::getPoseAt(
     tf::StampedTransform st;
     tf_->lookupTransform(world_frame_id_, source_frame, t, st);
     tf::transformTFToKindr(st, &Tr);
+
     // HARDCODED: The GT pose of rpg dataset is the pose of stereo rig, namely that of the marker.
     if(std::strcmp(source_frame.c_str(), "marker") == 0)
     {

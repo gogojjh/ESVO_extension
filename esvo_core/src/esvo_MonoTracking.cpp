@@ -394,14 +394,14 @@ namespace esvo_core
 
 	void esvo_MonoTracking::publishTimeSurface(const ros::Time &t)
 	{
-		if (TS_buf_.empty())
-			return;
-		sensor_msgs::ImagePtr aux_left = TS_buf_.back().second.cvImagePtr_left_->toImageMsg();
-		aux_left->header.stamp = t;
-		time_surface_left_pub_.publish(aux_left);
-		sensor_msgs::ImagePtr aux_right = TS_buf_.back().second.cvImagePtr_right_->toImageMsg();
-		aux_right->header.stamp = t;
-		time_surface_right_pub_.publish(aux_right);
+		// if (TS_buf_.empty())
+		// 	return;
+		// sensor_msgs::ImagePtr aux_left = TS_buf_.back().second.cvImagePtr_left_->toImageMsg();
+		// aux_left->header.stamp = t;
+		// time_surface_left_pub_.publish(aux_left);
+		// sensor_msgs::ImagePtr aux_right = TS_buf_.back().second.cvImagePtr_right_->toImageMsg();
+		// aux_right->header.stamp = t;
+		// time_surface_right_pub_.publish(aux_right);
 	}
 
 	void esvo_MonoTracking::publishMCImage(const ros::Time &t)
@@ -416,22 +416,66 @@ namespace esvo_core
 		mcimage_pub_.publish(aux);
 	}
 
-	void esvo_MonoTracking::stampedPoseCallback(const geometry_msgs::PoseStampedConstPtr &msg)
+	void esvo_MonoTracking::stampedPoseCallback(const geometry_msgs::PoseStampedConstPtr &ps_msg)
 	{
 		m_buf_.lock();
+
+		// For esvo_MVStereo
+		// obtain T_world_cam
+		Eigen::Matrix4d T_world_marker = Eigen::Matrix4d::Identity();
+		T_world_marker.topLeftCorner<3, 3>() = Eigen::Quaterniond(ps_msg->pose.orientation.w,
+																  ps_msg->pose.orientation.x,
+																  ps_msg->pose.orientation.y,
+																  ps_msg->pose.orientation.z)
+												   .toRotationMatrix();
+		T_world_marker.topRightCorner<3, 1>() = Eigen::Vector3d(ps_msg->pose.position.x,
+																ps_msg->pose.position.y,
+																ps_msg->pose.position.z);
+
+		// HARDCODED: The GT pose of rpg dataset is the pose of stereo rig, namely that of the marker.
+		Eigen::Matrix4d T_marker_cam;
+		T_marker_cam << 5.363262328777285e-01, -1.748374625145743e-02, -8.438296573030597e-01, -7.009849865398374e-02,
+			8.433577587813513e-01, -2.821937531845164e-02, 5.366109927684415e-01, 1.881333563905305e-02,
+			-3.319431623758162e-02, -9.994488408486204e-01, -3.897382049768972e-04, -6.966829200678797e-02,
+			0, 0, 0, 1;
+		Eigen::Matrix4d T_world_cam = T_world_marker * T_marker_cam;
+		static Eigen::Matrix4d T_world_map_ = Eigen::Matrix4d::Identity();
+		if (T_world_map_ == Eigen::Matrix4d::Identity())
+			T_world_map_ = T_world_cam;
+
+		Eigen::Matrix4d T_map_cam = T_world_map_.inverse() * T_world_cam;
+		Eigen::Matrix3d R_map_cam = T_map_cam.topLeftCorner<3, 3>();
+		Eigen::Quaterniond q_map_cam(R_map_cam);
+		Eigen::Vector3d t_map_cam = T_map_cam.topRightCorner<3, 1>();
+
 		// add pose to tf
 		tf::Transform tf(
 			tf::Quaternion(
-				msg->pose.orientation.x,
-				msg->pose.orientation.y,
-				msg->pose.orientation.z,
-				msg->pose.orientation.w),
+				q_map_cam.x(),
+				q_map_cam.y(),
+				q_map_cam.z(),
+				q_map_cam.w()),
 			tf::Vector3(
-				msg->pose.position.x,
-				msg->pose.position.y,
-				msg->pose.position.z));
-		tf::StampedTransform st(tf, msg->header.stamp, msg->header.frame_id, dvs_frame_id_.c_str());
+				t_map_cam.x(),
+				t_map_cam.y(),
+				t_map_cam.z()));
+		tf::StampedTransform st(tf, ps_msg->header.stamp, ps_msg->header.frame_id, dvs_frame_id_.c_str());
 		tf_->setTransform(st);
+
+		// add pose to tf
+		// tf::Transform tf(
+		// 	tf::Quaternion(
+		// 		ps_msg->pose.orientation.x,
+		// 		ps_msg->pose.orientation.y,
+		// 		ps_msg->pose.orientation.z,
+		// 		ps_msg->pose.orientation.w),
+		// 	tf::Vector3(
+		// 		ps_msg->pose.position.x,
+		// 		ps_msg->pose.position.y,
+		// 		ps_msg->pose.position.z));
+		// tf::StampedTransform st(tf, ps_msg->header.stamp, ps_msg->header.frame_id, dvs_frame_id_.c_str());
+		// tf_->setTransform(st);
+		
 		// broadcast the tf such that the nav_path messages can find the valid fixed frame "map".
 		static tf::TransformBroadcaster br;
 		br.sendTransform(st);
@@ -459,7 +503,7 @@ namespace esvo_core
 
 	/************ publish results *******************/	
 	void esvo_MonoTracking::gtPoseCallback(const geometry_msgs::PoseStampedConstPtr &msg)
-	{
+	{	
 		// m_buf_.lock();
 		// publish gt pose and path
 		Eigen::Quaterniond q_gt_cur(msg->pose.orientation.w,
@@ -517,7 +561,6 @@ namespace esvo_core
 
 		// m_buf_.unlock();
 	}
-
 
 	void esvo_MonoTracking::publishPose(const ros::Time &t, Transformation &tr)
 	{

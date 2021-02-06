@@ -246,6 +246,8 @@ class esvo_MVStereo
   // For counting the total number of fusion
   size_t TotalNumFusion_;
 
+  std::string resultPath_;
+
   // EMVS_Mapping
   void insertKeyframe();
   void publishDSIResults(const ros::Time &t, const cv::Mat &semiDenseMask,
@@ -263,11 +265,12 @@ class esvo_MVStereo
   Eigen::Matrix4d T_w_keyframe_, T_w_frame_;
   // pcl::PointCloud<pcl::PointXYZI>::Ptr emvs_pc_, pc_map_;
 
-  std::string resultPath_;
   double meanDepth_;
   double KEYFRAME_LINEAR_DIS_, KEYFRAME_ORIENTATION_DIS_;
   image_transport::Publisher depthMap_pub_, confidenceMap_pub_, semiDenseMask_pub_;
   int EMVS_Accu_event_;
+
+  bool SAVE_RESULT_;
 };
 
 }
