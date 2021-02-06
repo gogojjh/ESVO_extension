@@ -168,7 +168,7 @@ bool RegProblemSolverLM::solve_analytical()
       return false;
     }
     Eigen::LevenbergMarquardtSpace::Status status = lm.minimizeOneStep(x);
-    regProblemPtr_->addMotionUpdate(x);
+    regProblemPtr_->addMotionUpdate(x); // ensure the incremental update at each step is small
 
     iteration++;
     nfev += lm.nfev;

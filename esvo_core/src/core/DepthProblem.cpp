@@ -193,11 +193,13 @@ namespace esvo_core
       return true;
     }
 
-    bool DepthProblem::patchInterpolation(
-        const Eigen::MatrixXd &img,
-        const Eigen::Vector2d &location,
-        Eigen::MatrixXd &patch,
-        bool debug) const
+    /**
+     * @brief: This extracts the patch of the TimeSurface (img) given the location
+     */
+    bool DepthProblem::patchInterpolation(const Eigen::MatrixXd &img,
+                                          const Eigen::Vector2d &location,
+                                          Eigen::MatrixXd &patch,
+                                          bool debug) const
     {
       int wx = dpConfigPtr_->patchSize_X_;
       int wy = dpConfigPtr_->patchSize_Y_;

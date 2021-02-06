@@ -47,6 +47,7 @@ namespace esvo_core
 		  dFusor_(camSysPtr_, dpConfigPtr_),
 		  dMonoFusor_(camSysPtr_, dpConfigPtr_),
 		  dRegularizor_(dpConfigPtr_),
+		  dMonoRegularizor_(dpConfigPtr_),
 		  ebm_(camSysPtr_, NUM_THREAD_MAPPING, tools::param(pnh_, "SmoothTimeSurface", false)),
 		  pc_(new PointCloud()),
 		  pc_near_(new PointCloud()),
@@ -54,10 +55,6 @@ namespace esvo_core
 		  pc_map_(new pcl::PointCloud<pcl::PointXYZI>()),
 		  depthFramePtr_(new DepthFrame(camSysPtr_->cam_left_ptr_->height_, camSysPtr_->cam_left_ptr_->width_)),
 		  // Monocular Mapping
-		//   camPtr_(camodocal::CameraFactory::instance()->generateCameraFromYamlFile(
-		// 	  tools::param(pnh_, "CAM_CALIB_PATH", std::string("left_pinhold.yaml")))),
-		//   camVirtualPtr_(camodocal::CameraFactory::instance()->generateCameraFromYamlFile(
-		// 	  tools::param(pnh_, "CAM_CALIB_PATH", std::string("left_pinhold.yaml")))),
 		  emvs_dsi_shape_(tools::param(pnh_, "opts_dim_x", 0),
 						  tools::param(pnh_, "opts_dim_y", 0),
 						  tools::param(pnh_, "opts_dim_z", 100),
@@ -549,7 +546,6 @@ namespace esvo_core
 		// ******************************** Nonlinear opitmization
 		std::vector<DepthPoint> vdp; // depth points on the current stereo observations
 		vdp.reserve(vEMP.size());
-		LOG(INFO) << "Optimizing point size: " << vEMP.size();
 		dpSolver_.solve(&vEMP, &TS_obs_, vdp); // hyper-thread version
 #ifdef ESVO_CORE_MAPPING_DEBUG
 		LOG(INFO) << "Nonlinear optimization returns: " << vdp.size() << " estimates.";
@@ -561,6 +557,7 @@ namespace esvo_core
 		LOG(INFO) << "After culling, vdp.size: " << vdp.size();
 #endif
 		t_solve = tt_mapping.toc();
+		// LOG(INFO) << "Optimizing " << vEMP.size() << " points costs: " << t_solve << "ms"; // 10-60ms
 		// LOG(INFO) << "Nonliner optimization succeeds";
 
 		// ******************************** Fusion (strategy 1: const number of point)
@@ -786,23 +783,24 @@ namespace esvo_core
 			// 	exit(-1);
 			// }
 
-			while (dqvMonoDepthPoints_.size() > 1)
+			while (dqvMonoDepthPoints_.size() > 1) // keep the historical length is 1
 				dqvMonoDepthPoints_.pop_front();
-
-			// LOG(INFO) << "Fusion succeeds";
+			// LOG(INFO) << "Fusion succeeds";		
 		}
+		for (auto it = dqvMonoDepthPoints_.rbegin(); it != dqvMonoDepthPoints_.rend(); it++)
+			dMonoFusor_.naive_propagation(*it, depthFramePtr_); 
 
 		// ******************************** apply fusion and count the total number of fusion.
-		double t_fusion, t_regularization;
-		size_t numFusionCount = 0;
-		size_t numPoints = 0;
-		for (auto it = dqvMonoDepthPoints_.rbegin(); it != dqvMonoDepthPoints_.rend(); it++)
-		{
-			numPoints += it->size();
-			numFusionCount += dMonoFusor_.update(*it, depthFramePtr_, fusion_radius_); // fusing new points to update the depthmap
-		}
+		// double t_fusion, t_regularization;
+		// size_t numFusionCount = 0;
+		// size_t numPoints = 0;
+		// for (auto it = dqvMonoDepthPoints_.rbegin(); it != dqvMonoDepthPoints_.rend(); it++)
+		// {
+		// 	numPoints += it->size();
+		// 	numFusionCount += dMonoFusor_.update(*it, depthFramePtr_, fusion_radius_); // fusing new points to update the depthmap
+		// }
 		// LOG(INFO) << "numFusionCount: " << numFusionCount;
-		TotalNumFusion_ += numFusionCount;
+		// TotalNumFusion_ += numFusionCount;
 		// LOG(INFO) << "size of local map: " << dqvMonoDepthPoints_.size() << "; numPoints: " << numPoints;
 
 		// depthFramePtr_->dMap_->clean(pow(stdVar_vis_threshold_, 2), age_vis_threshold_, invDepth_max_range_, invDepth_min_range_);
@@ -819,7 +817,7 @@ namespace esvo_core
 		// if (bRegularization_)
 		// {
 		// 	tt_mapping.tic();
-		// 	dRegularizor_.apply(depthFramePtr_->dMap_);
+		// 	dMonoRegularizor_.apply(depthFramePtr_->dMap_);
 		// 	t_regularization = tt_mapping.toc();
 		// }
 
@@ -884,7 +882,7 @@ namespace esvo_core
 			T_w_frame_ = TS_obs_.second.tr_.getTransformationMatrix();
 			double dis = (T_w_frame_.topRightCorner<3, 1>() - T_w_keyframe_.topRightCorner<3, 1>()).norm();
 			// if (dis > KEYFRAME_LINEAR_DIS_)
-			if (meanDepth_ == 1e5 || dis > 0.15 * meanDepth_)
+			if (meanDepth_ == 1e5 || dis > 0.15 * meanDepth_) // 1e5: system just starts; > 0.15: move at a long distance
 			{
 				isKeyframe_ = true;
 				T_w_keyframe_ = T_w_frame_;

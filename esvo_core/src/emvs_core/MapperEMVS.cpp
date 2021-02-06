@@ -302,6 +302,7 @@ namespace EMVS
 						esvo_core::container::DepthPoint dp(y, x);
 						dp.update_x(p.head<2>().cast<double>());
 						dp.update_p_cam(xyz_rv.cast<double>());
+						dp.update(1.0 / xyz_rv.z(), 0);
 						dp.update_confidence(1.0 / xyz_rv.z(), static_cast<double>(confidence_map.at<float>(y, x)));
 						dp.updatePose(T_w_rv_);
 						dp.age() = 1;

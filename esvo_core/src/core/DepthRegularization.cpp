@@ -16,6 +16,9 @@ namespace esvo_core
 
     DepthRegularization::~DepthRegularization() {}
 
+    /**
+     * @brief: This function chooses the neighboorhood points to average the current dp
+     */
     void DepthRegularization::apply(DepthMap::Ptr &depthMapPtr)
     {
       DepthMap &dm = *depthMapPtr.get();
@@ -49,6 +52,7 @@ namespace esvo_core
                   closeNeighbours.push_back(neighbours[i]);
               }
             }
+
             // regularizationMinCloseNeighbours is larger than the fusion's applied region (namely 4 pixels in my implementation)
             if (closeNeighbours.size() > _regularizationMinCloseNeighbours)
             {
@@ -96,6 +100,7 @@ namespace esvo_core
               newDp.invDepth() = statisticalMean;
               isSet = true;
             }
+
           }
 
           if (!isSet)

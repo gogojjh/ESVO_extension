@@ -19,6 +19,7 @@
 #include <esvo_core/core/DepthFusion.h>
 #include <esvo_core/core/DepthMonoFusion.h>
 #include <esvo_core/core/DepthRegularization.h>
+#include <esvo_core/core/DepthMonoRegularization.h>
 #include <esvo_core/core/DepthProblem.h>
 #include <esvo_core/core/DepthProblemSolver.h>
 #include <esvo_core/core/EventBM.h>
@@ -179,6 +180,7 @@ namespace esvo_core
         DepthFusion dFusor_;
         DepthMonoFusion dMonoFusor_;
         DepthRegularization dRegularizor_;
+        DepthMonoRegularization dMonoRegularizor_;
         Visualization visualizor_;
         EventBM ebm_;
 
