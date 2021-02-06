@@ -13,7 +13,12 @@ Please refer to the **[ESVO Project Page](https://sites.google.com/view/esvo-pro
 
 # 1. Installation
 
-We have tested ESVO on Ubuntu 18.04.5 LTS + ROS melodic + gcc 5.5.0 + cmake (>=3.10), and Ubuntu 16.04 LTS + ROS kinetic + gcc 5.4.0 + cmake (>=3.10). For Ubuntu 16.04, you may need to upgrade your cmake.
+We have tested ESVO on machines with the following configurations
+* Ubuntu 18.04.5 LTS + ROS melodic + gcc 5.5.0 + cmake (>=3.10) + OpenCV 3.2
+* Ubuntu 16.04 LTS + ROS kinetic + gcc 5.4.0 + cmake (>=3.10) + OpenCV 3.2
+* Ubuntu 20.04 LTS + ROS Noetic + OpenCV 4
+
+For Ubuntu 16.04, you may need to upgrade your cmake.
 
 ## 1.1 Driver Installation
 
@@ -68,7 +73,6 @@ run
 	$ catkin build esvo_time_surface esvo_core
 	$ source ~/catkin_ws/devel/setup.bash
 
-
 # 2. Usage
 To run the pipeline, you need to download rosbag files from the [ESVO Project Page](https://sites.google.com/view/esvo-project-page/home).
 
@@ -97,6 +101,19 @@ To save trajectories at anytime, go to another terminal and terminate the system
     
 You need to set the path in `/cfg/tracking_xxx.yaml` to which the result file will be saved.
 
+## 2.3 esvo_core/mvstereo
+This module implements the mapper of ESVO and some other event-based mapping methods (e.g. [26], [45]).
+As a multi-view stereo (MVS) pipeline, it assumes that poses are known as prior.
+To launch the mapper, run
+
+    $ roslaunch esvo_core mvstereo_xxx.launch
+
+This will launch two *esvo_time_surface nodes* (for left and right event cameras, respectively), and the mapping node simultaneously.
+Then play the input (already downloaded) bag file by running
+    
+    $ roslaunch esvo_time_surface [bag_name].launch
+
+Note that only *rpg* and *upenn* datasets are applicable for this module because they come with the ground truth poses.
 
 # 3. Parameters (Dynamic Reconfigure)
 ## Time Surface
@@ -114,6 +131,13 @@ for denoising the time surface.
 maintained at each coordinate.
 
 ## Mapping
+**Event Matching**
+- `EM_Slice_Thickness`: Determines the thickness of the temporal slice (unit: sec).
+- `EM_Time_THRESHOLD`: Temporal simultaneity threshold.
+- `EM_EPIPOLAR_THRESHOLD`: Epipolar constraint threshold.
+- `EM_TS_NCC_THRESHOLD`: Motion consistency threshold.
+- `EM_NUM_EVENT_MATCHING`: Maximum number of events for event matching.
+
 **Block Matching**
 - `BM_half_slice_thickness` : Determines the thickness of the temporal slice (unit: sec).
 - `BM_min_disparity` : Minimum searching distance for epipolar matching.
@@ -203,10 +227,18 @@ The event data fed to ESVO needs to be recorded at remarkbly higher streaming ra
 
 For convenience we provide a number of bag files, which have been rewritten to meet above requirement. They can be downloaded from the [ESVO Project Page](https://sites.google.com/view/esvo-project-page/home).
 
-
 # 6. License
 ESVO is licensed under the GNU General Public License Version 3 (GPLv3), see http://www.gnu.org/licenses/gpl.html.
 
 For commercial use, please contact Yi Zhou and Shaojie Shen. 
 
 Email addresses are available in the project page.
+
+# 7. Log
+* **12/01/2021** Merge with Suman Ghosh's pull request. 
+This commit fixed the running issue on machines with **Ubuntu 20.04 + ROS Noetic + OpenCV 4**.
+* **28/01/2021** We provide the independent mapping module of ESVO. 
+This module maybe useful for people who are interested in event-based multi-view stereo (MVS) methods,
+which typically assume poses are known as prior knowledge.
+Besides, methods in [26], [45] are also implemented for comparison purpose.
+Please refer to `2.3 esvo_core/mvstereo`.
