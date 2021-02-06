@@ -58,3 +58,4 @@ opts_pc_min_num_neighbors: 3
 PATH_TO_SAVE_RESULT: "/home/jjiao/ESVO_result/rpg/" # CHANGE THIS PATH
 KEYFRAME_LINEAR_DIS: 0.15 # m
 KEYFRAME_ORIENTATION_DIS: 5 # degree
+EMVS_Accu_event: 200000

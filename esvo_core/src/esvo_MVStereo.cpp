@@ -190,6 +190,7 @@ namespace esvo_core
     depthMap_pub_ = it_.advertise("DSI_Depth_Map", 1);
     confidenceMap_pub_ = it_.advertise("DSI_Confidence_Map", 1);
     semiDenseMask_pub_ = it_.advertise("DSI_Semi_Dense_Mask", 1);
+    EMVS_Accu_event_ = tools::param(pnh_, "EMVS_Accu_event", 2e5);
   }
 
   esvo_MVStereo::~esvo_MVStereo()
@@ -523,7 +524,7 @@ void esvo_MVStereo::MappingAtTime(const ros::Time& t)
     if (isKeyframe_)
     {
       // LOG(INFO) << "insert a keyframe";
-      if (emvs_mapper_.accumulate_events_ < 2e5)
+      if (emvs_mapper_.accumulate_events_ < EMVS_Accu_event_)
         if (!dqvDepthPoints_.empty())
           dqvDepthPoints_.pop_back();
       dqvDepthPoints_.push_back(std::vector<DepthPoint>());
@@ -540,7 +541,7 @@ void esvo_MVStereo::MappingAtTime(const ros::Time& t)
 
     cv::Mat depth_map, confidence_map, semidense_mask;
     emvs_mapper_.getDepthMapFromDSI(depth_map, confidence_map, semidense_mask, emvs_opts_depth_map_, meanDepth_);
-    if (emvs_mapper_.accumulate_events_ >= 2e5) // only enough point cloud to extract map
+    if (emvs_mapper_.accumulate_events_ >= EMVS_Accu_event_) // only enough point cloud to extract map
     {
       std::vector<DepthPoint> &vdp = dqvDepthPoints_.back(); // depth points on the current observations
       emvs_mapper_.getDepthPoint(depth_map, confidence_map, semidense_mask, vdp);
