@@ -261,13 +261,11 @@ class esvo_MVStereo
   EMVS::LinearTrajectory trajectory_;
   bool isKeyframe_;
   Eigen::Matrix4d T_w_keyframe_, T_w_frame_;
-  pcl::PointCloud<pcl::PointXYZI>::Ptr emvs_pc_, pc_map_;
+  // pcl::PointCloud<pcl::PointXYZI>::Ptr emvs_pc_, pc_map_;
 
   std::string resultPath_;
   double meanDepth_;
   double KEYFRAME_LINEAR_DIS_, KEYFRAME_ORIENTATION_DIS_;
-
-  std::vector<Eigen::Vector4d> vEdgeletCoordinates_;
   image_transport::Publisher depthMap_pub_, confidenceMap_pub_, semiDenseMask_pub_;
 };
 

@@ -221,6 +221,7 @@ namespace esvo_core
     //
     if(TS_history_.size() >= 10)/* To assure the esvo_time_surface node has been working. */
     {
+
 #ifdef ESVO_CORE_MVSTEREO_LOG
       LOG(INFO) << "TS_history_.size(): " << TS_history_.size();
 #endif
@@ -241,6 +242,7 @@ namespace esvo_core
           }
         }
       }
+
       // To check if the most current TS observation has been loaded by dataTransferring()
       if(TS_obs_.second.isEmpty())
       {
@@ -475,22 +477,22 @@ void esvo_MVStereo::MappingAtTime(const ros::Time& t)
     if (bDenoising_) // Set it to "True" to deal with flicker effect caused by VICON.
     {
       tt_mapping.tic();
-      // Draw one mask image for denoising.
+      // Draw one mask image for denoising
       cv::Mat denoising_mask;
-      createDenoisingMask(vALLEventsPtr_left_, denoising_mask,
-                          camSysPtr_->cam_left_ptr_->height_, camSysPtr_->cam_left_ptr_->width_);
+      createDenoisingMask(vALLEventsPtr_left_, denoising_mask, camSysPtr_->cam_left_ptr_->height_, camSysPtr_->cam_left_ptr_->width_);
 
-      // Extract denoised events (appear on edges likely).
+      // Extract events (appear on edges likely) for each TS
       vDenoisedEventsPtr_left_.clear();
-      extractDenoisedEvents(vCloseEventsPtr_left_, vDenoisedEventsPtr_left_, denoising_mask, 0);
+      extractDenoisedEvents(vCloseEventsPtr_left_, vDenoisedEventsPtr_left_, denoising_mask, PROCESS_EVENT_NUM_);
       totalNumCount_ = vDenoisedEventsPtr_left_.size();
-      t_denoising = tt_mapping.toc();
+      t_BM_denoising = tt_mapping.toc();
     }
     else
     {
       vDenoisedEventsPtr_left_.clear();
+      vDenoisedEventsPtr_left_.reserve(PROCESS_EVENT_NUM_);
       vDenoisedEventsPtr_left_.insert(vDenoisedEventsPtr_left_.end(), vCloseEventsPtr_left_.begin(),
-                                      vCloseEventsPtr_left_.end());
+                                      vCloseEventsPtr_left_.begin() + min(vCloseEventsPtr_left_.size(), PROCESS_EVENT_NUM_));
     }
 
     // undistort events' coordinates
@@ -504,6 +506,7 @@ void esvo_MVStereo::MappingAtTime(const ros::Time& t)
         coor = camSysPtr_->cam_left_ptr_->getRectifiedUndistortedCoordinate(vDenoisedEventsPtr_left_[i]->x, vDenoisedEventsPtr_left_[i]->y);
       else
         coor = Eigen::Vector2d(vDenoisedEventsPtr_left_[i]->x, vDenoisedEventsPtr_left_[i]->y);
+      // LOG(INFO) << coor.transpose() << " " << vDenoisedEventsPtr_left_[i]->x << " " << vDenoisedEventsPtr_left_[i]->y;
       Eigen::Vector4d tmp_coor;
       tmp_coor[0] = coor[0];
       tmp_coor[1] = coor[1];
@@ -511,11 +514,13 @@ void esvo_MVStereo::MappingAtTime(const ros::Time& t)
       tmp_coor[3] = double(vDenoisedEventsPtr_left_[i]->polarity);
       vEdgeletCoordinates.push_back(tmp_coor);
     }
-    LOG(INFO) << "Process " << vEdgeletCoordinates.size() << " events";
+    // LOG(INFO) << "Process " << vEdgeletCoordinates.size() << " events";
+    // LOG(INFO) << mVirtualPoses_.front().first.toSec() << " " << vEdgeletCoordinates.front()[2];
+    // LOG(INFO) << mVirtualPoses_.back().first.toSec() << " " << vEdgeletCoordinates.back()[2];
 
     if (isKeyframe_)
     {
-      LOG(INFO) << "insert a keyframe";
+      // LOG(INFO) << "insert a keyframe";
       if (emvs_mapper_.accumulate_events_ < 2e5)
         if (!dqvDepthPoints_.empty())
           dqvDepthPoints_.pop_back();
@@ -527,13 +532,13 @@ void esvo_MVStereo::MappingAtTime(const ros::Time& t)
     }
     else
     {
-      LOG(INFO) << "insert an non-keyframe";
+      // LOG(INFO) << "insert an non-keyframe";
       emvs_mapper_.updateDSI(mVirtualPoses_, vEdgeletCoordinates);
     }
 
     cv::Mat depth_map, confidence_map, semidense_mask;
     emvs_mapper_.getDepthMapFromDSI(depth_map, confidence_map, semidense_mask, emvs_opts_depth_map_, meanDepth_);
-    LOG(INFO) << "get depth map";
+    // LOG(INFO) << "get depth map";
     if (emvs_mapper_.accumulate_events_ >= 2e5) // only enough point cloud to extract map
     {
       std::vector<DepthPoint> &vdp = dqvDepthPoints_.back(); // depth points on the current stereo observations
@@ -691,7 +696,7 @@ void esvo_MVStereo::insertKeyframe()
   {
     isKeyframe_ = true;
     T_w_keyframe_ = T_w_frame_;
-    LOG(INFO) << "mean depth: " << meanDepth_ << "m";
+    // LOG(INFO) << "mean depth: " << meanDepth_ << "m";
   }
   else
   {
@@ -826,7 +831,7 @@ bool esvo_MVStereo::dataTransferring()
     ros::Time t_begin(std::max(0.0, t_end.toSec() - 10 * BM_half_slice_thickness_));
     auto ev_end_it = tools::EventBuffer_lower_bound(events_left_, t_end);
     auto ev_begin_it = tools::EventBuffer_lower_bound(events_left_, t_begin); //events_left_.begin();
-    const size_t MAX_NUM_Event_INVOLVED = 10000;
+    const size_t MAX_NUM_Event_INVOLVED = 20000;
     vALLEventsPtr_left_.reserve(MAX_NUM_Event_INVOLVED);
     vCloseEventsPtr_left_.reserve(MAX_NUM_Event_INVOLVED);
     while (ev_end_it != ev_begin_it && vALLEventsPtr_left_.size() < MAX_NUM_Event_INVOLVED)
@@ -836,6 +841,7 @@ bool esvo_MVStereo::dataTransferring()
       ev_end_it--;
     }
     totalNumCount_ = vCloseEventsPtr_left_.size();
+    // LOG(INFO) << "receive " << totalNumCount_ << " events";
 
     // using inherent linear interpolation
     // t0 <= ev.ts <= t1
@@ -898,16 +904,24 @@ void esvo_MVStereo::stampedPoseCallback(const geometry_msgs::PoseStampedConstPtr
   tf::StampedTransform st(tf, ps_msg->header.stamp, ps_msg->header.frame_id, dvs_frame_id_.c_str());
   tf_->setTransform(st);
 
+  // HARDCODED: The GT pose of rpg dataset is the pose of stereo rig, namely that of the marker.
   // add pose to mAllPoses_
-  Eigen::Matrix4d T = Eigen::Matrix4d::Identity();
-  T.topLeftCorner<3, 3>() = Eigen::Quaterniond(ps_msg->pose.orientation.w,
-                                               ps_msg->pose.orientation.x,
-                                               ps_msg->pose.orientation.y,
-                                               ps_msg->pose.orientation.z).toRotationMatrix();
-  T.topRightCorner<3, 1>() = Eigen::Vector3d(ps_msg->pose.position.x,
-                                             ps_msg->pose.position.y,
-                                             ps_msg->pose.position.z);
-  mAllPoses_.emplace(ps_msg->header.stamp, T);
+  Eigen::Matrix4d T_world_marker = Eigen::Matrix4d::Identity();
+  T_world_marker.topLeftCorner<3, 3>() = Eigen::Quaterniond(ps_msg->pose.orientation.w,
+                                                            ps_msg->pose.orientation.x,
+                                                            ps_msg->pose.orientation.y,
+                                                            ps_msg->pose.orientation.z)
+                                             .toRotationMatrix();
+  T_world_marker.topRightCorner<3, 1>() = Eigen::Vector3d(ps_msg->pose.position.x,
+                                                          ps_msg->pose.position.y,
+                                                          ps_msg->pose.position.z);
+  Eigen::Matrix4d T_marker_cam;
+  T_marker_cam << 5.363262328777285e-01, -1.748374625145743e-02, -8.438296573030597e-01, -7.009849865398374e-02,
+      8.433577587813513e-01, -2.821937531845164e-02, 5.366109927684415e-01, 1.881333563905305e-02,
+      -3.319431623758162e-02, -9.994488408486204e-01, -3.897382049768972e-04, -6.966829200678797e-02,
+      0, 0, 0, 1;
+  Eigen::Matrix4d T_world_cam = T_world_marker * T_marker_cam;
+  mAllPoses_.emplace(ps_msg->header.stamp, T_world_cam);
 }
 
 // return the pose of the left event cam at time t.
