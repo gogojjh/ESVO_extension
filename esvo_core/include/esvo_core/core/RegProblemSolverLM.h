@@ -6,6 +6,7 @@
 #include <esvo_core/tools/Visualization.h>
 #include <esvo_core/optimization/OptimizationFunctor.h>
 
+#include <Eigen/Eigen>
 #include <unsupported/Eigen/NonLinearOptimization>
 #include <unsupported/Eigen/NumericalDiff>
 

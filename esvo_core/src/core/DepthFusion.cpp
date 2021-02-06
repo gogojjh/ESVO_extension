@@ -184,70 +184,7 @@ namespace esvo_core
           }
         }
       }
-
       return numFusion;
-    }
-
-void
-DepthFusion::naive_propagation(
-  std::vector<DepthPoint> &dp_obs,
-  DepthFrame::Ptr &df)
-{
-  Eigen::Matrix<double, 4, 4> T_frame_world = df->T_world_frame_.inverse().getTransformationMatrix();
-  for (size_t i = 0; i < dp_obs.size(); i++)
-  {
-    Eigen::Matrix<double, 4, 4> T_frame_obs = T_frame_world * dp_obs[i].T_world_cam();
-    DepthPoint dp_prop;
-    if (!naive_propagate_one_point(dp_obs[i], dp_prop, T_frame_obs))
-      continue;
-
-    // determine the four neighbouring pixels
-    std::vector<std::pair<size_t, size_t> > vpCoordinate;
-    const size_t patchSize = 4;
-    vpCoordinate.reserve(patchSize);
-    size_t row_topleft = dp_prop.row();
-    size_t col_topleft = dp_prop.col();
-    for(int dy = 0; dy <= 1; dy++)
-      for(int dx = 0; dx <= 1; dx++)
-        vpCoordinate.push_back(std::make_pair(row_topleft + dy, col_topleft + dx));
-
-    bool
-    DepthFusion::chiSquareTest(
-        double invD1, double invD2,
-        double var1, double var2)
-    {
-      double delta_d_squared = std::pow(invD1 - invD2, 2);
-      double compatibility = delta_d_squared / var1 + delta_d_squared / var2;
-      if (compatibility < 5.99)
-        return true;
-      else
-        return false;
-    }
-
-    bool
-    DepthFusion::studentTCompatibleTest(
-        double invD1, double invD2,
-        double var1, double var2)
-    {
-      double stdvar1 = sqrt(var1);
-      double stdvar2 = sqrt(var2);
-      double diff = fabs(invD1 - invD2);
-      if (diff < 2 * stdvar1 || diff < 2 * stdvar2)
-        return true;
-      return false;
-    }
-
-    bool
-    DepthMonoFusion::boundaryCheck(
-        double xcoor,
-        double ycoor,
-        size_t width,
-        size_t height)
-    {
-      if (xcoor < 0 || xcoor >= width || ycoor < 0 || ycoor >= height)
-        return false;
-      else
-        return true;
     }
 
     void
@@ -260,7 +197,7 @@ DepthFusion::naive_propagation(
       {
         Eigen::Matrix<double, 4, 4> T_frame_obs = T_frame_world * dp_obs[i].T_world_cam();
         DepthPoint dp_prop;
-        if (!propagate_one_point(dp_obs[i], dp_prop, T_frame_obs))
+        if (!naive_propagate_one_point(dp_obs[i], dp_prop, T_frame_obs))
           continue;
 
         // determine the four neighbouring pixels
@@ -305,6 +242,45 @@ DepthFusion::naive_propagation(
           }
         }
       }
+    }
+
+    bool
+    DepthFusion::boundaryCheck(
+        double xcoor,
+        double ycoor,
+        size_t width,
+        size_t height)
+    {
+      if (xcoor < 0 || xcoor >= width || ycoor < 0 || ycoor >= height)
+        return false;
+      else
+        return true;
+    }
+
+    bool
+    DepthFusion::chiSquareTest(
+        double invD1, double invD2,
+        double var1, double var2)
+    {
+      double delta_d_squared = std::pow(invD1 - invD2, 2);
+      double compatibility = delta_d_squared / var1 + delta_d_squared / var2;
+      if (compatibility < 5.99)
+        return true;
+      else
+        return false;
+    }
+
+    bool
+    DepthFusion::studentTCompatibleTest(
+        double invD1, double invD2,
+        double var1, double var2)
+    {
+      double stdvar1 = sqrt(var1);
+      double stdvar2 = sqrt(var2);
+      double diff = fabs(invD1 - invD2);
+      if (diff < 2 * stdvar1 || diff < 2 * stdvar2)
+        return true;
+      return false;
     }
 
     bool

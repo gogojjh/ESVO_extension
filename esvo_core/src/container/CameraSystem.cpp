@@ -146,16 +146,6 @@ namespace esvo_core
       x = x_hom.head(2) / x_hom(2);
     }
 
-<<<<<<< HEAD
-    bool 
-    PerspectiveCamera::isValidPixel(
-      const Eigen::Vector2d &p)
-    {
-      if (p(1) < 0 || p(1) >= height_ || p(0) < 0 || p(0) >= width_) 
-        return false;
-      return true;
-    }
-
     /************************************************************/
     /************************************************************/
     CameraSystem::CameraSystem(const std::string &calibInfoDir, bool bPrintCalibInfo)
@@ -165,6 +155,7 @@ namespace esvo_core
       loadCalibInfo(calibInfoDir, bPrintCalibInfo);
       computeBaseline();
     }
+    
     CameraSystem::~CameraSystem() {}
 
     void CameraSystem::computeBaseline()
@@ -253,77 +244,3 @@ namespace esvo_core
   } // namespace container
 
 } // namespace esvo_core
-=======
-void CameraSystem::loadCalibInfo(const std::string &cameraSystemDir, bool bPrintCalibInfo)
-{
-  const std::string left_cam_calib_dir(cameraSystemDir + "/left.yaml");
-  const std::string right_cam_calib_dir(cameraSystemDir + "/right.yaml");
-  YAML::Node leftCamCalibInfo = YAML::LoadFile(left_cam_calib_dir);
-  YAML::Node rightCamCalibInfo = YAML::LoadFile(right_cam_calib_dir);
-
-  // load calib (left)
-  size_t width = leftCamCalibInfo["image_width"].as<int>();
-  size_t height = leftCamCalibInfo["image_height"].as<int>();
-  std::string cameraNameLeft = leftCamCalibInfo["camera_name"].as<std::string>();
-  std::string cameraNameRight = rightCamCalibInfo["camera_name"].as<std::string>();
-  std::string distortion_model = leftCamCalibInfo["distortion_model"].as<std::string>();
-  std::vector<double> vD_left, vK_left, vRectMat_left, vP_left;
-  std::vector<double> vD_right, vK_right, vRectMat_right, vP_right;
-  std::vector<double> vT_right_left;
-
-  vD_left = leftCamCalibInfo["distortion_coefficients"]["data"].as< std::vector<double> >();
-  vK_left = leftCamCalibInfo["camera_matrix"]["data"].as< std::vector<double> >();
-  vRectMat_left = leftCamCalibInfo["rectification_matrix"]["data"].as< std::vector<double> >();
-  vP_left = leftCamCalibInfo["projection_matrix"]["data"].as< std::vector<double> >();
-
-  vD_right = rightCamCalibInfo["distortion_coefficients"]["data"].as< std::vector<double> >();
-  vK_right = rightCamCalibInfo["camera_matrix"]["data"].as< std::vector<double> >();
-  vRectMat_right = rightCamCalibInfo["rectification_matrix"]["data"].as< std::vector<double> >();
-  vP_right = rightCamCalibInfo["projection_matrix"]["data"].as< std::vector<double> >();
-
-  vT_right_left = leftCamCalibInfo["T_right_left"]["data"].as< std::vector<double> >();
-
-  cam_left_ptr_->setIntrinsicParameters(
-    width, height,
-    cameraNameLeft,
-    distortion_model,
-    vD_left, vK_left, vRectMat_left, vP_left);
-  cam_right_ptr_->setIntrinsicParameters(
-    width, height,
-    cameraNameRight,
-    distortion_model,
-    vD_right, vK_right, vRectMat_right, vP_right);
-
-  T_right_left_ = Eigen::Matrix<double,3,4,Eigen::RowMajor>(vT_right_left.data());
-
-  if(bPrintCalibInfo)
-    printCalibInfo();
-}
-
-void CameraSystem::printCalibInfo()
-{
-  LOG(INFO) << "============================================" << std::endl;
-  LOG(INFO) << "Left Camera" << std::endl;
-  LOG(INFO) << "--image_width: " << cam_left_ptr_->width_;
-  LOG(INFO) << "--image_height: " << cam_left_ptr_->height_;
-  LOG(INFO) << "--distortion model: " << cam_left_ptr_->distortion_model_;
-  LOG(INFO) << "--distortion_coefficients:\n" << cam_left_ptr_->D_;
-  LOG(INFO) << "--rectification_matrix:\n" <<  cam_left_ptr_->RectMat_;
-  LOG(INFO) << "--projection_matrix:\n" <<  cam_left_ptr_->P_;
-  LOG(INFO) << "--T_right_left:\n" <<  T_right_left_;
-
-  LOG(INFO) << "============================================" << std::endl;
-  LOG(INFO) << "Right Camera:" << std::endl;
-  LOG(INFO) << "--image_width: " << cam_right_ptr_->width_;
-  LOG(INFO) << "--image_height: " << cam_right_ptr_->height_;
-  LOG(INFO) << "--distortion model:" << cam_right_ptr_->distortion_model_;
-  LOG(INFO) << "--distortion_coefficients:\n" << cam_right_ptr_->D_;
-  LOG(INFO) << "--rectification_matrix:\n" <<  cam_right_ptr_->RectMat_;
-  LOG(INFO) << "--projection_matrix:\n" <<  cam_right_ptr_->P_;
-  LOG(INFO) << "============================================" << std::endl;
-}
-
-} // container
-
-} //esvo_core
->>>>>>> 889bdd5b53b58914308c7eb81f3e6b31f0271ecb

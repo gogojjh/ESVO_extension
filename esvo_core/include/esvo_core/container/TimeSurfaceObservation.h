@@ -21,48 +21,34 @@
 //#define TIME_SURFACE_OBSERVATION_LOG
 namespace esvo_core
 {
-using namespace tools;
-namespace container
-{
-struct TimeSurfaceObservation
-{
-  TimeSurfaceObservation(
-    cv_bridge::CvImagePtr &left,
-    cv_bridge::CvImagePtr &right,
-    Transformation &tr,
-    size_t id,
-    bool bCalcTsGradient = false)
-    : tr_(tr),
-      id_(id)
+  using namespace tools;
+  namespace container
   {
-    cv::cv2eigen(left->image, TS_left_);
-    cv::cv2eigen(right->image, TS_right_);
-
-    if (bCalcTsGradient)
+    struct TimeSurfaceObservation
     {
       TimeSurfaceObservation(
           cv_bridge::CvImagePtr &left,
           cv_bridge::CvImagePtr &right,
           Transformation &tr,
           size_t id,
-          bool bCalcSaeGradient = false)
+          bool bCalcTsGradient = false)
           : tr_(tr),
             id_(id)
       {
         cv::cv2eigen(left->image, TS_left_);
         cv::cv2eigen(right->image, TS_right_);
 
-        if (bCalcSaeGradient)
+        if (bCalcTsGradient)
         {
 #ifdef TIME_SURFACE_OBSERVATION_LOG
           TicToc tt;
           tt.tic();
 #endif
-          cv::Mat cv_dSAE_du_left, cv_dSAE_dv_left;
-          cv::Sobel(left->image, cv_dSAE_du_left, CV_64F, 1, 0);
-          cv::Sobel(left->image, cv_dSAE_dv_left, CV_64F, 0, 1);
-          cv::cv2eigen(cv_dSAE_du_left, dTS_du_left_);
-          cv::cv2eigen(cv_dSAE_dv_left, dTS_dv_left_);
+          cv::Mat cv_dTS_du_left, cv_dTS_dv_left;
+          cv::Sobel(left->image, cv_dTS_du_left, CV_64F, 1, 0);
+          cv::Sobel(left->image, cv_dTS_dv_left, CV_64F, 0, 1);
+          cv::cv2eigen(cv_dTS_du_left, dTS_du_left_);
+          cv::cv2eigen(cv_dTS_dv_left, dTS_dv_left_);
 #ifdef TIME_SURFACE_OBSERVATION_LOG
           LOG(INFO) << "@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@Sobel computation (" << id_ << ") takes " << tt.toc() << " ms.";
 #endif
@@ -88,13 +74,13 @@ struct TimeSurfaceObservation
           TicToc tt;
           tt.tic();
 #endif
-      cv::Mat cv_dTS_du_left, cv_dTS_dv_left;
-      cv::Mat cv_dTS_du_right, cv_dTS_dv_right;
-      cv::Sobel(left->image, cv_dTS_du_left, CV_64F, 1, 0);
-      cv::Sobel(left->image, cv_dTS_dv_left, CV_64F, 0, 1);
+          cv::Mat cv_dTS_du_left, cv_dTS_dv_left;
+          cv::Mat cv_dTS_du_right, cv_dTS_dv_right;
+          cv::Sobel(left->image, cv_dTS_du_left, CV_64F, 1, 0);
+          cv::Sobel(left->image, cv_dTS_dv_left, CV_64F, 0, 1);
 
-      cv::cv2eigen(cv_dTS_du_left, dTS_du_left_);
-      cv::cv2eigen(cv_dTS_dv_left, dTS_dv_left_);
+          cv::cv2eigen(cv_dTS_du_left, dTS_du_left_);
+          cv::cv2eigen(cv_dTS_dv_left, dTS_dv_left_);
 
 #ifdef TIME_SURFACE_OBSERVATION_LOG
           LOG(INFO) << "@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@Sobel computation (" << id_ << ") takes " << tt.toc() << " ms.";
@@ -196,63 +182,7 @@ struct TimeSurfaceObservation
                                 return t.toSec() < tso.first.toSec();
                               });
     }
-<<<<<<< HEAD
   } // namespace container
 } // namespace esvo_core
-=======
-  }
-
-  inline void computeTsNegativeGrad()
-  {
-    cv::Mat cv_TS_flipped_left;
-    cv::eigen2cv(TS_negative_left_, cv_TS_flipped_left);
-
-    cv::Mat cv_dFlippedTS_du_left, cv_dFlippedTS_dv_left;
-    cv::Sobel(cv_TS_flipped_left, cv_dFlippedTS_du_left, CV_64F, 1, 0);
-    cv::Sobel(cv_TS_flipped_left, cv_dFlippedTS_dv_left, CV_64F, 0, 1);
-
-    cv::cv2eigen(cv_dFlippedTS_du_left, dTS_negative_du_left_);
-    cv::cv2eigen(cv_dFlippedTS_dv_left, dTS_negative_dv_left_);
-  }
-
-  Eigen::MatrixXd TS_left_, TS_right_;
-  Eigen::MatrixXd TS_blurred_left_;
-  Eigen::MatrixXd TS_negative_left_;
-  cv_bridge::CvImagePtr cvImagePtr_left_, cvImagePtr_right_;
-  Transformation tr_;
-  Eigen::MatrixXd dTS_du_left_, dTS_dv_left_;
-  Eigen::MatrixXd dTS_negative_du_left_, dTS_negative_dv_left_;
-  size_t id_;
-};
-
-struct ROSTimeCmp
-{
-  bool operator()(const ros::Time &a, const ros::Time &b) const
-  {
-    return a.toNSec() < b.toNSec();
-  }
-};
-
-using TimeSurfaceHistory = std::map<ros::Time, TimeSurfaceObservation, ROSTimeCmp>;
-using StampedTimeSurfaceObs = std::pair<ros::Time, TimeSurfaceObservation>;
-
-inline static TimeSurfaceHistory::iterator TSHistory_lower_bound(TimeSurfaceHistory &ts_history, ros::Time &t)
-{
-  return std::lower_bound(ts_history.begin(), ts_history.end(), t,
-                          [](const std::pair<ros::Time, TimeSurfaceObservation> &tso, const ros::Time &t) {
-                            return tso.first.toSec() < t.toSec();
-                          });
-}
-
-inline static TimeSurfaceHistory::iterator TSHistory_upper_bound(TimeSurfaceHistory &ts_history, ros::Time &t)
-{
-  return std::upper_bound(ts_history.begin(), ts_history.end(), t,
-                          [](const ros::Time &t, const std::pair<ros::Time, TimeSurfaceObservation> &tso) {
-                            return t.toSec() < tso.first.toSec();
-                          });
-}
-}
-}
->>>>>>> master
 
 #endif //ESVO_CORE_CONTAINER_TIMESURFACEOBSERVATION_H

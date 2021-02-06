@@ -81,6 +81,7 @@ set(HEADERS
   include/esvo_core/core/DepthFusion.h
   include/esvo_core/core/DepthMonoFusion.h
   include/esvo_core/core/DepthRegularization.h
+  include/esvo_core/core/DepthMonoRegularization.h
   include/esvo_core/core/DepthProblem.h
   include/esvo_core/core/DepthProblemSolver.h
   include/esvo_core/core/EventBM.h
@@ -106,6 +107,7 @@ set(SOURCES
   src/core/DepthFusion.cpp
   src/core/DepthMonoFusion.cpp
   src/core/DepthRegularization.cpp
+  src/core/DepthMonoRegularization.cpp
   src/core/DepthProblem.cpp
   src/core/DepthProblemSolver.cpp
   src/core/EventBM.cpp
@@ -119,7 +121,7 @@ set(SOURCES
   src/tools/sobel.cpp
   src/tools/cayley.cpp)
 
-cs_add_library(estimator_lib ${SOURCES} ${HEADERS})
+cs_add_library(${PROJECT_NAME}_LIB ${SOURCES} ${HEADERS})
 
 #option(DEFINE_USE_INVERSE_DEPTH "Use linear spacing in inverse depth (if OFF, will use linear spacing in depth)" ON)
 #if(DEFINE_USE_INVERSE_DEPTH)
@@ -136,20 +138,20 @@ cs_add_library(emvs_lib
 # Node esvo_Mapping
 cs_add_executable(estimator src/estimator_node.cpp
     src/estimator.cpp include/esvo_core/estimator.h)
-target_link_libraries(estimator estimator_lib emvs_lib
+target_link_libraries(estimator ${PROJECT_NAME}_LIB emvs_lib
     ${catkin_LIBRARIES} ${OpenCV_LIBRARIES} yaml-cpp)
 
 # Node esvo_MonoTracking
 cs_add_executable(esvo_MonoTracking src/esvo_MonoTrackingNode.cpp
     src/esvo_MonoTracking.cpp include/esvo_core/esvo_MonoTracking.h)
-target_link_libraries(esvo_MonoTracking estimator_lib mc_lib
+target_link_libraries(esvo_MonoTracking ${PROJECT_NAME}_LIB mc_lib
     ${catkin_LIBRARIES} ${OpenCV_LIBRARIES} ${gsl_LIBRARIES} yaml-cpp)
 
 # Node esvo_Tracking
-cs_add_executable(esvo_Tracking src/esvo_TrackingNode.cpp
-    src/esvo_Tracking.cpp include/esvo_core/esvo_Tracking.h)
-target_link_libraries(esvo_Tracking ${PROJECT_NAME}_LIB
-    ${catkin_LIBRARIES} ${OpenCV_LIBRARIES} yaml-cpp)
+#cs_add_executable(esvo_Tracking src/esvo_TrackingNode.cpp
+#    src/esvo_Tracking.cpp include/esvo_core/esvo_Tracking.h)
+#target_link_libraries(esvo_Tracking ${PROJECT_NAME}_LIB
+#    ${catkin_LIBRARIES} ${OpenCV_LIBRARIES} yaml-cpp)
 
 # Node esvo_MVS (newly added in branch "mvs")
 cs_add_executable(esvo_MVStereo

@@ -13,6 +13,7 @@
 #include <esvo_core/container/CameraSystem.h>
 #include <esvo_core/container/DepthMap.h>
 #include <esvo_core/container/EventMatchPair.h>
+#include <esvo_core/container/TimeSurfaceObservation.h>
 #include <esvo_core/core/DepthFusion.h>
 #include <esvo_core/core/DepthRegularization.h>
 #include <esvo_core/core/DepthProblem.h>
@@ -48,6 +49,7 @@ enum eMVStereoMode
   BM_PLUS_ESTIMATION,       //3 (this one is ESVO's mapping method, namely BM + nonliear opt.)
   PURE_SEMI_GLOBAL_MATCHING //4 (this one implements SGM [45])
 };
+
 class esvo_MVStereo
 {
   public:
@@ -239,6 +241,7 @@ class esvo_MVStereo
   // For counting the total number of fusion
   size_t TotalNumFusion_;
 };
+
 }
 
 #endif //ESVO_CORE_ESVO_MVSTEREO_H
