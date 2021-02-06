@@ -25,8 +25,8 @@
 #include <esvo_core/DVS_MappingStereoConfig.h>
 #include <dynamic_reconfigure/server.h>
 
-#include "emvs_core/MapperEMVS.hpp"
-#include "emvs_core/Trajectory.hpp"
+#include <emvs_core/MapperEMVS.hpp>
+#include <emvs_core/Trajectory.hpp>
 
 #include <opencv2/core/core.hpp>
 #include <opencv2/imgproc/imgproc.hpp>
@@ -51,8 +51,8 @@ enum eMVStereoMode
   EM_PLUS_ESTIMATION,        //2 (GTS [26] + nonliear opt.)
   BM_PLUS_ESTIMATION,        //3 (this one is ESVO's mapping method, namely BM + nonliear opt.)
   PURE_SEMI_GLOBAL_MATCHING, //4 (this one implements SGM [45])
-  PURE_EMVS,
-  PURE_EMVS_PLUS_ESTIMATION
+  PURE_EMVS,                 //5 (this one implements EMVS [33])
+  PURE_EMVS_PLUS_ESTIMATION  //6 (this one implements EMVS [33] + nonliear opt.)
 };
 
 class esvo_MVStereo
@@ -256,7 +256,7 @@ class esvo_MVStereo
   EMVS::OptionsDepthMap emvs_opts_depth_map_;
   EMVS::OptionsPointCloud emvs_opts_pc_;
 
-  std::map<ros::Time, Eigen::Matrix4d> mAllPoses_;
+  std::map<ros::Time, Eigen::Matrix4d> mAllPoses_; // save the historical poses for mapping
   std::vector<std::pair<ros::Time, Eigen::Matrix4d>> mVirtualPoses_;
   EMVS::LinearTrajectory trajectory_;
   bool isKeyframe_;

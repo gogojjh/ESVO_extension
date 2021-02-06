@@ -506,7 +506,6 @@ void esvo_MVStereo::MappingAtTime(const ros::Time& t)
         coor = camSysPtr_->cam_left_ptr_->getRectifiedUndistortedCoordinate(vDenoisedEventsPtr_left_[i]->x, vDenoisedEventsPtr_left_[i]->y);
       else
         coor = Eigen::Vector2d(vDenoisedEventsPtr_left_[i]->x, vDenoisedEventsPtr_left_[i]->y);
-      // LOG(INFO) << coor.transpose() << " " << vDenoisedEventsPtr_left_[i]->x << " " << vDenoisedEventsPtr_left_[i]->y;
       Eigen::Vector4d tmp_coor;
       tmp_coor[0] = coor[0];
       tmp_coor[1] = coor[1];
@@ -518,6 +517,9 @@ void esvo_MVStereo::MappingAtTime(const ros::Time& t)
     // LOG(INFO) << mVirtualPoses_.front().first.toSec() << " " << vEdgeletCoordinates.front()[2];
     // LOG(INFO) << mVirtualPoses_.back().first.toSec() << " " << vEdgeletCoordinates.back()[2];
 
+    double t_solve, t_fusion, t_optimization, t_regularization;
+
+    tt_mapping.tic();
     if (isKeyframe_)
     {
       // LOG(INFO) << "insert a keyframe";
@@ -538,35 +540,119 @@ void esvo_MVStereo::MappingAtTime(const ros::Time& t)
 
     cv::Mat depth_map, confidence_map, semidense_mask;
     emvs_mapper_.getDepthMapFromDSI(depth_map, confidence_map, semidense_mask, emvs_opts_depth_map_, meanDepth_);
-    // LOG(INFO) << "get depth map";
     if (emvs_mapper_.accumulate_events_ >= 2e5) // only enough point cloud to extract map
     {
-      std::vector<DepthPoint> &vdp = dqvDepthPoints_.back(); // depth points on the current stereo observations
+      std::vector<DepthPoint> &vdp = dqvDepthPoints_.back(); // depth points on the current observations
       emvs_mapper_.getDepthPoint(depth_map, confidence_map, semidense_mask, vdp);
-      while (dqvDepthPoints_.size() > 1) 
-        dqvDepthPoints_.pop_front();
     }
-    for (auto it = dqvDepthPoints_.rbegin(); it != dqvDepthPoints_.rend(); it++)
-      dFusor_.naive_propagation(*it, depthFramePtr_);
+    t_solve = tt_mapping.toc();
 
-    if (msm_ == PURE_EMVS || msm_ == PURE_EMVS_PLUS_ESTIMATION)
+    if (msm_ == PURE_EMVS)
     {
-      std::thread tPublishDSIResult(&esvo_MVStereo::publishDSIResults, this,
-                                    t, semidense_mask, depth_map, confidence_map);
-      tPublishDSIResult.detach();
+      if (FusionStrategy_ == "CONST_POINTS")
+      {
+        size_t numFusionPoints = 0;
+        tt_mapping.tic();
+        for (size_t n = 0; n < dqvDepthPoints_.size(); n++)
+          numFusionPoints += dqvDepthPoints_[n].size();
+        while (numFusionPoints > 1.5 * maxNumFusionPoints_)
+        {
+          dqvDepthPoints_.pop_front();
+          numFusionPoints = 0;
+          for (size_t n = 0; n < dqvDepthPoints_.size(); n++)
+            numFusionPoints += dqvDepthPoints_[n].size();
+        }
+      }
+      else if (FusionStrategy_ == "CONST_FRAMES") // (strategy 2: const number of frames)
+      {
+        tt_mapping.tic();
+        while (dqvDepthPoints_.size() > maxNumFusionFrames_)
+          dqvDepthPoints_.pop_front();
+      }
+      else
+      {
+        LOG(INFO) << "Invalid FusionStrategy is assigned.";
+        exit(-1);
+      }
+      for (auto it = dqvDepthPoints_.rbegin(); it != dqvDepthPoints_.rend(); it++)
+        dFusor_.naive_propagation(*it, depthFramePtr_);
+    } 
+    else // TODO: since the depth point is not properly modeled as Guassian distribution
+    {
+      if (FusionStrategy_ == "CONST_POINTS")
+      {
+        size_t numFusionPoints = 0;
+        tt_mapping.tic();
+        for (size_t n = 0; n < dqvDepthPoints_.size(); n++)
+          numFusionPoints += dqvDepthPoints_[n].size();
+        while (numFusionPoints > 1.5 * maxNumFusionPoints_)
+        {
+          dqvDepthPoints_.pop_front();
+          numFusionPoints = 0;
+          for (size_t n = 0; n < dqvDepthPoints_.size(); n++)
+            numFusionPoints += dqvDepthPoints_[n].size();
+        }
+      }
+      else if (FusionStrategy_ == "CONST_FRAMES") // (strategy 2: const number of frames)
+      {
+        tt_mapping.tic();
+        while (dqvDepthPoints_.size() > maxNumFusionFrames_)
+          dqvDepthPoints_.pop_front();
+      }
+      else
+      {
+        LOG(INFO) << "Invalid FusionStrategy is assigned.";
+        exit(-1);
+      }
 
-      // visualization
-      std::thread tPublishMappingResult(&esvo_MVStereo::publishMappingResults, this,
-                                        depthFramePtr_->dMap_, depthFramePtr_->T_world_frame_, t);
-      tPublishMappingResult.detach();
-      return;
+      // apply fusion and count the total number of fusion.
+      size_t numFusionCount = 0;
+      for (auto it = dqvDepthPoints_.rbegin(); it != dqvDepthPoints_.rend(); it++)
+      {
+        numFusionCount += dFusor_.update(*it, depthFramePtr_, fusion_radius_);
+        //    LOG(INFO) << "numFusionCount: " << numFusionCount;
+      }
+
+      TotalNumFusion_ += numFusionCount;
+      depthFramePtr_->dMap_->clean(
+          pow(stdVar_vis_threshold_, 2), age_vis_threshold_, invDepth_max_range_, invDepth_min_range_);
+      t_fusion = tt_mapping.toc();
+
+      // regularization
+      if (bRegularization_)
+      {
+        tt_mapping.tic();
+        dRegularizor_.apply(depthFramePtr_->dMap_);
+        t_regularization = tt_mapping.toc();
+      }
+      t_optimization = t_solve + t_fusion + t_regularization;
+      t_overall_count += t_optimization;
+
+      // To save the depth result, set it to true.
+      if (false)
+      {
+        // For quantitative comparison.
+        std::string baseDir(base_fold);
+        std::string saveDir(baseDir);
+        saveDepthMap(depthFramePtr_->dMap_, saveDir, t);
+      }
     }
+
+    std::thread tPublishDSIResult(&esvo_MVStereo::publishDSIResults, this,
+                                  t, semidense_mask, depth_map, confidence_map);
+    tPublishDSIResult.detach();
+
+    // visualization
+    std::thread tPublishMappingResult(&esvo_MVStereo::publishMappingResults, this,
+                                      depthFramePtr_->dMap_, depthFramePtr_->T_world_frame_, t);
+    tPublishMappingResult.detach();
+    return;
   }
 
   /**************************************************************/
   /*************  Nonlinear Optimization & Fusion ***************/
   /**************************************************************/
-  if(msm_ == EM_PLUS_ESTIMATION || msm_ == BM_PLUS_ESTIMATION)
+  if (msm_ == EM_PLUS_ESTIMATION || msm_ == BM_PLUS_ESTIMATION)
   {
     double t_optimization = 0;
     double t_solve, t_fusion, t_regularization;
@@ -820,6 +906,7 @@ bool esvo_MVStereo::dataTransferring()
 #endif
   }
 
+  // EMVS
   if (msm_ == PURE_EMVS || msm_ == PURE_EMVS_PLUS_ESTIMATION)
   {
     // copy all involved events' pointers
@@ -904,24 +991,27 @@ void esvo_MVStereo::stampedPoseCallback(const geometry_msgs::PoseStampedConstPtr
   tf::StampedTransform st(tf, ps_msg->header.stamp, ps_msg->header.frame_id, dvs_frame_id_.c_str());
   tf_->setTransform(st);
 
-  // HARDCODED: The GT pose of rpg dataset is the pose of stereo rig, namely that of the marker.
-  // add pose to mAllPoses_
-  Eigen::Matrix4d T_world_marker = Eigen::Matrix4d::Identity();
-  T_world_marker.topLeftCorner<3, 3>() = Eigen::Quaterniond(ps_msg->pose.orientation.w,
-                                                            ps_msg->pose.orientation.x,
-                                                            ps_msg->pose.orientation.y,
-                                                            ps_msg->pose.orientation.z)
-                                             .toRotationMatrix();
-  T_world_marker.topRightCorner<3, 1>() = Eigen::Vector3d(ps_msg->pose.position.x,
-                                                          ps_msg->pose.position.y,
-                                                          ps_msg->pose.position.z);
-  Eigen::Matrix4d T_marker_cam;
-  T_marker_cam << 5.363262328777285e-01, -1.748374625145743e-02, -8.438296573030597e-01, -7.009849865398374e-02,
-      8.433577587813513e-01, -2.821937531845164e-02, 5.366109927684415e-01, 1.881333563905305e-02,
-      -3.319431623758162e-02, -9.994488408486204e-01, -3.897382049768972e-04, -6.966829200678797e-02,
-      0, 0, 0, 1;
-  Eigen::Matrix4d T_world_cam = T_world_marker * T_marker_cam;
-  mAllPoses_.emplace(ps_msg->header.stamp, T_world_cam);
+  if (msm_ == PURE_EMVS || msm_ == PURE_EMVS_PLUS_ESTIMATION)
+  {
+    // HARDCODED: The GT pose of rpg dataset is the pose of stereo rig, namely that of the marker.
+    // add pose to mAllPoses_
+    Eigen::Matrix4d T_world_marker = Eigen::Matrix4d::Identity();
+    T_world_marker.topLeftCorner<3, 3>() = Eigen::Quaterniond(ps_msg->pose.orientation.w,
+                                                              ps_msg->pose.orientation.x,
+                                                              ps_msg->pose.orientation.y,
+                                                              ps_msg->pose.orientation.z)
+                                              .toRotationMatrix();
+    T_world_marker.topRightCorner<3, 1>() = Eigen::Vector3d(ps_msg->pose.position.x,
+                                                            ps_msg->pose.position.y,
+                                                            ps_msg->pose.position.z);
+    Eigen::Matrix4d T_marker_cam;
+    T_marker_cam << 5.363262328777285e-01, -1.748374625145743e-02, -8.438296573030597e-01, -7.009849865398374e-02,
+        8.433577587813513e-01, -2.821937531845164e-02, 5.366109927684415e-01, 1.881333563905305e-02,
+        -3.319431623758162e-02, -9.994488408486204e-01, -3.897382049768972e-04, -6.966829200678797e-02,
+        0, 0, 0, 1;
+    Eigen::Matrix4d T_world_cam = T_world_marker * T_marker_cam;
+    mAllPoses_.emplace(ps_msg->header.stamp, T_world_cam);
+  }
 }
 
 // return the pose of the left event cam at time t.

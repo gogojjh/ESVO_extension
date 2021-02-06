@@ -8,10 +8,10 @@ fusion_radius: 0
 FUSION_STRATEGY: "CONST_FRAMES" #"CONST_FRAMES" or "CONST_POINTS"
 maxNumFusionFrames: 40
 maxNumFusionPoints: 5000
-Denoising: True
+Denoising: False
 SmoothTimeSurface: False
 Regularization: True
-PROCESS_EVENT_NUM: 1000
+PROCESS_EVENT_NUM: 10000
 TS_HISTORY_LENGTH: 100
 mapping_rate_hz: 20
 # DepthProblemConfig
