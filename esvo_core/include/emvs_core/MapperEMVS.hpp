@@ -63,11 +63,12 @@ namespace EMVS
 	public:
 		OptionsDepthMap(const int &adaptive_threshold_kernel_size,
 						const double &adaptive_threshold_c,
-						const int &median_filter_size) : adaptive_threshold_kernel_size_(adaptive_threshold_kernel_size),
+						const int &median_filter_size,
+						const int &contrast_threshold) : adaptive_threshold_kernel_size_(adaptive_threshold_kernel_size),
 														 adaptive_threshold_c_(adaptive_threshold_c),
-														 median_filter_size_(median_filter_size)
+														 median_filter_size_(median_filter_size),
+														 contrast_threshold_(contrast_threshold)
 		{
-
 		}
 
 		// Adaptive Gaussian Thresholding parameters
@@ -75,6 +76,8 @@ namespace EMVS
 		double adaptive_threshold_c_;
 		// Kernel size of median filter
 		int median_filter_size_;
+		// contrast Thresholding parameters to remove outliers
+		int contrast_threshold_;
 	};
 
 	struct OptionsPointCloud
@@ -95,9 +98,7 @@ namespace EMVS
 	{
 	public:
 		MapperEMVS() {}
-
-		void configDSI(const esvo_core::container::PerspectiveCamera::Ptr &camPtr,
-					   ShapeDSI &dsi_shape);
+		MapperEMVS(const esvo_core::container::PerspectiveCamera::Ptr &camPtr, ShapeDSI &dsi_shape);
 
 		void initializeDSI(const Eigen::Matrix4d &T_w_rv);
 
@@ -110,10 +111,17 @@ namespace EMVS
 								const OptionsDepthMap &options_depth_map,
 								double &mean_depth);
 
+		void getProbMapFromDSI(cv::Mat &mean_map, cv::Mat &variance_map);
+
 		void getDepthPoint(const cv::Mat &depth_map,
 						   const cv::Mat &confidence_map,
 						   const cv::Mat &mask,
 						   std::vector<esvo_core::container::DepthPoint> &vdp);
+
+		void getDepthPointFromMean(const cv::Mat &mean_map,
+								   const cv::Mat &variance_map,
+								   const cv::Mat &mask,
+								   std::vector<esvo_core::container::DepthPoint> &vdp);
 
 		void getPointcloud(const cv::Mat &depth_map,
 						   const cv::Mat &mask,
@@ -143,7 +151,7 @@ namespace EMVS
 		int height_;
 
 		// (Constant) parameters that define the DSI (size and intrinsics)
-		ShapeDSI dsi_shape_;
+		// ShapeDSI dsi_shape_;
 
 		// Precomputed vector of num_depth_cells_ inverse depths,
 		// uniformly sampled in inverse depth space

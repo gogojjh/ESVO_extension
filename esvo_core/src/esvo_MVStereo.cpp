@@ -36,6 +36,8 @@ namespace esvo_core
             tools::param(pnh_, "Tdist_nu", 0.0),
             tools::param(pnh_, "Tdist_scale", 0.0),
             tools::param(pnh_, "ITERATION_OPTIMIZATION", 10))),
+        invDepth_min_range_(tools::param(pnh_, "invDepth_min_range", 0.16)),
+        invDepth_max_range_(tools::param(pnh_, "invDepth_max_range", 2.0)),
         dpSolver_(camSysPtr_, dpConfigPtr_, NUMERICAL, NUM_THREAD_MAPPING),
         dFusor_(camSysPtr_, dpConfigPtr_),
         dRegularizor_(dpConfigPtr_),
@@ -44,11 +46,18 @@ namespace esvo_core
         pc_(new PointCloud()),
         depthFramePtr_(new DepthFrame(camSysPtr_->cam_left_ptr_->height_, camSysPtr_->cam_left_ptr_->width_)),
         // MapperEMVS
+        emvs_dsi_shape_(tools::param(pnh_, "opts_dim_x", 0),
+                        tools::param(pnh_, "opts_dim_y", 0),
+                        tools::param(pnh_, "opts_dim_z", 100),
+                        1.0 / invDepth_max_range_, 1.0 / invDepth_min_range_, 0.0),
         emvs_opts_depth_map_(tools::param(pnh_, "opts_depth_map_kernal_size", 5),
                              tools::param(pnh_, "opts_depth_map_threshold_c", 5),
-                             tools::param(pnh_, "opts_depth_map_median_filter_size", 5)),
+                             tools::param(pnh_, "opts_depth_map_median_filter_size", 5),
+                             tools::param(pnh_, "opts_depth_map_contrast_threshold", 70)),
         emvs_opts_pc_(tools::param(pnh_, "opts_pc_radius_search", 0.05),
-                      tools::param(pnh_, "opts_pc_min_num_neighbors", 3))
+                      tools::param(pnh_, "opts_pc_min_num_neighbors", 3)),
+        emvs_mapper_(camSysPtr_->cam_left_ptr_, emvs_dsi_shape_)
+
   {
     // frame id
     dvs_frame_id_ = tools::param(pnh_, "dvs_frame_id", std::string("dvs"));
@@ -57,8 +66,6 @@ namespace esvo_core
 
     /**** online parameters ***/
     // mapping parameters
-    invDepth_min_range_ = tools::param(pnh_, "invDepth_min_range", 0.16);
-    invDepth_max_range_ = tools::param(pnh_, "invDepth_max_range", 2.0);
     patch_area_ = tools::param(pnh_, "patch_size_X", 25) * tools::param(pnh_, "patch_size_Y", 25);
     residual_vis_threshold_ = tools::param(pnh_, "residual_vis_threshold", 15);
     cost_vis_threshold_ = pow(residual_vis_threshold_, 2) * patch_area_;
@@ -174,11 +181,6 @@ namespace esvo_core
     KEYFRAME_ORIENTATION_DIS_ = tools::param(pnh_, "KEYFRAME_ORIENTATION_DIS", 5); // deg
 
     // DSI_Mapper configure
-    emvs_dsi_shape_ = EMVS::ShapeDSI(tools::param(pnh_, "opts_dim_x", 0),
-                                     tools::param(pnh_, "opts_dim_y", 0),
-                                     tools::param(pnh_, "opts_dim_z", 100),
-                                     1.0 / invDepth_max_range_, 1.0 / invDepth_min_range_, 0.0),
-    emvs_mapper_.configDSI(camSysPtr_->cam_left_ptr_, emvs_dsi_shape_);
     emvs_dsi_shape_.printDSIInfo();
 
     isKeyframe_ = false;
@@ -190,8 +192,11 @@ namespace esvo_core
     depthMap_pub_ = it_.advertise("DSI_Depth_Map", 1);
     confidenceMap_pub_ = it_.advertise("DSI_Confidence_Map", 1);
     semiDenseMask_pub_ = it_.advertise("DSI_Semi_Dense_Mask", 1);
+    varianceMap_pub_ = it_.advertise("DSI_Variance_Map", 1);
     EMVS_Accu_event_ = tools::param(pnh_, "EMVS_Accu_event", 2e5);
     SAVE_RESULT_ = tools::param(pnh_, "SAVE_RESULT", false);
+
+    T_world_map_.setIdentity();
   }
 
   esvo_MVStereo::~esvo_MVStereo()
@@ -540,10 +545,13 @@ void esvo_MVStereo::MappingAtTime(const ros::Time& t)
 
     cv::Mat depth_map, confidence_map, semidense_mask;
     emvs_mapper_.getDepthMapFromDSI(depth_map, confidence_map, semidense_mask, emvs_opts_depth_map_, meanDepth_);
+    cv::Mat mean_map, variance_map;
+    emvs_mapper_.getProbMapFromDSI(mean_map, variance_map);
     if (emvs_mapper_.accumulate_events_ >= EMVS_Accu_event_) // only enough point cloud to extract map
     {
       std::vector<DepthPoint> &vdp = dqvDepthPoints_.back(); // depth points on the current observations
       emvs_mapper_.getDepthPoint(depth_map, confidence_map, semidense_mask, vdp);
+      // emvs_mapper_.getDepthPointFromMean(mean_map, variance_map, semidense_mask, vdp);
     }
     t_solve = tt_mapping.toc();
 
@@ -638,13 +646,15 @@ void esvo_MVStereo::MappingAtTime(const ros::Time& t)
     }
 
     std::thread tPublishDSIResult(&esvo_MVStereo::publishDSIResults, this,
-                                  t, semidense_mask, depth_map, confidence_map);
+                                  t, semidense_mask, depth_map, confidence_map, variance_map);
     tPublishDSIResult.detach();
 
     // visualization
     std::thread tPublishMappingResult(&esvo_MVStereo::publishMappingResults, this,
                                       depthFramePtr_->dMap_, depthFramePtr_->T_world_frame_, t);
     tPublishMappingResult.detach();
+
+    LOG_EVERY_N(INFO, 10) << "Depth point size: " << depthFramePtr_->dMap_->size(); // 4000
 
     // To save the depth result, set it to true.
     if (SAVE_RESULT_)
@@ -985,7 +995,7 @@ void esvo_MVStereo::stampedPoseCallback(const geometry_msgs::PoseStampedConstPtr
     }
   }
 
-  // // add pose to tf
+  // add pose to tf
   // tf::Transform tf(
   //     tf::Quaternion(
   //         ps_msg->pose.orientation.x,
@@ -1018,11 +1028,13 @@ void esvo_MVStereo::stampedPoseCallback(const geometry_msgs::PoseStampedConstPtr
       -3.319431623758162e-02, -9.994488408486204e-01, -3.897382049768972e-04, -6.966829200678797e-02,
       0, 0, 0, 1;
   Eigen::Matrix4d T_world_cam = T_world_marker * T_marker_cam;
-  static Eigen::Matrix4d T_world_map_ = Eigen::Matrix4d::Identity();
+#ifdef ESVO_MVSTEREO_TRACKING_DEBUG
   if (T_world_map_ == Eigen::Matrix4d::Identity())
     T_world_map_ = T_world_cam;
-
   Eigen::Matrix4d T_map_cam = T_world_map_.inverse() * T_world_cam;
+#else
+  Eigen::Matrix4d T_map_cam = T_world_cam;
+#endif
   Eigen::Matrix3d R_map_cam = T_map_cam.topLeftCorner<3, 3>();
   Eigen::Quaterniond q_map_cam(R_map_cam);
   Eigen::Vector3d t_map_cam = T_map_cam.topRightCorner<3, 1>();
@@ -1040,7 +1052,6 @@ void esvo_MVStereo::stampedPoseCallback(const geometry_msgs::PoseStampedConstPtr
           t_map_cam.z()));
   tf::StampedTransform st(tf, ps_msg->header.stamp, ps_msg->header.frame_id, dvs_frame_id_.c_str());
   tf_->setTransform(st);
-
   if (msm_ == PURE_EMVS || msm_ == PURE_EMVS_PLUS_ESTIMATION)
   {
     // add pose to mAllPoses_
@@ -1221,6 +1232,8 @@ void esvo_MVStereo::reset()
   std::thread MappingThread(&esvo_MVStereo::MappingLoop, this,
                             std::move(mapping_thread_promise_), std::move(reset_future_));
   MappingThread.detach();
+
+  T_world_map_.setIdentity();
 }
 
 void esvo_MVStereo::onlineParameterChangeCallback(DVS_MappingStereoConfig &config, uint32_t level)
@@ -1302,7 +1315,8 @@ void esvo_MVStereo::onlineParameterChangeCallback(DVS_MappingStereoConfig &confi
 }
 
 void esvo_MVStereo::publishDSIResults(const ros::Time &t, const cv::Mat &semiDenseMask,
-                                      const cv::Mat &depthMap, const cv::Mat &confidenceMap)
+                                      const cv::Mat &depthMap, const cv::Mat &confidenceMap,
+                                      const cv::Mat &varianceMap)
 {
   publishImage(255 * semiDenseMask, t, semiDenseMask_pub_, "mono8");
 
@@ -1317,6 +1331,10 @@ void esvo_MVStereo::publishDSIResults(const ros::Time &t, const cv::Mat &semiDen
   cv::Mat confidenceMap255;
   cv::normalize(confidenceMap, confidenceMap255, 0, 255.0, cv::NORM_MINMAX, CV_8UC1);
   publishImage(confidenceMap255, t, confidenceMap_pub_, "mono8");
+
+  cv::Mat varianceMap255;
+  cv::normalize(varianceMap, varianceMap255, 0, 255.0, cv::NORM_MINMAX, CV_8UC1);
+  publishImage(varianceMap255, t, varianceMap_pub_, "mono8");
 }
 
 void esvo_MVStereo::publishMappingResults(

@@ -22,15 +22,12 @@ namespace esvo_core
     void DepthRegularization::apply(DepthMap::Ptr &depthMapPtr)
     {
       DepthMap &dm = *depthMapPtr.get();
-
       DepthMap dmTmp(dm.rows(), dm.cols());
-
       DepthMap::iterator it = dm.begin();
       while (it != dm.end()) // traverse all map points
       {
         dmTmp.set(it->row(), it->col(), *it);
         DepthPoint &newDp = dmTmp.get(it->row(), it->col());
-
         if (it->valid())
         {
           //get the valid neighbourhood pixels

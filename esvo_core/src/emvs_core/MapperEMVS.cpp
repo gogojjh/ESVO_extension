@@ -5,37 +5,8 @@
 
 namespace EMVS
 {
-	void MapperEMVS::configDSI(const esvo_core::container::PerspectiveCamera::Ptr &camPtr,
-							   ShapeDSI &dsi_shape)
+	MapperEMVS::MapperEMVS(const esvo_core::container::PerspectiveCamera::Ptr &camPtr, ShapeDSI &dsi_shape)
 	{
-		// CHECK_GT(dsi_shape.min_depth_, 0.0);
-		// CHECK_GT(dsi_shape.max_depth_, dsi_shape.min_depth_);
-		// depths_vec_ = TypeDepthVector(float(dsi_shape.min_depth_), float(dsi_shape.max_depth_), float(dsi_shape.dimZ_));
-		// raw_depths_vec_ = depths_vec_.getDepthVector();
-		// dsi_shape.dimX_ = (dsi_shape.dimX_ > 0) ? dsi_shape.dimX_ : camera_ptr_->imageWidth();
-		// dsi_shape.dimY_ = (dsi_shape.dimY_ > 0) ? dsi_shape.dimY_ : camera_ptr_->imageHeight();
-		// dsi_shape.fov_ = (dsi_shape.fov_ > 0) ? dsi_shape.fov_ : 45.0; // using event camera's fov
-		// camera_virtual_params_ = std::vector<double>{0, 0, 0, 0,
-		// 											 camera_params_[4],
-		// 											 camera_params_[4],
-		// 											 0.5 * dsi_shape.dimX_,
-		// 											 0.5 * dsi_shape.dimY_};
-		// camera_virtual_ptr_->readParameters(camera_virtual_params_);
-		// K_ << camera_params_[4], 0.0, camera_params_[6],
-		// 	0.0, camera_params_[5], camera_params_[7],
-		// 	0.0, 0.0, 1.0;
-		// K_virtual_ << camera_virtual_params_[4], 0.0, camera_virtual_params_[6],
-		// 	0.0, camera_virtual_params_[5], camera_virtual_params_[7],
-		// 	0.0, 0.0, 1.0;
-		// dsi_ = Grid3D(dsi_shape.dimX_, dsi_shape.dimY_, dsi_shape.dimZ_);
-		// std::cout << camera_ptr_->parametersToString() << std::endl;
-		// std::cout << camera_virtual_ptr_->parametersToString() << std::endl;
-
-		// width_ = camera_ptr_->imageWidth();
-		// height_ = camera_ptr_->imageHeight();
-		// camera_ptr_->writeParameters(camera_params_);
-		// precomputeRectifiedPoints();
-
 		width_ = camPtr->width_;
 		height_ = camPtr->height_;
 
@@ -169,7 +140,7 @@ namespace EMVS
 					float X = (event_locations_z0[i][0] * a + bx) / d;
 					float Y = (event_locations_z0[i][1] * a + by) / d;
 					// Bilinear voting
-					dsi_.accumulateGridValueAt(X, Y, pgrid);
+					dsi_.accumulateGridValueAt(X, Y, pgrid); // add the grid by linear interpolation
 				}
 			}
 		}
@@ -273,6 +244,50 @@ namespace EMVS
 			}
 			if (depth_cnt != 0)
 				mean_depth /= depth_cnt;
+
+			// remove outliers by checking the voting on a patch
+			size_t patchSize = 3;
+			for (size_t y = 0; y < confidence_map.rows / patchSize; y++)
+			{
+				for (size_t x = 0; x < confidence_map.cols / patchSize; x++)
+				{
+					cv::Rect roi(x * patchSize, y * patchSize, patchSize, patchSize);
+					double contrast = cv::norm(confidence_map(roi), cv::NORM_L2SQR);
+					if (contrast <= options_depth_map.contrast_threshold_)
+						mask(roi).setTo(cv::Scalar(0));
+				}
+			}
+		}
+
+		void MapperEMVS::getProbMapFromDSI(cv::Mat &mean_map, cv::Mat &variance_map)
+		{
+			int dimX, dimY, dimZ;
+			dsi_.getDimensions(&dimX, &dimY, &dimZ);
+			mean_map = cv::Mat(dimY, dimX, CV_32FC1); // (y,x) as in images
+			variance_map = cv::Mat(dimY, dimX, CV_32FC1);
+			
+			std::vector<float> grid_vals_vec(dimZ);
+			for (unsigned int v = 0; v < dimY; v++)
+			{
+				for (unsigned int u = 0; u < dimX; u++)
+				{
+					for (unsigned int k = 0; k < dimZ; ++k)
+						grid_vals_vec.at(k) = dsi_.getGridValueAt(u, v, k);
+
+					float sum = std::accumulate(grid_vals_vec.begin(), grid_vals_vec.end(), 0);
+					float mean = 0.0;
+					float variance = 0.0;
+					for (unsigned int k = 0; k < dimZ; ++k)
+					{
+						float inv_depth = 1.0 / depths_vec_.cellIndexToDepth(k);
+						mean += grid_vals_vec.at(k) / sum * inv_depth;
+						variance += grid_vals_vec.at(k) / sum * inv_depth * inv_depth;
+					}
+					variance -= mean * mean;
+					mean_map.at<float>(v, u) = mean;
+					variance_map.at<float>(v, u) = variance;
+				}
+			}		
 		}
 
 		void MapperEMVS::getDepthPoint(const cv::Mat &depth_map,
@@ -301,6 +316,43 @@ namespace EMVS
 						p_cam = xyz_rv.cast<double>();
 						dp.update_p_cam(p_cam);
 						dp.update(1.0 / xyz_rv.z(), var_pseudo);
+						// dp.update_confidence(1.0 / xyz_rv.z(), static_cast<double>(confidence_map.at<float>(y, x)));
+						dp.residual() = 0.0;
+						dp.updatePose(T_w_rv_);
+						dp.age() = 1;
+						vdp.push_back(dp);
+					}
+				}
+			}
+		}
+
+		void MapperEMVS::getDepthPointFromMean(const cv::Mat &mean_map,
+											   const cv::Mat &variance_map,
+											   const cv::Mat &mask,
+											   std::vector<esvo_core::container::DepthPoint> &vdp)
+		{
+			vdp.clear();
+			for (size_t y = 0; y < mean_map.rows; ++y)
+			{
+				for (size_t x = 0; x < mean_map.cols; ++x)
+				{
+					if (mask.at<uint8_t>(y, x) > 0)
+					{
+						Eigen::Vector3f p(x, y, 1);
+						Eigen::Vector3f P = K_virtual_.inverse() * p;
+						Eigen::Vector3f xyz_rv = (P / P.z() / mean_map.at<float>(y, x));
+						if (xyz_rv.z() <= 1e-6)
+							continue;
+
+						double var_pseudo = 0; //pow(stdVar_vis_threshold_*0.99,2);
+						esvo_core::container::DepthPoint dp(x, y);
+						Eigen::Vector2d p_img(x * 1.0, y * 1.0);
+						dp.update_x(p_img);
+						Eigen::Vector3d p_cam;
+						p_cam = xyz_rv.cast<double>();
+						dp.update_p_cam(p_cam);
+						dp.update(1.0 / xyz_rv.z(), var_pseudo);
+						// dp.update(1.0 / xyz_rv.z(), double(variance_map.at<float>(y, x)));
 						// dp.update_confidence(1.0 / xyz_rv.z(), static_cast<double>(confidence_map.at<float>(y, x)));
 						dp.residual() = 0.0;
 						dp.updatePose(T_w_rv_);

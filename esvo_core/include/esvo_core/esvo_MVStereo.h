@@ -41,6 +41,8 @@
 #include <pcl/point_types.h>
 #include <pcl_ros/point_cloud.h>
 
+#define ESVO_MVSTEREO_TRACKING_DEBUG
+
 namespace esvo_core
 {
 using namespace core;
@@ -251,12 +253,13 @@ class esvo_MVStereo
   // EMVS_Mapping
   void insertKeyframe();
   void publishDSIResults(const ros::Time &t, const cv::Mat &semiDenseMask,
-                         const cv::Mat &depthMap, const cv::Mat &confidenceMap);
+                         const cv::Mat &depthMap, const cv::Mat &confidenceMap,
+                         const cv::Mat &varianceMap);
 
-  EMVS::MapperEMVS emvs_mapper_;
   EMVS::ShapeDSI emvs_dsi_shape_;
   EMVS::OptionsDepthMap emvs_opts_depth_map_;
   EMVS::OptionsPointCloud emvs_opts_pc_;
+  EMVS::MapperEMVS emvs_mapper_;
 
   std::map<ros::Time, Eigen::Matrix4d> mAllPoses_; // save the historical poses for mapping
   std::vector<std::pair<ros::Time, Eigen::Matrix4d>> mVirtualPoses_;
@@ -267,10 +270,12 @@ class esvo_MVStereo
 
   double meanDepth_;
   double KEYFRAME_LINEAR_DIS_, KEYFRAME_ORIENTATION_DIS_;
-  image_transport::Publisher depthMap_pub_, confidenceMap_pub_, semiDenseMask_pub_;
+  image_transport::Publisher depthMap_pub_, confidenceMap_pub_, semiDenseMask_pub_, varianceMap_pub_;
   int EMVS_Accu_event_;
 
   bool SAVE_RESULT_;
+
+  Eigen::Matrix4d T_world_map_;
 };
 
 }
