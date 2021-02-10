@@ -549,8 +549,8 @@ void esvo_MVStereo::MappingAtTime(const ros::Time& t)
     emvs_mapper_.getProbMapFromDSI(mean_map, variance_map);
     if (emvs_mapper_.accumulate_events_ >= EMVS_Accu_event_) // only enough point cloud to extract map
     {
+      emvs_mapper_.getDepthPoint(depth_map, confidence_map, semidense_mask, variance_map, vdp);
       std::vector<DepthPoint> &vdp = dqvDepthPoints_.back(); // depth points on the current observations
-      emvs_mapper_.getDepthPoint(depth_map, confidence_map, semidense_mask, vdp);
       // emvs_mapper_.getDepthPointFromMean(mean_map, variance_map, semidense_mask, vdp);
     }
     t_solve = tt_mapping.toc();

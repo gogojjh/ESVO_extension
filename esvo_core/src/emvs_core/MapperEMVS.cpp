@@ -308,7 +308,7 @@ namespace EMVS
 						if (xyz_rv.z() <= 1e-6)
 							continue;
 
-						double var_pseudo = 0; //pow(stdVar_vis_threshold_*0.99,2);
+						// double var_pseudo = 0; //pow(stdVar_vis_threshold_*0.99,2);
 						esvo_core::container::DepthPoint dp(x, y);
 						Eigen::Vector2d p_img(x * 1.0, y * 1.0);
 						dp.update_x(p_img);
@@ -316,6 +316,7 @@ namespace EMVS
 						p_cam = xyz_rv.cast<double>();
 						dp.update_p_cam(p_cam);
 						dp.update(1.0 / xyz_rv.z(), var_pseudo);
+						// dp.update(1.0 / xyz_rv.z(), static_cast<double>(variance_map.at<float>(y, x)));
 						// dp.update_confidence(1.0 / xyz_rv.z(), static_cast<double>(confidence_map.at<float>(y, x)));
 						dp.residual() = 0.0;
 						dp.updatePose(T_w_rv_);
