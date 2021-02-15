@@ -476,6 +476,8 @@ void esvo_MVStereo::MappingAtTime(const ros::Time& t)
   /******************************************************************/
   /*************** Event Multi-Stereo Mapping (EMVS) ****************/
   /******************************************************************/
+  // DSM initialization entrance: https://github.com/jzubizarreta/dsm/blob/master/dsm/src/FullSystem/FullSystem.cpp#L419
+  // DSM initialization: https://github.com/jzubizarreta/dsm/blob/f84ead96546bd16291b107dd513aedffbcb0bd05/dsm/src/Initializer/MonoInitializer.cpp#L102
   if (msm_ == PURE_EMVS || msm_ == PURE_EMVS_PLUS_ESTIMATION)
   {
     double t_denoising;
@@ -549,8 +551,8 @@ void esvo_MVStereo::MappingAtTime(const ros::Time& t)
     emvs_mapper_.getProbMapFromDSI(mean_map, variance_map);
     if (emvs_mapper_.accumulate_events_ >= EMVS_Accu_event_) // only enough point cloud to extract map
     {
-      emvs_mapper_.getDepthPoint(depth_map, confidence_map, semidense_mask, variance_map, vdp);
       std::vector<DepthPoint> &vdp = dqvDepthPoints_.back(); // depth points on the current observations
+      emvs_mapper_.getDepthPoint(depth_map, confidence_map, semidense_mask, vdp);
       // emvs_mapper_.getDepthPointFromMean(mean_map, variance_map, semidense_mask, vdp);
     }
     t_solve = tt_mapping.toc();

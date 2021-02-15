@@ -308,7 +308,7 @@ namespace EMVS
 						if (xyz_rv.z() <= 1e-6)
 							continue;
 
-						// double var_pseudo = 0; //pow(stdVar_vis_threshold_*0.99,2);
+						double var_pseudo = 0; //pow(stdVar_vis_threshold_*0.99,2);
 						esvo_core::container::DepthPoint dp(x, y);
 						Eigen::Vector2d p_img(x * 1.0, y * 1.0);
 						dp.update_x(p_img);

@@ -4,6 +4,18 @@
 #include <opencv2/core/core.hpp>
 #include <iostream>
 
+// class GridType
+// {
+// public:
+//   GridType()
+//   {
+//     score_ = 0.0f;
+//     num_ = 0.0f;
+//   }
+//   float score_;
+//   float num_;
+// };
+
 class Grid3D
 {
 public:
@@ -26,6 +38,8 @@ public:
   {
     return data_array_.at(ix + size_[0]*(iy + size_[1]*iz));
   }
+
+  inline float GridValueRatio(const float v);
 
   // At floating point location within a Z slice. Bilinear interpolation or voting.
   inline void accumulateGridValueAt(const float x_f, const float y_f, float* grid);
@@ -60,6 +74,13 @@ private:
 };
 
 
+inline float Grid3D::GridValueRatio(const float v)
+{
+  const float r[10] = {1.0, 1.2, 1.4, 1.6, 1.8, 2.0, 2.2, 2.4, 2.6, 2.8};
+  // const float r[10] = {1.0, 1.5, 2.0, 2.5, 3.0, 4.5, 5.0, 5.5, 6.0, 6.5};
+  return (int(v / 30) >= 10 ? r[9] : r[int(v / 30)]);
+}
+
 // Function implementation
 // Bilinear voting within a Z-slice, if point (x,y) is given as float
 inline void Grid3D::accumulateGridValueAt(const float x_f, const float y_f, float* grid)
@@ -76,10 +97,10 @@ inline void Grid3D::accumulateGridValueAt(const float x_f, const float y_f, floa
           fx1 = 1.f - fx,
           fy1 = 1.f - fy;
 
-      g[0] += fx1*fy1;
-      g[1] += fx*fy1;
-      g[size_[0]]   += fx1*fy;
-      g[size_[0]+1] += fx*fy;
+      g[0] += GridValueRatio(g[0]) * fx1*fy1;
+      g[1] += GridValueRatio(g[1]) * fx*fy1;
+      g[size_[0]]   += GridValueRatio(g[size_[0]]) * fx1*fy;
+      g[size_[0]+1] += GridValueRatio(g[size_[0]+1]) * fx*fy;
     }
   }
 }

@@ -136,10 +136,10 @@ cs_add_library(emvs_lib
   src/emvs_core/MedianFilter.cpp)
 
 # Node esvo_Mapping
-cs_add_executable(estimator src/estimator_node.cpp
-    src/estimator.cpp include/esvo_core/estimator.h)
-target_link_libraries(estimator ${PROJECT_NAME}_LIB emvs_lib
-    ${catkin_LIBRARIES} ${OpenCV_LIBRARIES} yaml-cpp)
+#cs_add_executable(estimator src/estimator_node.cpp
+#    src/estimator.cpp include/esvo_core/estimator.h)
+#target_link_libraries(estimator ${PROJECT_NAME}_LIB emvs_lib
+#    ${catkin_LIBRARIES} ${OpenCV_LIBRARIES} yaml-cpp)
 
 # Node esvo_MonoTracking
 cs_add_executable(esvo_MonoTracking src/esvo_MonoTrackingNode.cpp
