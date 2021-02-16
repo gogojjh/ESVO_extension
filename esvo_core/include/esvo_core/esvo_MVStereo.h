@@ -40,6 +40,7 @@
 #include <cv_bridge/cv_bridge.h>
 #include <pcl/point_types.h>
 #include <pcl_ros/point_cloud.h>
+#include <pcl/filters/radius_outlier_removal.h>
 
 #define ESVO_MVSTEREO_TRACKING_DEBUG
 
@@ -256,6 +257,7 @@ class esvo_MVStereo
                          const cv::Mat &depthMap, const cv::Mat &confidenceMap,
                          const cv::Mat &varianceMap);
 
+  double MIN_PARALLEX_;
   EMVS::ShapeDSI emvs_dsi_shape_;
   EMVS::OptionsDepthMap emvs_opts_depth_map_;
   EMVS::OptionsPointCloud emvs_opts_pc_;
@@ -269,7 +271,7 @@ class esvo_MVStereo
   // pcl::PointCloud<pcl::PointXYZI>::Ptr emvs_pc_, pc_map_;
 
   double meanDepth_;
-  double KEYFRAME_LINEAR_DIS_, KEYFRAME_ORIENTATION_DIS_;
+  double KEYFRAME_LINEAR_DIS_, KEYFRAME_ORIENTATION_DIS_, KEYFRAME_MEANDEPTH_DIS_;
   image_transport::Publisher depthMap_pub_, confidenceMap_pub_, semiDenseMask_pub_, varianceMap_pub_;
   int EMVS_Accu_event_;
 

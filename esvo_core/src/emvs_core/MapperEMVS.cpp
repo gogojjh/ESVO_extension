@@ -5,7 +5,9 @@
 
 namespace EMVS
 {
-	MapperEMVS::MapperEMVS(const esvo_core::container::PerspectiveCamera::Ptr &camPtr, ShapeDSI &dsi_shape)
+	MapperEMVS::MapperEMVS(const esvo_core::container::PerspectiveCamera::Ptr &camPtr, 
+						   ShapeDSI &dsi_shape,
+						   const float &min_parallex)
 	{
 		width_ = camPtr->width_;
 		height_ = camPtr->height_;
@@ -26,6 +28,7 @@ namespace EMVS
  			          0.0, 0.0, 1.0;
 		std::cout << "K_: " << std::endl << K_ << std::endl;
 		std::cout << "K_virtual_: " << std::endl << K_virtual_ << std::endl;
+		MIN_PARALLEX_ = min_parallex;
 	}
 
 	void MapperEMVS::initializeDSI(const Eigen::Matrix4d &T_w_rv)
@@ -139,8 +142,11 @@ namespace EMVS
 					const float d = zi * (z0 - C[2]);
 					float X = (event_locations_z0[i][0] * a + bx) / d;
 					float Y = (event_locations_z0[i][1] * a + by) / d;
-					// Bilinear voting
-					dsi_.accumulateGridValueAt(X, Y, pgrid); // add the grid by linear interpolation
+					float dx = event_locations_z0[i][0] - X;
+					float dy = event_locations_z0[i][1] - Y;
+					float ev_parallax = sqrt(dx * dx + dy * dy); // pixel distance
+					if (ev_parallax > MIN_PARALLEX_)
+						dsi_.accumulateGridValueAt(X, Y, pgrid);
 				}
 			}
 		}
@@ -395,13 +401,13 @@ namespace EMVS
 			}
 
 			// Filter point cloud to remove outliers (Section 5.2.5 in the IJCV paper)
-			// pcl::PointCloud<pcl::PointXYZI>::Ptr cloud_filtered(new pcl::PointCloud<pcl::PointXYZI>);
-			// pcl::RadiusOutlierRemoval<pcl::PointXYZI> outlier_rm;
-			// outlier_rm.setInputCloud(pc_);
-			// outlier_rm.setRadiusSearch(options_pc.radius_search_);
-			// outlier_rm.setMinNeighborsInRadius(options_pc.min_num_neighbors_);
-			// outlier_rm.filter(*cloud_filtered);
-			// pc_->swap(*cloud_filtered);
+			pcl::PointCloud<pcl::PointXYZI>::Ptr cloud_filtered(new pcl::PointCloud<pcl::PointXYZI>);
+			pcl::RadiusOutlierRemoval<pcl::PointXYZI> outlier_rm;
+			outlier_rm.setInputCloud(pc_);
+			outlier_rm.setRadiusSearch(options_pc.radius_search_);
+			outlier_rm.setMinNeighborsInRadius(options_pc.min_num_neighbors_);
+			outlier_rm.filter(*cloud_filtered);
+			pc_->swap(*cloud_filtered);
 		}
 
 	} // namespace EMVS

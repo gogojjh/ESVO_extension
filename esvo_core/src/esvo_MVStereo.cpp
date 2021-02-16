@@ -46,6 +46,7 @@ namespace esvo_core
         pc_(new PointCloud()),
         depthFramePtr_(new DepthFrame(camSysPtr_->cam_left_ptr_->height_, camSysPtr_->cam_left_ptr_->width_)),
         // MapperEMVS
+        MIN_PARALLEX_(tools::param(pnh_, "min_parallex", 5.0)),
         emvs_dsi_shape_(tools::param(pnh_, "opts_dim_x", 0),
                         tools::param(pnh_, "opts_dim_y", 0),
                         tools::param(pnh_, "opts_dim_z", 100),
@@ -56,8 +57,7 @@ namespace esvo_core
                              tools::param(pnh_, "opts_depth_map_contrast_threshold", 70)),
         emvs_opts_pc_(tools::param(pnh_, "opts_pc_radius_search", 0.05),
                       tools::param(pnh_, "opts_pc_min_num_neighbors", 3)),
-        emvs_mapper_(camSysPtr_->cam_left_ptr_, emvs_dsi_shape_)
-
+        emvs_mapper_(camSysPtr_->cam_left_ptr_, emvs_dsi_shape_, static_cast<float>(MIN_PARALLEX_))
   {
     // frame id
     dvs_frame_id_ = tools::param(pnh_, "dvs_frame_id", std::string("dvs"));
@@ -179,6 +179,7 @@ namespace esvo_core
     resultPath_ = tools::param(pnh_, "PATH_TO_SAVE_RESULT", std::string());
     KEYFRAME_LINEAR_DIS_ = tools::param(pnh_, "KEYFRAME_LINEAR_DIS", 0.2);
     KEYFRAME_ORIENTATION_DIS_ = tools::param(pnh_, "KEYFRAME_ORIENTATION_DIS", 5); // deg
+    KEYFRAME_MEANDEPTH_DIS_ = tools::param(pnh_, "KEYFRAME_MEANDEPTH_DIS", 5);     // deg
 
     // DSI_Mapper configure
     emvs_dsi_shape_.printDSIInfo();
@@ -186,7 +187,7 @@ namespace esvo_core
     isKeyframe_ = false;
     T_w_frame_.setIdentity();
     T_w_keyframe_.setIdentity();
-    meanDepth_ = 1e5;
+    meanDepth_ = -1.0;
     mAllPoses_.clear();
 
     depthMap_pub_ = it_.advertise("DSI_Depth_Map", 1);
@@ -798,7 +799,7 @@ void esvo_MVStereo::insertKeyframe()
   T_w_frame_ = TS_obs_.second.tr_.getTransformationMatrix();
   double dis = (T_w_frame_.topRightCorner<3, 1>() - T_w_keyframe_.topRightCorner<3, 1>()).norm();
   // if (dis > KEYFRAME_LINEAR_DIS_)
-  if (meanDepth_ == 1e5 || dis > 0.15 * meanDepth_) // 1e5: system just starts; > 0.15: move at a long distance
+  if (meanDepth_ < 0 || (meanDepth_ != 0 && dis > KEYFRAME_MEANDEPTH_DIS_ * meanDepth_)) // 1e5: system just starts; > 0.15: move at a long distance
   {
     isKeyframe_ = true;
     T_w_keyframe_ = T_w_frame_;
@@ -1409,8 +1410,19 @@ void esvo_MVStereo::publishPointCloud(
   LOG(INFO) << "The farthest point (p_cam): " << FarthestPoint.transpose();
 #endif
 
+
   if (!pc_->empty())
   {
+#ifdef ESVO_MVSTEREO_TRACKING_DEBUG
+  pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_filtered(new pcl::PointCloud<pcl::PointXYZ>());
+  pcl::RadiusOutlierRemoval<pcl::PointXYZ> outlier_rm;
+  outlier_rm.setInputCloud(pc_);
+  outlier_rm.setRadiusSearch(emvs_opts_pc_.radius_search_);
+  outlier_rm.setMinNeighborsInRadius(emvs_opts_pc_.min_num_neighbors_);
+  outlier_rm.filter(*cloud_filtered);
+  pc_->swap(*cloud_filtered);
+#endif 
+
 #ifdef ESVO_CORE_MVSTEREO_LOG
     LOG(INFO) << "<<<<<<<<<(pointcloud)<<<<<<<<" << pc_->size() << " points are published";
 #endif

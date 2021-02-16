@@ -1,3 +1,5 @@
+// Implementation of plane sweep (stereo) methods on event camera-based mapping
+
 #ifndef MAPPER_EMVS_H_
 #define MAPPER_EMVS_H_
 
@@ -98,7 +100,7 @@ namespace EMVS
 	{
 	public:
 		MapperEMVS() {}
-		MapperEMVS(const esvo_core::container::PerspectiveCamera::Ptr &camPtr, ShapeDSI &dsi_shape);
+		MapperEMVS(const esvo_core::container::PerspectiveCamera::Ptr &camPtr, ShapeDSI &dsi_shape, const float &min_parallex);
 
 		void initializeDSI(const Eigen::Matrix4d &T_w_rv);
 
@@ -162,6 +164,8 @@ namespace EMVS
 		Eigen::Matrix2Xf precomputed_rectified_points_;
 
 		size_t accumulate_events_;
+
+		float MIN_PARALLEX_;
 	};
 
 } // namespace EMVS
