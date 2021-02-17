@@ -20,6 +20,7 @@
 #include "DepthVector.hpp"
 
 #define USE_INVERSE_DEPTH
+// #define EMVS_CHECK_OBS
 
 namespace EMVS
 {
@@ -97,11 +98,26 @@ namespace EMVS
 		int min_num_neighbors_;
 	};
 
+	struct OptionsMapper
+	{
+	public:
+		OptionsMapper(const float &min_parallex, const int &obs_patch_size_x, const int &obs_patch_size_y, const float &min_ts_score) : min_parallex_(min_parallex),
+																																		obs_patch_size_x_(obs_patch_size_x),
+																																		obs_patch_size_y_(obs_patch_size_y),
+																																		min_ts_score_(min_ts_score)
+		{
+
+		}
+		float min_parallex_;
+		int obs_patch_size_x_, obs_patch_size_y_;
+		float min_ts_score_;
+	};
+
 	class MapperEMVS
 	{
 	public:
 		MapperEMVS() {}
-		MapperEMVS(const esvo_core::container::PerspectiveCamera::Ptr &camPtr, ShapeDSI &dsi_shape, const float &min_parallex);
+		MapperEMVS(const esvo_core::container::PerspectiveCamera::Ptr &camPtr, ShapeDSI &dsi_shape, const OptionsMapper &opts_mapper);
 
 		void reset();
 
@@ -129,6 +145,11 @@ namespace EMVS
 		void storeEventsPose(std::vector<std::pair<ros::Time, Eigen::Matrix4d>> &pVirtualPoses,
 							 std::vector<Eigen::Vector4d> &pvEventsPtr);
 
+		void setTSNegativeObservation(std::shared_ptr<Eigen::MatrixXd> &pTSNegative)
+		{
+			pTSNegative_ = pTSNegative;
+		}
+
 		inline size_t storeEventNum()
 		{
 			return vpEventsPose_.size();
@@ -137,7 +158,7 @@ namespace EMVS
 		inline void clearEvents()
 		{
 			vpEventsPose_.clear();
-			vpEventsPose_.reserve(2e5);
+			vpEventsPose_.reserve(1e5);
 		}
 
 		inline ros::Time getRVTime()
@@ -155,6 +176,7 @@ namespace EMVS
 		void precomputeRectifiedPoints();
 		void fillVoxelGrid(const std::vector<Eigen::Vector4f> &event_locations_z0,
 						   const std::vector<Eigen::Vector3f> &camera_centers);
+		bool observedTS(const float &x, const float &y);
 		void convertDepthIndicesToValues(const cv::Mat &depth_cell_indices, cv::Mat &depth_map);
 		void removeMaskBoundary(cv::Mat &mask, int border_size);
 
@@ -171,7 +193,12 @@ namespace EMVS
 		Eigen::Matrix2Xf precomputed_rectified_points_;
 
 		std::vector<std::pair<std::shared_ptr<Eigen::Vector4d>, std::shared_ptr<Eigen::Matrix4d>>> vpEventsPose_;
-		float MIN_PARALLEX_;
+		std::shared_ptr<Eigen::MatrixXd> pTSNegative_;
+
+		float min_Parallax_;
+		int obs_PatchSize_X_;
+		int obs_PatchSize_Y_;
+		float min_TS_Score_;
 	};
 
 } // namespace EMVS

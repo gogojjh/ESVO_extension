@@ -146,6 +146,7 @@ namespace esvo_core
         cv::cv2eigen(cv_dFlippedSAE_dv_left, dTS_negative_dv_left_);
       }
 
+    public:
       Eigen::MatrixXd TS_left_, TS_right_;
       Eigen::MatrixXd TS_blurred_left_;
       Eigen::MatrixXd TS_negative_left_;

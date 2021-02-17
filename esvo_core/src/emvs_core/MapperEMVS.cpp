@@ -7,7 +7,7 @@ namespace EMVS
 {
 	MapperEMVS::MapperEMVS(const esvo_core::container::PerspectiveCamera::Ptr &camPtr,
 						   ShapeDSI &dsi_shape,
-						   const float &min_parallex)
+						   const OptionsMapper &opts_mapper)
 	{
 		width_ = camPtr->width_;
 		height_ = camPtr->height_;
@@ -23,14 +23,21 @@ namespace EMVS
 		dsi_ = Grid3D(dsi_shape.dimX_, dsi_shape.dimY_, dsi_shape.dimZ_);
 
 		K_ = camPtr->P_.cast<float>().topLeftCorner<3, 3>();
-		K_virtual_ << K_(0, 0), 0.0, 0.5 * static_cast<float>(dsi_shape.dimX_),
-			0.0, K_(1, 1), 0.5 * static_cast<float>(dsi_shape.dimY_),
+		// K_virtual_ << K_(0, 0), 0.0, 0.5 * static_cast<float>(dsi_shape.dimX_),
+		// 	0.0, K_(1, 1), 0.5 * static_cast<float>(dsi_shape.dimY_),
+		// 	0.0, 0.0, 1.0;
+		K_virtual_ << K_(0, 0), 0.0, K_(0, 2),
+			0.0, K_(1, 1), K_(1, 2),
 			0.0, 0.0, 1.0;
 		std::cout << "K_: " << std::endl
 				  << K_ << std::endl;
 		std::cout << "K_virtual_: " << std::endl
 				  << K_virtual_ << std::endl;
-		MIN_PARALLEX_ = min_parallex;
+		pTSNegative_ = std::make_shared<Eigen::MatrixXd>();
+		min_Parallax_ = opts_mapper.min_parallex_;
+		obs_PatchSize_X_ = opts_mapper.obs_patch_size_x_;
+		obs_PatchSize_Y_ = opts_mapper.obs_patch_size_y_;
+		min_TS_Score_ = opts_mapper.min_ts_score_;
 	}
 
 	void MapperEMVS::initializeDSI(const Eigen::Matrix4d &T_w_rv)
@@ -132,10 +139,49 @@ namespace EMVS
 				float dx = event_locations_z0[i][0] - X;
 				float dy = event_locations_z0[i][1] - Y;
 				float ev_parallax = sqrt(dx * dx + dy * dy); // pixel distance
-				if (ev_parallax > MIN_PARALLEX_)
+#ifdef EMVS_CHECK_OBS
+				if (ev_parallax > min_Parallax_)
+					if (observedTS(X, Y))
+						dsi_.accumulateGridValueAt(X, Y, pgrid);
+#else
+				if (ev_parallax > min_Parallax_)
 					dsi_.accumulateGridValueAt(X, Y, pgrid);
+#endif
 			}
 		}
+	}
+
+	bool MapperEMVS::observedTS(const float &x, const float &y)
+	{
+		if (x < 0.0f || y < 0.0f || x >= pTSNegative_->cols() || y >= pTSNegative_->rows())
+			return false;
+
+		int wx = obs_PatchSize_X_;
+		int wy = obs_PatchSize_Y_;
+		// int patchSize = wx * wy;
+
+		// compute SrcPatch_UpLeft coordinate and SrcPatch_DownRight coordinate
+		// check patch boundary is inside img boundary
+		Eigen::Vector2i SrcPatch_UpLeft, SrcPatch_DownRight;
+		SrcPatch_UpLeft << floor(x) - (wx - 1) / 2, floor(y) - (wy - 1) / 2;
+		SrcPatch_DownRight << floor(x) + (wx - 1) / 2, floor(y) + (wy - 1) / 2;
+		SrcPatch_UpLeft[0] = SrcPatch_UpLeft[0] < 0 ? 0 : SrcPatch_UpLeft[0];
+		SrcPatch_UpLeft[1] = SrcPatch_UpLeft[1] < 0 ? 0 : SrcPatch_UpLeft[1];
+		SrcPatch_DownRight[0] = SrcPatch_DownRight[0] >= pTSNegative_->cols() ? pTSNegative_->cols() - 1 : SrcPatch_DownRight[0];
+		SrcPatch_DownRight[1] = SrcPatch_DownRight[1] >= pTSNegative_->rows() ? pTSNegative_->rows() - 1 : SrcPatch_DownRight[1];
+		for (int y = SrcPatch_UpLeft[1]; y <= SrcPatch_DownRight[1]; y++)
+			for (int x = SrcPatch_UpLeft[0]; x <= SrcPatch_DownRight[0]; x++)
+				if ((*pTSNegative_)(y, x) <= static_cast<double>(min_TS_Score_)) // any event is triggered
+					return true;
+		// Eigen::MatrixXd SrcPatch = pTSNegative_->block(SrcPatch_UpLeft[1],
+		// 											   SrcPatch_UpLeft[0],
+		// 											   SrcPatch_DownRight[1] - SrcPatch_UpLeft[1] + 1,
+		// 											   SrcPatch_DownRight[0] - SrcPatch_UpLeft[0] + 1);
+		// for (size_t y = 0; y < SrcPatch.rows(); y++)
+		// 	for (size_t x = 0; x < SrcPatch.cols(); x++)
+		// 		if (SrcPatch(y, x) <= static_cast<double>(min_TS_Score_)) // any event is triggered
+		// 			return true;
+		return false;
 	}
 
 	void MapperEMVS::storeEventsPose(std::vector<std::pair<ros::Time, Eigen::Matrix4d>> &pVirtualPoses,
@@ -166,7 +212,7 @@ namespace EMVS
 	{
 		dsi_.resetGrid();
 		vpEventsPose_.clear();
-		vpEventsPose_.reserve(3e5);
+		vpEventsPose_.reserve(2e5);
 		dsiInitFlag_ = false;
 	}
 

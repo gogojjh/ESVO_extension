@@ -96,3 +96,5 @@ double Grid3D::computeMeanSquare() const
   
   return result/numCells_;
 }
+
+

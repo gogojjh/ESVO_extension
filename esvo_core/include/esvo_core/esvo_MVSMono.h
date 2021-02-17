@@ -8,6 +8,7 @@
 #include <message_filters/synchronizer.h>
 #include <message_filters/sync_policies/exact_time.h>
 
+#include <tf/transform_broadcaster.h>
 #include <tf2_ros/transform_broadcaster.h>
 
 #include <esvo_core/container/CameraSystem.h>
@@ -257,10 +258,10 @@ class esvo_MVSMono
                          const cv::Mat &depthMap, const cv::Mat &confidenceMap,
                          const cv::Mat &varianceMap);
 
-  double MIN_PARALLEX_;
   EMVS::ShapeDSI emvs_dsi_shape_;
   EMVS::OptionsDepthMap emvs_opts_depth_map_;
   EMVS::OptionsPointCloud emvs_opts_pc_;
+  EMVS::OptionsMapper emvs_opts_mapper_;
   EMVS::MapperEMVS emvs_mapper_;
 
   std::map<ros::Time, Eigen::Matrix4d> mAllPoses_; // save the historical poses for mapping
@@ -278,6 +279,7 @@ class esvo_MVSMono
   bool SAVE_RESULT_;
   std::string strDataset_;
 
+  std::map<ros::Time, std::shared_ptr<Eigen::MatrixXd>> TS_map_negative_history_;
   Eigen::Matrix4d T_world_map_;
 };
 

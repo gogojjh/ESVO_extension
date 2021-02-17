@@ -59,8 +59,13 @@ opts_depth_map_median_filter_size: 15 # Size of the median filter used to clean 
 opts_depth_map_contrast_threshold: 1 # Threshold of the contrast to remove outliers in the mask 
 opts_pc_radius_search: 0.03
 opts_pc_min_num_neighbors: 3
-min_parallex: 3.0
+opts_mapper_parallex: 3.0
+opts_mapper_PatchSize_X: 3
+opts_mapper_PatchSize_Y: 3
+opts_mapper_TS_score: 150.0
 KEYFRAME_LINEAR_DIS: 0.15 # m
 KEYFRAME_ORIENTATION_DIS: 5 # degree
-KEYFRAME_MEANDEPTH_DIS: 1.0
-EMVS_Accu_event: 200000
+KEYFRAME_MEANDEPTH_DIS: 0.3 # percentage
+EMVS_Accu_event: 50000 #200000
+
+Dataset_Name: "rpg_stereo"

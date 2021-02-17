@@ -79,7 +79,7 @@ namespace esvo_time_surface
 						if (!ignore_polarity_)
 							expVal *= polarity;
 
-						// Backward version
+						// Backward version (this paper)
 						if (time_surface_mode_ == BACKWARD)
 							time_surface_map.at<double>(y, x) = expVal;
 
@@ -251,7 +251,7 @@ namespace esvo_time_surface
 						if (!ignore_polarity_)
 							expVal *= polarity;
 
-						// Backward version
+						// Backward version (this paper)
 						if (time_surface_mode_ == BACKWARD)
 							time_surface_map.at<double>(y, x) = expVal;
 

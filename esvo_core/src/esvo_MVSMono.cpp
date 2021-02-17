@@ -46,7 +46,6 @@ namespace esvo_core
         pc_(new PointCloud()),
         depthFramePtr_(new DepthFrame(camSysPtr_->cam_left_ptr_->height_, camSysPtr_->cam_left_ptr_->width_)),
         // MapperEMVS
-        MIN_PARALLEX_(tools::param(pnh_, "min_parallex", 5.0)),
         emvs_dsi_shape_(tools::param(pnh_, "opts_dim_x", 0),
                         tools::param(pnh_, "opts_dim_y", 0),
                         tools::param(pnh_, "opts_dim_z", 100),
@@ -57,7 +56,11 @@ namespace esvo_core
                              tools::param(pnh_, "opts_depth_map_contrast_threshold", 70)),
         emvs_opts_pc_(tools::param(pnh_, "opts_pc_radius_search", 0.05),
                       tools::param(pnh_, "opts_pc_min_num_neighbors", 3)),
-        emvs_mapper_(camSysPtr_->cam_left_ptr_, emvs_dsi_shape_, static_cast<float>(MIN_PARALLEX_))
+        emvs_opts_mapper_(tools::param(pnh_, "opts_mapper_parallex", 3.0),
+                          tools::param(pnh_, "opts_mapper_PatchSize_X", 5),
+                          tools::param(pnh_, "opts_mapper_PatchSize_Y", 5),
+                          tools::param(pnh_, "opts_mapper_TS_score", 50.0)),
+        emvs_mapper_(camSysPtr_->cam_left_ptr_, emvs_dsi_shape_, emvs_opts_mapper_)
   {
     // frame id
     dvs_frame_id_ = tools::param(pnh_, "dvs_frame_id", std::string("dvs"));
@@ -179,7 +182,7 @@ namespace esvo_core
     resultPath_ = tools::param(pnh_, "PATH_TO_SAVE_RESULT", std::string());
     KEYFRAME_LINEAR_DIS_ = tools::param(pnh_, "KEYFRAME_LINEAR_DIS", 0.2);
     KEYFRAME_ORIENTATION_DIS_ = tools::param(pnh_, "KEYFRAME_ORIENTATION_DIS", 5); // deg
-    KEYFRAME_MEANDEPTH_DIS_ = tools::param(pnh_, "KEYFRAME_MEANDEPTH_DIS", 5);     // deg
+    KEYFRAME_MEANDEPTH_DIS_ = tools::param(pnh_, "KEYFRAME_MEANDEPTH_DIS", 0.15);     // percentage
 
     // DSI_Mapper configure
     emvs_dsi_shape_.printDSIInfo();
@@ -345,7 +348,7 @@ void esvo_MVSMono::MappingAtTime(const ros::Time& t)
     tt_mapping.tic();
     if (isKeyframe_)
     {
-      LOG(INFO) << "insert a keyframe: reset the DSI for the local map\r";
+      // LOG(INFO) << "insert a keyframe: reset the DSI for the local map\r";
       if (!emvs_mapper_.dsiInitFlag_)
         if (!dqvDepthPoints_.empty())
           dqvDepthPoints_.pop_back();
@@ -355,16 +358,35 @@ void esvo_MVSMono::MappingAtTime(const ros::Time& t)
     }
     else
     {
-      LOG(INFO) << "insert an non-keyframe: add events onto the DSI\r";
+      // LOG(INFO) << "insert an non-keyframe: add events onto the DSI\r";
     }
 
     emvs_mapper_.storeEventsPose(mVirtualPoses_, vEdgeletCoordinates);
-    if (emvs_mapper_.storeEventNum() > EMVS_Accu_event_)
+    if (!emvs_mapper_.dsiInitFlag_)
     {
-      Eigen::Matrix4d T_w_rv;
-      ros::Time t_rv = emvs_mapper_.getRVTime();
-      trajectory_.getPoseAt(mAllPoses_, t_rv, T_w_rv);
-      emvs_mapper_.initializeDSI(T_w_rv);
+      TS_obs_.second.getTimeSurfaceNegative(0);
+      TS_map_negative_history_.emplace(t, std::make_shared<Eigen::MatrixXd>(TS_obs_.second.TS_negative_left_));
+      if (emvs_mapper_.storeEventNum() > EMVS_Accu_event_)
+      {
+        Eigen::Matrix4d T_w_rv;
+        ros::Time t_rv = emvs_mapper_.getRVTime();
+        trajectory_.getPoseAt(mAllPoses_, t_rv, T_w_rv);
+        std::map<ros::Time, std::shared_ptr<Eigen::MatrixXd>>::iterator it_TS_negative =
+            std::upper_bound(TS_map_negative_history_.begin(), TS_map_negative_history_.end(), t_rv,
+                            [](const ros::Time &t, const std::pair<ros::Time, std::shared_ptr<Eigen::MatrixXd>> &tso) {
+                              return t.toSec() < tso.first.toSec();
+                            });
+        // LOG(INFO) << "t_rv: " << t_rv << ", " << "it_TS_negative: " << it_TS_negative->first;
+        emvs_mapper_.initializeDSI(T_w_rv);
+        emvs_mapper_.setTSNegativeObservation(it_TS_negative->second);
+        TS_map_negative_history_.clear();
+
+        // cv::Mat TS_negative_mat;
+        // cv::eigen2cv(*it_TS_negative->second, TS_negative_mat);
+        // TS_negative_mat.convertTo(TS_negative_mat, CV_8UC1);
+        // cv::imshow("TS_negative_mat", TS_negative_mat);
+        // cv::waitKey(30);
+      }
     }
     if (emvs_mapper_.dsiInitFlag_)
     {
@@ -379,7 +401,7 @@ void esvo_MVSMono::MappingAtTime(const ros::Time& t)
     std::vector<DepthPoint> &vdp = dqvDepthPoints_.back(); // depth points on the current observations
     emvs_mapper_.getDepthPoint(depth_map, confidence_map, semidense_mask, vdp);
     t_solve = tt_mapping.toc();
-    LOG(INFO) << "Get DP from DSI costs: " << t_solve << " ms\r"; // 20ms
+    LOG_EVERY_N(INFO, 50) << "Get DP from DSI costs: " << t_solve << " ms\r"; // 40ms
 
     if (msm_ == PURE_EMVS)
     {
@@ -483,7 +505,7 @@ void esvo_MVSMono::MappingAtTime(const ros::Time& t)
     std::thread tPublishMappingResult(&esvo_MVSMono::publishMappingResults, this,
                                       depthFramePtr_->dMap_, depthFramePtr_->T_world_frame_, t);
     tPublishMappingResult.detach();
-    LOG_EVERY_N(INFO, 20) << "Depth point size: " << depthFramePtr_->dMap_->size(); // 4000
+    // LOG_EVERY_N(INFO, 20) << "Depth point size: " << depthFramePtr_->dMap_->size(); // 4000
 
     // To save the depth result, set it to true.
     if (SAVE_RESULT_)
@@ -539,6 +561,7 @@ void esvo_MVSMono::insertKeyframe()
     isKeyframe_ = true;
     T_w_keyframe_ = T_w_frame_;
     // LOG(INFO) << "mean depth: " << meanDepth_ << "m";
+    meanDepth_ = -1.0;
   }
   else
   {
@@ -725,6 +748,9 @@ void esvo_MVSMono::stampedPoseCallback(const geometry_msgs::PoseStampedConstPtr 
           t_map_cam.z()));
   tf::StampedTransform st(tf, ps_msg->header.stamp, ps_msg->header.frame_id, dvs_frame_id_.c_str());
   tf_->setTransform(st);
+
+  static tf::TransformBroadcaster br;
+  br.sendTransform(st);
 
   if (msm_ == PURE_EMVS || msm_ == PURE_EMVS_PLUS_ESTIMATION)
   {

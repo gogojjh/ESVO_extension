@@ -66,6 +66,13 @@ public:
     return &data_array_.data()[layer * size_[0] * size_[1]];
   }
 
+  inline bool isValidGrid(const float x_f, const float y_f)
+  {
+    if (x_f >= 0.f && y_f >= 0.f && x_f < size_[0] && y_f < size_[1])
+      return true;
+    else return false;
+  }
+
 private:
   std::vector<float> data_array_;
   unsigned int numCells_;
