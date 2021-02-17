@@ -75,7 +75,8 @@
         "regex": "cpp",
         "*.txx": "cpp",
         "*.cuh": "cpp",
-        "__tree": "cpp"
+        "__tree": "cpp",
+        "eigen": "cpp"
     },
     "cmake.configureOnOpen": true,
     "C_Cpp.errorSquiggles": "Disabled"

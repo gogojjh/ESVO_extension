@@ -154,9 +154,17 @@ target_link_libraries(esvo_MonoTracking ${PROJECT_NAME}_LIB mc_lib
 #    ${catkin_LIBRARIES} ${OpenCV_LIBRARIES} yaml-cpp)
 
 # Node esvo_MVS (newly added in branch "mvs")
-cs_add_executable(esvo_MVStereo
-    src/esvo_MVStereoNode.cpp
-    src/esvo_MVStereo.cpp
-    include/esvo_core/esvo_MVStereo.h)
-target_link_libraries(esvo_MVStereo ${PROJECT_NAME}_LIB emvs_lib
+# cs_add_executable(esvo_MVStereo
+#     src/esvo_MVStereoNode.cpp
+#     src/esvo_MVStereo.cpp
+#     include/esvo_core/esvo_MVStereo.h)
+# target_link_libraries(esvo_MVStereo ${PROJECT_NAME}_LIB emvs_lib
+#     ${catkin_LIBRARIES} ${OpenCV_LIBRARIES} yaml-cpp)
+
+# Node esvo_MVS (newly added in branch "mvs")
+cs_add_executable(esvo_MVSMono
+    src/esvo_MVSMonoNode.cpp
+    src/esvo_MVSMono.cpp
+    include/esvo_core/esvo_MVSMono.h)
+target_link_libraries(esvo_MVSMono ${PROJECT_NAME}_LIB emvs_lib
     ${catkin_LIBRARIES} ${OpenCV_LIBRARIES} yaml-cpp)

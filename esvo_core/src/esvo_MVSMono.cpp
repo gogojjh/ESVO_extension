@@ -1,4 +1,4 @@
-#include <esvo_core/esvo_MVStereo.h>
+#include <esvo_core/esvo_MVSMono.h>
 #include <esvo_core/DVS_MappingStereoConfig.h>
 #include <esvo_core/tools/params_helper.h>
 
@@ -18,7 +18,7 @@
 
 namespace esvo_core
 {
-  esvo_MVStereo::esvo_MVStereo(
+  esvo_MVSMono::esvo_MVSMono(
       const ros::NodeHandle &nh,
       const ros::NodeHandle &nh_private)
       : nh_(nh),
@@ -145,10 +145,10 @@ namespace esvo_core
                          BM_step_, BM_ZNCC_Threshold_, BM_bUpDownConfiguration_);
 
     // callbacks functions
-    events_left_sub_ = nh_.subscribe<dvs_msgs::EventArray>("events_left", 0, boost::bind(&esvo_MVStereo::eventsCallback, this, _1, boost::ref(events_left_)));
-    events_right_sub_ = nh_.subscribe<dvs_msgs::EventArray>("events_right", 0, boost::bind(&esvo_MVStereo::eventsCallback, this, _1, boost::ref(events_right_)));
-    stampedPose_sub_ = nh_.subscribe("stamped_pose", 0, &esvo_MVStereo::stampedPoseCallback, this);
-    TS_sync_.registerCallback(boost::bind(&esvo_MVStereo::timeSurfaceCallback, this, _1, _2));
+    events_left_sub_ = nh_.subscribe<dvs_msgs::EventArray>("events_left", 0, boost::bind(&esvo_MVSMono::eventsCallback, this, _1, boost::ref(events_left_)));
+    events_right_sub_ = nh_.subscribe<dvs_msgs::EventArray>("events_right", 0, boost::bind(&esvo_MVSMono::eventsCallback, this, _1, boost::ref(events_right_)));
+    stampedPose_sub_ = nh_.subscribe("stamped_pose", 0, &esvo_MVSMono::stampedPoseCallback, this);
+    TS_sync_.registerCallback(boost::bind(&esvo_MVSMono::timeSurfaceCallback, this, _1, _2));
     // TF
     tf_ = std::make_shared<tf::Transformer>(true, ros::Duration(100.0));
 
@@ -157,8 +157,8 @@ namespace esvo_core
     stdVarMap_pub_ = it_.advertise("Standard_Variance_Map", 1);
     ageMap_pub_ = it_.advertise("Age_Map", 1);
     costMap_pub_ = it_.advertise("Cost_Map", 1);
-    pc_pub_ = nh_.advertise<PointCloud>("/esvo_mvstereo/pointcloud_world", 1);
-    pose_pub_ = nh_.advertise<geometry_msgs::PoseStamped>("/esvo_mvstereo/pose_pub", 1);
+    pc_pub_ = nh_.advertise<PointCloud>("/esvo_mvsmono/pointcloud_world", 1);
+    pose_pub_ = nh_.advertise<geometry_msgs::PoseStamped>("/esvo_mvsmono/pose_pub", 1);
 
     TotalNumFusion_ = 0;
 
@@ -167,12 +167,12 @@ namespace esvo_core
     reset_future_ = reset_promise_.get_future();
 
     // stereo mapping detached thread
-    std::thread MappingThread(&esvo_MVStereo::MappingLoop, this,
+    std::thread MappingThread(&esvo_MVSMono::MappingLoop, this,
                               std::move(mapping_thread_promise_), std::move(reset_future_));
     MappingThread.detach();
 
     // Dynamic reconfigure
-    dynamic_reconfigure_callback_ = boost::bind(&esvo_MVStereo::onlineParameterChangeCallback, this, _1, _2);
+    dynamic_reconfigure_callback_ = boost::bind(&esvo_MVSMono::onlineParameterChangeCallback, this, _1, _2);
     server_.reset(new dynamic_reconfigure::Server<DVS_MappingStereoConfig>(nh_private));
     server_->setCallback(dynamic_reconfigure_callback_);
 
@@ -200,7 +200,7 @@ namespace esvo_core
     T_world_map_.setIdentity();
   }
 
-  esvo_MVStereo::~esvo_MVStereo()
+  esvo_MVSMono::~esvo_MVSMono()
   {
     pc_pub_.shutdown();
     pose_pub_.shutdown();
@@ -210,7 +210,7 @@ namespace esvo_core
     costMap_pub_.shutdown();
   }
 
-  void esvo_MVStereo::MappingLoop(
+  void esvo_MVSMono::MappingLoop(
       std::promise<void> prom_mapping,
       std::future<void> future_reset)
   {
@@ -276,7 +276,7 @@ namespace esvo_core
   }
 }
 
-void esvo_MVStereo::MappingAtTime(const ros::Time& t)
+void esvo_MVSMono::MappingAtTime(const ros::Time& t)
 {
   TicToc tt_mapping;
   double t_overall_count = 0;
@@ -328,7 +328,7 @@ void esvo_MVStereo::MappingAtTime(const ros::Time& t)
       // visualization
 //      LOG(INFO) << "-------------- depth point num: " << depthFramePtr_->dMap_->size() << " " << dqvDepthPoints_.size();
 //      exit(-1);
-      std::thread tPublishMappingResult(&esvo_MVStereo::publishMappingResults, this,
+      std::thread tPublishMappingResult(&esvo_MVSMono::publishMappingResults, this,
                                         depthFramePtr_->dMap_, depthFramePtr_->T_world_frame_, t);
       tPublishMappingResult.detach();
 
@@ -401,7 +401,7 @@ void esvo_MVStereo::MappingAtTime(const ros::Time& t)
       dFusor_.naive_propagation(*it, depthFramePtr_);
 
     // visualization
-    std::thread tPublishMappingResult(&esvo_MVStereo::publishMappingResults, this, depthFramePtr_->dMap_, depthFramePtr_->T_world_frame_, t);
+    std::thread tPublishMappingResult(&esvo_MVSMono::publishMappingResults, this, depthFramePtr_->dMap_, depthFramePtr_->T_world_frame_, t);
     tPublishMappingResult.detach();
 
     // To save the depth result, set it to true.
@@ -467,7 +467,7 @@ void esvo_MVStereo::MappingAtTime(const ros::Time& t)
         dFusor_.naive_propagation(*it, depthFramePtr_);
 
       // visualization
-      std::thread tPublishMappingResult(&esvo_MVStereo::publishMappingResults, this,
+      std::thread tPublishMappingResult(&esvo_MVSMono::publishMappingResults, this,
                                         depthFramePtr_->dMap_, depthFramePtr_->T_world_frame_, t);
       tPublishMappingResult.detach();
       return;
@@ -647,12 +647,12 @@ void esvo_MVStereo::MappingAtTime(const ros::Time& t)
       t_overall_count += t_optimization;
     }
 
-    std::thread tPublishDSIResult(&esvo_MVStereo::publishDSIResults, this,
+    std::thread tPublishDSIResult(&esvo_MVSMono::publishDSIResults, this,
                                   t, semidense_mask, depth_map, confidence_map, variance_map);
     tPublishDSIResult.detach();
 
     // visualization
-    std::thread tPublishMappingResult(&esvo_MVStereo::publishMappingResults, this,
+    std::thread tPublishMappingResult(&esvo_MVSMono::publishMappingResults, this,
                                       depthFramePtr_->dMap_, depthFramePtr_->T_world_frame_, t);
     tPublishMappingResult.detach();
 
@@ -744,7 +744,7 @@ void esvo_MVStereo::MappingAtTime(const ros::Time& t)
       t_overall_count += t_optimization;
 
       // Publishing resulting maps in an independent thread (save about 1ms)
-      std::thread tPublishMappingResult(&esvo_MVStereo::publishMappingResults, this,
+      std::thread tPublishMappingResult(&esvo_MVSMono::publishMappingResults, this,
                                         depthFramePtr_->dMap_, depthFramePtr_->T_world_frame_, t);
       tPublishMappingResult.detach();
 
@@ -789,7 +789,7 @@ void esvo_MVStereo::MappingAtTime(const ros::Time& t)
 /**
  * @brief: This function defines xx criterias to indicate if insert new keyframe in Mapping
  */
-void esvo_MVStereo::insertKeyframe()
+void esvo_MVSMono::insertKeyframe()
 {
   // criterion in LSD-SLAM or EVO
   // This is done based on two weights, the relative distance to the current key-frame and
@@ -810,7 +810,7 @@ void esvo_MVStereo::insertKeyframe()
   }
 }
 
-bool esvo_MVStereo::dataTransferring()
+bool esvo_MVSMono::dataTransferring()
 {
   TS_obs_ = std::make_pair(ros::Time(), TimeSurfaceObservation());// clean the TS obs.
   if(TS_history_.size() <= 10)
@@ -975,7 +975,7 @@ bool esvo_MVStereo::dataTransferring()
   return true;
 }
 
-void esvo_MVStereo::stampedPoseCallback(const geometry_msgs::PoseStampedConstPtr &ps_msg)
+void esvo_MVSMono::stampedPoseCallback(const geometry_msgs::PoseStampedConstPtr &ps_msg)
 {
   std::lock_guard<std::mutex> lock(data_mutex_);
   // To check inconsistent timestamps and reset.
@@ -1030,7 +1030,7 @@ void esvo_MVStereo::stampedPoseCallback(const geometry_msgs::PoseStampedConstPtr
       -3.319431623758162e-02, -9.994488408486204e-01, -3.897382049768972e-04, -6.966829200678797e-02,
       0, 0, 0, 1;
   Eigen::Matrix4d T_world_cam = T_world_marker * T_marker_cam;
-#ifdef ESVO_MVSTEREO_TRACKING_DEBUG
+#ifdef ESVO_MVSMONO_TRACKING_DEBUG
   if (T_world_map_ == Eigen::Matrix4d::Identity())
     T_world_map_ = T_world_cam;
   Eigen::Matrix4d T_map_cam = T_world_map_.inverse() * T_world_cam;
@@ -1063,7 +1063,7 @@ void esvo_MVStereo::stampedPoseCallback(const geometry_msgs::PoseStampedConstPtr
 }
 
 // return the pose of the left event cam at time t.
-bool esvo_MVStereo::getPoseAt(const ros::Time &t,
+bool esvo_MVSMono::getPoseAt(const ros::Time &t,
   esvo_core::Transformation &Tr,// T_world_virtual
   const std::string& source_frame )
 {
@@ -1100,7 +1100,7 @@ bool esvo_MVStereo::getPoseAt(const ros::Time &t,
   }
 }
 
-void esvo_MVStereo::eventsCallback(
+void esvo_MVSMono::eventsCallback(
   const dvs_msgs::EventArray::ConstPtr& msg,
   EventQueue& EQ)
 {
@@ -1136,7 +1136,7 @@ void esvo_MVStereo::eventsCallback(
   clearEventQueue(EQ);
 }
 
-void esvo_MVStereo::clearEventQueue(EventQueue& EQ)
+void esvo_MVSMono::clearEventQueue(EventQueue& EQ)
 {
   static constexpr size_t MAX_EVENT_QUEUE_LENGTH = 3000000;
   if (EQ.size() > MAX_EVENT_QUEUE_LENGTH)
@@ -1146,7 +1146,7 @@ void esvo_MVStereo::clearEventQueue(EventQueue& EQ)
   }
 }
 
-void esvo_MVStereo::timeSurfaceCallback(
+void esvo_MVSMono::timeSurfaceCallback(
   const sensor_msgs::ImageConstPtr& time_surface_left,
   const sensor_msgs::ImageConstPtr& time_surface_right)
 {
@@ -1194,7 +1194,7 @@ void esvo_MVStereo::timeSurfaceCallback(
   }
 }
 
-void esvo_MVStereo::reset()
+void esvo_MVSMono::reset()
 {
   // mutual-thread communication with MappingThread.
   LOG(INFO) << "Coming into reset()";
@@ -1231,14 +1231,14 @@ void esvo_MVStereo::reset()
   mapping_thread_promise_ = std::promise<void>();
   reset_future_ = reset_promise_.get_future();
   mapping_thread_future_ = mapping_thread_promise_.get_future();
-  std::thread MappingThread(&esvo_MVStereo::MappingLoop, this,
+  std::thread MappingThread(&esvo_MVSMono::MappingLoop, this,
                             std::move(mapping_thread_promise_), std::move(reset_future_));
   MappingThread.detach();
 
   T_world_map_.setIdentity();
 }
 
-void esvo_MVStereo::onlineParameterChangeCallback(DVS_MappingStereoConfig &config, uint32_t level)
+void esvo_MVSMono::onlineParameterChangeCallback(DVS_MappingStereoConfig &config, uint32_t level)
 {
   bool have_display_parameters_changed = false;
   {
@@ -1316,7 +1316,7 @@ void esvo_MVStereo::onlineParameterChangeCallback(DVS_MappingStereoConfig &confi
   }
 }
 
-void esvo_MVStereo::publishDSIResults(const ros::Time &t, const cv::Mat &semiDenseMask,
+void esvo_MVSMono::publishDSIResults(const ros::Time &t, const cv::Mat &semiDenseMask,
                                       const cv::Mat &depthMap, const cv::Mat &confidenceMap,
                                       const cv::Mat &varianceMap)
 {
@@ -1339,7 +1339,7 @@ void esvo_MVStereo::publishDSIResults(const ros::Time &t, const cv::Mat &semiDen
   publishImage(varianceMap255, t, varianceMap_pub_, "mono8");
 }
 
-void esvo_MVStereo::publishMappingResults(
+void esvo_MVSMono::publishMappingResults(
   DepthMap::Ptr depthMapPtr,
   Transformation tr,
   ros::Time t)
@@ -1361,7 +1361,7 @@ void esvo_MVStereo::publishMappingResults(
   publishPointCloud(depthMapPtr, tr, t);
 }
 
-void esvo_MVStereo::saveDepthMap(
+void esvo_MVSMono::saveDepthMap(
   DepthMap::Ptr& depthMapPtr,
   std::string& saveDir,
   ros::Time t)
@@ -1381,7 +1381,7 @@ void esvo_MVStereo::saveDepthMap(
   of.close();
 }
 
-void esvo_MVStereo::publishPointCloud(
+void esvo_MVSMono::publishPointCloud(
   DepthMap::Ptr& depthMapPtr,
   Transformation & tr,
   ros::Time& t)
@@ -1412,7 +1412,7 @@ void esvo_MVStereo::publishPointCloud(
 
   if (!pc_->empty())
   {
-#ifdef ESVO_MVSTEREO_TRACKING_DEBUG
+#ifdef ESVO_MVSMONO_TRACKING_DEBUG
   pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_filtered(new pcl::PointCloud<pcl::PointXYZ>());
   pcl::RadiusOutlierRemoval<pcl::PointXYZ> outlier_rm;
   outlier_rm.setInputCloud(pc_);
@@ -1431,7 +1431,7 @@ void esvo_MVStereo::publishPointCloud(
   }
 }
 
-void esvo_MVStereo::publishKFPose(const ros::Time& t, Transformation& tr)
+void esvo_MVSMono::publishKFPose(const ros::Time& t, Transformation& tr)
 {
   geometry_msgs::PoseStampedPtr ps_ptr(new geometry_msgs::PoseStamped());
   ps_ptr->header.stamp = t;
@@ -1447,7 +1447,7 @@ void esvo_MVStereo::publishKFPose(const ros::Time& t, Transformation& tr)
 }
 
 void
-esvo_MVStereo::publishImage(
+esvo_MVSMono::publishImage(
   const cv::Mat &image,
   const ros::Time & t,
   image_transport::Publisher & pub,
@@ -1462,7 +1462,7 @@ esvo_MVStereo::publishImage(
   pub.publish(msg);
 }
 
-void esvo_MVStereo::vEMP2vDP(
+void esvo_MVSMono::vEMP2vDP(
   std::vector<EventMatchPair>& vEMP,
   std::vector<DepthPoint>& vdp)
 {
@@ -1478,15 +1478,15 @@ void esvo_MVStereo::vEMP2vDP(
     dp.update(vEMP[i].invDepth_, var_pseudo);
     dp.residual() = vEMP[i].cost_;
     dp.age() = age_vis_threshold_;
-//    LOG(INFO) << "**************esvo_MVStereo::vEMP2vDP: " << dp.variance();
+//    LOG(INFO) << "**************esvo_MVSMono::vEMP2vDP: " << dp.variance();
     Eigen::Matrix<double, 4, 4> T_world_cam = vEMP[i].trans_.getTransformationMatrix();
-//        LOG(INFO) << "**************esvo_MVStereo::vEMP2vDP: " << T_world_cam;
+//        LOG(INFO) << "**************esvo_MVSMono::vEMP2vDP: " << T_world_cam;
     dp.updatePose(T_world_cam);
     vdp.push_back(dp);
   }
 }
 
-void esvo_MVStereo::eventSlicingForEM(std::vector<EventSlice>& eventSlices)
+void esvo_MVSMono::eventSlicingForEM(std::vector<EventSlice>& eventSlices)
 {
   size_t numSlice = std::floor(
     (t_upBound_.toSec() - t_lowBound_.toSec()) / EM_Slice_Thickness_);// a small number of events are ignored at this step.
@@ -1517,7 +1517,7 @@ void esvo_MVStereo::eventSlicingForEM(std::vector<EventSlice>& eventSlices)
   //  LOG(INFO) << "eventSlices: " << eventSlices.size();
 }
 
-void esvo_MVStereo::createEdgeMask(
+void esvo_MVSMono::createEdgeMask(
   std::vector<dvs_msgs::Event *> &vEventsPtr,
   PerspectiveCamera::Ptr &camPtr,
   cv::Mat& edgeMap,
@@ -1562,7 +1562,7 @@ void esvo_MVStereo::createEdgeMask(
   }
 }
 
-void esvo_MVStereo::createDenoisingMask(
+void esvo_MVSMono::createDenoisingMask(
   std::vector<dvs_msgs::Event *>& vAllEventsPtr,
   cv::Mat& mask,
   size_t row, size_t col)
@@ -1572,7 +1572,7 @@ void esvo_MVStereo::createDenoisingMask(
   cv::medianBlur(eventMap, mask, 3);
 }
 
-void esvo_MVStereo::extractDenoisedEvents(
+void esvo_MVSMono::extractDenoisedEvents(
   std::vector<dvs_msgs::Event *> &vCloseEventsPtr,
   std::vector<dvs_msgs::Event *> &vEdgeEventsPtr,
   cv::Mat& mask,

@@ -76,9 +76,10 @@ private:
 
 inline float Grid3D::GridValueRatio(const float v)
 {
-  const float r[10] = {1.0, 1.2, 1.4, 1.6, 1.8, 2.0, 2.2, 2.4, 2.6, 2.8};
-  // const float r[10] = {1.0, 1.5, 2.0, 2.5, 3.0, 4.5, 5.0, 5.5, 6.0, 6.5};
-  return (int(v / 30) >= 10 ? r[9] : r[int(v / 30)]);
+  // const float r[10] = {1.0, 1.2, 1.4, 1.6, 1.8, 2.0, 2.2, 2.4, 2.6, 2.8};
+  // // const float r[10] = {1.0, 1.5, 2.0, 2.5, 3.0, 4.5, 5.0, 5.5, 6.0, 6.5};
+  // return (int(v / 30) >= 10 ? r[9] : r[int(v / 30)]);
+  return 1.0f;
 }
 
 // Function implementation
