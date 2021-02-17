@@ -196,7 +196,7 @@ namespace esvo_core
     varianceMap_pub_ = it_.advertise("DSI_Variance_Map", 1);
     EMVS_Accu_event_ = tools::param(pnh_, "EMVS_Accu_event", 2e5);
     SAVE_RESULT_ = tools::param(pnh_, "SAVE_RESULT", false);
-
+    strDataset_ = tools::param(pnh_, "Dataset_Name", std::string("rpg_stereo"));
     T_world_map_.setIdentity();
   }
 
@@ -290,190 +290,6 @@ void esvo_MVSMono::MappingAtTime(const ros::Time& t)
   depthFramePtr_new->setTransformation(TS_obs_.second.tr_);
   depthFramePtr_ = depthFramePtr_new;
 
-  /**************************************************/
-  /********* Event-wise Matching (EM) [26] **********/
-  /**************************************************/
-  std::vector<EventMatchPair> vEMP;
-  if(msm_ == PURE_EVENT_MATCHING || msm_ == EM_PLUS_ESTIMATION)
-  {
-    // Event slicing (only for left)
-    std::vector<EventSlice> eventSlices;
-    eventSlicingForEM(eventSlices);
-//    LOG(INFO) << "-------------- eventSlicingForEM num: " << eventSlices.size();
-
-    // call event matcher
-    em_.createMatchProblem(&TS_obs_, &eventSlices, &vEventsPtr_right_);
-    em_.match_all_HyperThread(vEMP);
-//    LOG(INFO) << "-------------- vEMP num: " << vEMP.size();
-#ifdef  ESVO_CORE_MVSTEREO_LOG
-    LOG(INFO) << "vEMP.size: " << vEMP.size() << std::endl;
-#endif
-    if (vEMP.size() == 0)
-      return;
-    if (msm_ == PURE_EVENT_MATCHING)
-    {
-      std::vector<DepthPoint> vdp_em;
-      vdp_em.reserve(vEMP.size());
-      vEMP2vDP(vEMP, vdp_em);
-//      LOG(INFO) << "-------------- vEMP2vDP num: " << vdp_em.size();
-      // These are to accumulate as much depthFrames as the fusion (in the optiomization) does.
-      // This is for the comparison in the paper.
-      dqvDepthPoints_.push_back(vdp_em);
-
-      while(dqvDepthPoints_.size() > maxNumFusionFrames_)
-        dqvDepthPoints_.pop_front();
-      for(auto it = dqvDepthPoints_.rbegin(); it != dqvDepthPoints_.rend(); it++)
-        dFusor_.naive_propagation(*it, depthFramePtr_);
-
-      // visualization
-//      LOG(INFO) << "-------------- depth point num: " << depthFramePtr_->dMap_->size() << " " << dqvDepthPoints_.size();
-//      exit(-1);
-      std::thread tPublishMappingResult(&esvo_MVSMono::publishMappingResults, this,
-                                        depthFramePtr_->dMap_, depthFramePtr_->T_world_frame_, t);
-      tPublishMappingResult.detach();
-
-
-      // To save the depth result, set it to true.
-      if (SAVE_RESULT_)
-      {
-        // For quantitative comparison.
-        std::string baseDir(resultPath_);
-        std::string saveDir(baseDir);
-        saveDepthMap(depthFramePtr_->dMap_, saveDir, t);
-      }
-      return;
-    }
-  }
-
-  /***************************************************/
-  /*********** Semi-Global Matching (SGM) [45] *******/
-  /***************************************************/
-  if(msm_ == PURE_SEMI_GLOBAL_MATCHING)
-  {
-    cv::Mat dispMap, dispMap8;
-    // call SGM on the current stereo Time-Surface observation
-    sgbm_->compute(TS_obs_.second.cvImagePtr_left_->image,
-                   TS_obs_.second.cvImagePtr_right_->image, dispMap);
-    dispMap.convertTo(dispMap8, CV_8U, 255/(num_disparities_*16.));
-//    publishImage(dispMap8, t, invDepthMap_pub_, "mono8"); return;
-
-    // get the event map (mask)
-    cv::Mat edgeMap;
-    std::vector<std::pair<size_t, size_t> > vEdgeletCoordinates;
-    createEdgeMask(vEventsPtr_left_SGM_, camSysPtr_->cam_left_ptr_,
-                   edgeMap, vEdgeletCoordinates, true, 0);
-    // "and" operation and disparity -> invDepth
-    std::vector<DepthPoint> vdp_sgm;
-    vdp_sgm.reserve(vEdgeletCoordinates.size());
-    double var_pseudo = 0;//pow(stdVar_vis_threshold_*0.99,2);
-    for(size_t i = 0; i < vEdgeletCoordinates.size(); i++)
-    {
-      size_t x = vEdgeletCoordinates[i].first;
-      size_t y = vEdgeletCoordinates[i].second;
-      if(x < num_disparities_)
-        continue;
-      double disp = dispMap.at<short>(y,x) / 16.0;
-      if(disp < 0)
-        continue;
-      DepthPoint dp(x,y);
-      Eigen::Vector2d p_img(x*1.0,y*1.0);
-      dp.update_x(p_img);
-      double invDepth = disp / (camSysPtr_->cam_left_ptr_->P_(0,0) * camSysPtr_->baseline_);
-//      LOG(INFO) << "========================== invDepth: " << invDepth;
-      Eigen::Vector3d p_cam;
-      camSysPtr_->cam_left_ptr_->cam2World(p_img, invDepth, p_cam);
-//      LOG(INFO) << "========================== p_cam(2): " << p_cam(2);
-      dp.update_p_cam(p_cam);
-      dp.update(invDepth, var_pseudo);
-      dp.residual() = 0.0;
-      dp.age() = age_vis_threshold_;
-      Eigen::Matrix<double, 4, 4> T_world_cam = TS_obs_.second.tr_.getTransformationMatrix();
-      dp.updatePose(T_world_cam);
-      vdp_sgm.push_back(dp);
-    }
-    // accumulation
-    // This is to accumulate as many depthFrames as the fusion (in the optimization) does.
-    // This is for the comparison in the paper.
-    dqvDepthPoints_.push_back(vdp_sgm);
-    while(dqvDepthPoints_.size() > maxNumFusionFrames_)
-      dqvDepthPoints_.pop_front();
-    for(auto it = dqvDepthPoints_.rbegin(); it != dqvDepthPoints_.rend(); it++)
-      dFusor_.naive_propagation(*it, depthFramePtr_);
-
-    // visualization
-    std::thread tPublishMappingResult(&esvo_MVSMono::publishMappingResults, this, depthFramePtr_->dMap_, depthFramePtr_->T_world_frame_, t);
-    tPublishMappingResult.detach();
-
-    // To save the depth result, set it to true.
-    if (SAVE_RESULT_)
-    {
-      // For quantitative comparison.
-      std::string baseDir(resultPath_);
-      std::string saveDir(baseDir);
-      saveDepthMap(depthFramePtr_->dMap_, saveDir, t);
-    }
-    return;
-  }
-
-  /****************************************************/
-  /*************** Block Matching (BM) ****************/
-  /****************************************************/
-  double t_BM = 0.0;
-  double t_BM_denoising = 0.0;
-  if(msm_ == PURE_BLOCK_MATCHING || msm_ == BM_PLUS_ESTIMATION)
-  {
-    // Denoising operations
-    if(bDenoising_)
-    {
-      tt_mapping.tic();
-      // Draw one mask image for denoising
-      cv::Mat denoising_mask;
-      createDenoisingMask(vALLEventsPtr_left_, denoising_mask, camSysPtr_->cam_left_ptr_->height_, camSysPtr_->cam_left_ptr_->width_);
-
-      // Extract events (appear on edges likely) for each TS
-      vDenoisedEventsPtr_left_.clear();
-      extractDenoisedEvents(vCloseEventsPtr_left_, vDenoisedEventsPtr_left_, denoising_mask, PROCESS_EVENT_NUM_);
-      totalNumCount_ = vDenoisedEventsPtr_left_.size();
-      t_BM_denoising = tt_mapping.toc();
-    }
-    else
-    {
-      vDenoisedEventsPtr_left_.clear();
-      vDenoisedEventsPtr_left_.reserve(PROCESS_EVENT_NUM_);
-      vDenoisedEventsPtr_left_.insert(vDenoisedEventsPtr_left_.end(), vCloseEventsPtr_left_.begin(),
-        vCloseEventsPtr_left_.begin() + min(vCloseEventsPtr_left_.size(), PROCESS_EVENT_NUM_));
-    }
-
-    // block matching
-    tt_mapping.tic();
-    ebm_.createMatchProblem(&TS_obs_, &st_map_, &vDenoisedEventsPtr_left_); // interface for one slice
-    ebm_.match_all_HyperThread(vEMP);
-//    LOG(INFO) << "++++ Block Matching generates: " << vEMP.size() << " matching pairs.";
-    t_BM = tt_mapping.toc();
-    t_overall_count += t_BM_denoising;
-    t_overall_count += t_BM;
-
-    if(msm_ == PURE_BLOCK_MATCHING)
-    {
-      std::vector<DepthPoint> vdp_em;
-      vdp_em.reserve(vEMP.size());
-      vEMP2vDP(vEMP, vdp_em);
-//      LOG(INFO) << "++++ vEMP2vDP translates: " << vdp_em.size();
-
-      dqvDepthPoints_.push_back(vdp_em);
-      while(dqvDepthPoints_.size() > maxNumFusionFrames_)
-        dqvDepthPoints_.pop_front();
-      for(auto it = dqvDepthPoints_.rbegin(); it != dqvDepthPoints_.rend(); it++)
-        dFusor_.naive_propagation(*it, depthFramePtr_);
-
-      // visualization
-      std::thread tPublishMappingResult(&esvo_MVSMono::publishMappingResults, this,
-                                        depthFramePtr_->dMap_, depthFramePtr_->T_world_frame_, t);
-      tPublishMappingResult.detach();
-      return;
-    }
-  }
-
   /******************************************************************/
   /*************** Event Multi-Stereo Mapping (EMVS) ****************/
   /******************************************************************/
@@ -493,7 +309,7 @@ void esvo_MVSMono::MappingAtTime(const ros::Time& t)
       vDenoisedEventsPtr_left_.clear();
       extractDenoisedEvents(vCloseEventsPtr_left_, vDenoisedEventsPtr_left_, denoising_mask, PROCESS_EVENT_NUM_);
       totalNumCount_ = vDenoisedEventsPtr_left_.size();
-      t_BM_denoising = tt_mapping.toc();
+      t_denoising = tt_mapping.toc();
     }
     else
     {
@@ -594,8 +410,12 @@ void esvo_MVSMono::MappingAtTime(const ros::Time& t)
         dRegularizor_.apply(depthFramePtr_->dMap_);
         t_regularization = tt_mapping.toc();
       }
-    } 
-    else // TODO: since the depth point is not properly modeled as Guassian distribution
+    }
+    /**************************************************************/
+    /*************  Nonlinear Optimization & Fusion ***************/
+    /**************************************************************/
+    // TODO: since the depth point is not properly modeled as Guassian distribution
+    else 
     {
       if (FusionStrategy_ == "CONST_POINTS")
       {
@@ -669,103 +489,12 @@ void esvo_MVSMono::MappingAtTime(const ros::Time& t)
     return;
   }
 
-  /**************************************************************/
-  /*************  Nonlinear Optimization & Fusion ***************/
-  /**************************************************************/
-  if (msm_ == EM_PLUS_ESTIMATION || msm_ == BM_PLUS_ESTIMATION)
-  {
-    double t_optimization = 0;
-    double t_solve, t_fusion, t_regularization;
-    t_solve = t_fusion = t_regularization = 0.0;
-    size_t edgeMaskNum = 0;
-    size_t numFusionCount = 0;
-    {
-      tt_mapping.tic();
-      // nonlinear opitmization
-      std::vector<DepthPoint> vdp;
-      vdp.reserve(vEMP.size());
-      dpSolver_.solve(&vEMP, &TS_obs_, vdp); // hyper-thread version
-      dpSolver_.pointCulling(vdp, stdVar_vis_threshold_, cost_vis_threshold_,
-                        invDepth_min_range_, invDepth_max_range_);
-  //    LOG(INFO) << "---- Nonlinear optimization reserves: " << vdp.size();
-      t_solve = tt_mapping.toc();
-  //    LOG(INFO) << "$$$$$$$$$$$$$$$$$$$ after culling vdp.size: " << vdp.size();
-
-      // fusion (strategy 1: const number of point)
-      if(FusionStrategy_ == "CONST_POINTS")
-      {
-        size_t numFusionPoints = 0;
-        tt_mapping.tic();
-        dqvDepthPoints_.push_back(vdp);
-        for(size_t n = 0; n < dqvDepthPoints_.size(); n++)
-          numFusionPoints += dqvDepthPoints_[n].size();
-        while(numFusionPoints > 1.5 * maxNumFusionPoints_)
-        {
-          dqvDepthPoints_.pop_front();
-          numFusionPoints = 0;
-          for(size_t n = 0; n < dqvDepthPoints_.size(); n++)
-            numFusionPoints += dqvDepthPoints_[n].size();
-        }
-      }
-      else if(FusionStrategy_ == "CONST_FRAMES") // (strategy 2: const number of frames)
-      {
-        tt_mapping.tic();
-        dqvDepthPoints_.push_back(vdp);
-        while(dqvDepthPoints_.size() > maxNumFusionFrames_)
-          dqvDepthPoints_.pop_front();
-      }
-      else
-      {
-        LOG(INFO) << "Invalid FusionStrategy is assigned.";
-        exit(-1);
-      }
-
-      // apply fusion and count the total number of fusion.
-      numFusionCount = 0;
-      for(auto it = dqvDepthPoints_.rbegin(); it != dqvDepthPoints_.rend(); it++)
-      {
-        numFusionCount += dFusor_.update(*it, depthFramePtr_, fusion_radius_);
-  //    LOG(INFO) << "numFusionCount: " << numFusionCount;
-      }
-
-      TotalNumFusion_ += numFusionCount;
-      depthFramePtr_->dMap_->clean(
-        pow(stdVar_vis_threshold_,2), age_vis_threshold_, invDepth_max_range_, invDepth_min_range_);
-      t_fusion = tt_mapping.toc();
-
-      // regularization
-      if(bRegularization_)
-      {
-        tt_mapping.tic();
-        dRegularizor_.apply(depthFramePtr_->dMap_);
-        t_regularization = tt_mapping.toc();
-      }
-      t_optimization = t_solve + t_fusion + t_regularization;
-      t_overall_count += t_optimization;
-
-      // Publishing resulting maps in an independent thread (save about 1ms)
-      std::thread tPublishMappingResult(&esvo_MVSMono::publishMappingResults, this,
-                                        depthFramePtr_->dMap_, depthFramePtr_->T_world_frame_, t);
-      tPublishMappingResult.detach();
-
-      // To save the depth result, set it to true.
-      if (SAVE_RESULT_)
-      {
-        // For quantitative comparison.
-        std::string baseDir(resultPath_);
-        std::string saveDir(baseDir);
-        saveDepthMap(depthFramePtr_->dMap_, saveDir, t);
-      }
-    }
-  }
 #ifdef  ESVO_CORE_MVSTEREO_LOG
   LOG(INFO) << "\n";
   LOG(INFO) << "------------------------------------------------------------";
   LOG(INFO) << "--------------------Computation Cost-------------------------";
   LOG(INFO) << "------------------------------------------------------------";
-  LOG(INFO) << "Denoising: " << t_BM_denoising << " ms, (" << t_BM_denoising / t_overall_count * 100 << "%).";
-  LOG(INFO) << "Block Matching (BM): " << t_BM << " ms, (" << t_BM / t_overall_count * 100 << "%).";
-  LOG(INFO) << "BM success ratio: " << vEMP.size() << "/" << totalNumCount_ << "(Successes/Total).";
+  LOG(INFO) << "Denoising: " << t_denoising << " ms, (" << t_denoising / t_overall_count * 100 << "%).";
   LOG(INFO) << "------------------------------------------------------------";
   LOG(INFO) << "------------------------------------------------------------";
   LOG(INFO) << "Update: " << t_optimization << " ms, (" << t_optimization / t_overall_count * 100
@@ -835,96 +564,6 @@ bool esvo_MVSMono::dataTransferring()
   }
   if(TS_obs_.second.isEmpty())
     return false;
-
-  // Data transfer for EM [26]
-  if(msm_ == PURE_EVENT_MATCHING || msm_ == EM_PLUS_ESTIMATION)
-  {
-    vEventsPtr_left_.clear();
-    vEventsPtr_right_.clear();
-    // All events between t_lowBound and t_upBound are extracted by chronological bounding;
-    t_lowBound_ = TS_history_.begin()->first;
-    t_upBound_ = TS_history_.rbegin()->first;
-    auto ev_left_lowBound = tools::EventBuffer_lower_bound(events_left_, t_lowBound_);
-    auto ev_left_upBound = tools::EventBuffer_lower_bound(events_left_, t_upBound_);
-    ev_left_upBound--;
-    auto ev_right_lowBound = tools::EventBuffer_lower_bound(events_right_, t_lowBound_);
-    auto ev_right_upBound = tools::EventBuffer_lower_bound(events_right_, t_upBound_);
-    ev_right_upBound--;
-
-    if (ev_left_lowBound == ev_left_upBound || ev_right_lowBound == ev_right_upBound)// no events !!!
-      return false;
-
-    vEventsPtr_left_.reserve(std::distance(ev_left_lowBound, ev_left_upBound) + 1);
-    vEventsPtr_right_.reserve(std::distance(ev_right_lowBound, ev_right_upBound) + 1);
-    while (ev_left_lowBound != ev_left_upBound && vEventsPtr_left_.size() <= EM_numEventMatching_)
-    {
-      vEventsPtr_left_.push_back(ev_left_lowBound._M_cur);
-      ev_left_lowBound++;
-    }
-    while (ev_right_lowBound != ev_right_upBound && vEventsPtr_right_.size() <= EM_numEventMatching_)
-    {
-      vEventsPtr_right_.push_back(ev_right_lowBound._M_cur);
-      ev_right_lowBound++;
-    }
-    totalNumCount_ = vEventsPtr_right_.size();
-  }
-
-  // SGM [45]
-  if(msm_ == PURE_SEMI_GLOBAL_MATCHING)
-  {
-    vEventsPtr_left_SGM_.clear();
-    ros::Time t_end    = TS_obs_.first;
-    ros::Time t_begin(std::max(0.0, t_end.toSec() - 2 * BM_half_slice_thickness_));
-    auto ev_end_it     = tools::EventBuffer_lower_bound(events_left_, t_end);
-    auto ev_begin_it   = tools::EventBuffer_lower_bound(events_left_, t_begin);
-    vEventsPtr_left_SGM_.reserve(30000);
-    while(ev_end_it != ev_begin_it && vEventsPtr_left_SGM_.size() <= PROCESS_EVENT_NUM_)
-    {
-      vEventsPtr_left_SGM_.push_back(ev_end_it._M_cur);
-      ev_end_it--;
-    }
-  }
-
-  // BM
-  if(msm_ == PURE_BLOCK_MATCHING || msm_ == BM_PLUS_ESTIMATION)
-  {
-    // copy all involved events' pointers
-    vALLEventsPtr_left_.clear();  // to generate denoising mask (only used for ECCV 2018 dataset)
-    vCloseEventsPtr_left_.clear();// will be denoised using the mask above.
-
-    // load allEvent
-    ros::Time t_end    = TS_obs_.first;
-    ros::Time t_begin(std::max(0.0, t_end.toSec() - 10 * BM_half_slice_thickness_));
-    auto ev_end_it     = tools::EventBuffer_lower_bound(events_left_, t_end);
-    auto ev_begin_it   = tools::EventBuffer_lower_bound(events_left_, t_begin);//events_left_.begin();
-    const size_t MAX_NUM_Event_INVOLVED = 10000;
-    vALLEventsPtr_left_.reserve(MAX_NUM_Event_INVOLVED);
-    vCloseEventsPtr_left_.reserve(MAX_NUM_Event_INVOLVED);
-    while(ev_end_it != ev_begin_it && vALLEventsPtr_left_.size() < MAX_NUM_Event_INVOLVED)
-    {
-      vALLEventsPtr_left_.push_back(ev_end_it._M_cur);
-      vCloseEventsPtr_left_.push_back(ev_end_it._M_cur);
-      ev_end_it--;
-    }
-    totalNumCount_ = vCloseEventsPtr_left_.size();
-#ifdef ESVO_CORE_MVSTEREO_LOG
-    LOG(INFO) << "Data Transfering (vALLEventsPtr_left_): " << vALLEventsPtr_left_.size();
-#endif
-    // load transformation for all virtual views
-    // the sampling interval is 0.5 ms)
-    st_map_.clear();
-    ros::Time t_tmp = t_begin;
-    while(t_tmp.toSec() <= t_end.toSec())
-    {
-      Transformation tr;
-      if(getPoseAt(t_tmp, tr, dvs_frame_id_))
-        st_map_.emplace(t_tmp, tr);
-      t_tmp = ros::Time(t_tmp.toSec() + 0.05 * BM_half_slice_thickness_);
-    }
-#ifdef ESVO_CORE_MVSTEREO_LOG
-    LOG(INFO) << "Data Transfering (stampTransformation map): " << st_map_.size();
-#endif
-  }
 
   // EMVS
   if (msm_ == PURE_EMVS || msm_ == PURE_EMVS_PLUS_ESTIMATION)
@@ -1025,18 +664,43 @@ void esvo_MVSMono::stampedPoseCallback(const geometry_msgs::PoseStampedConstPtr 
 
   // HARDCODED: The GT pose of rpg dataset is the pose of stereo rig, namely that of the marker.
   Eigen::Matrix4d T_marker_cam;
-  T_marker_cam << 5.363262328777285e-01, -1.748374625145743e-02, -8.438296573030597e-01, -7.009849865398374e-02,
-      8.433577587813513e-01, -2.821937531845164e-02, 5.366109927684415e-01, 1.881333563905305e-02,
-      -3.319431623758162e-02, -9.994488408486204e-01, -3.897382049768972e-04, -6.966829200678797e-02,
-      0, 0, 0, 1;
+  if (!strDataset_.compare("rpg_mono"))
+  {
+    T_marker_cam.setIdentity();
+  }
+  else if (!strDataset_.compare("rpg_stereo"))
+  {
+    T_marker_cam << 5.363262328777285e-01, -1.748374625145743e-02, -8.438296573030597e-01, -7.009849865398374e-02,
+        8.433577587813513e-01, -2.821937531845164e-02, 5.366109927684415e-01, 1.881333563905305e-02,
+        -3.319431623758162e-02, -9.994488408486204e-01, -3.897382049768972e-04, -6.966829200678797e-02,
+        0, 0, 0, 1;
+  }
+  else if (!strDataset_.compare("rpg_slider"))
+  {
+    T_marker_cam.setIdentity();
+  }
+  else if (!strDataset_.compare("upen"))
+  {
+    T_marker_cam.setIdentity();
+  }
+  else if (!strDataset_.compare("ust_mono"))
+  {
+    T_marker_cam.setIdentity();
+  }
+  else if (!strDataset_.compare("ust_stereo"))
+  {
+    T_marker_cam.setIdentity();
+  }
+  else
+  {
+    T_marker_cam.setIdentity();
+  }
+
   Eigen::Matrix4d T_world_cam = T_world_marker * T_marker_cam;
-#ifdef ESVO_MVSMONO_TRACKING_DEBUG
   if (T_world_map_ == Eigen::Matrix4d::Identity())
     T_world_map_ = T_world_cam;
   Eigen::Matrix4d T_map_cam = T_world_map_.inverse() * T_world_cam;
-#else
-  Eigen::Matrix4d T_map_cam = T_world_cam;
-#endif
+
   Eigen::Matrix3d R_map_cam = T_map_cam.topLeftCorner<3, 3>();
   Eigen::Quaterniond q_map_cam(R_map_cam);
   Eigen::Vector3d t_map_cam = T_map_cam.topRightCorner<3, 1>();
@@ -1054,6 +718,7 @@ void esvo_MVSMono::stampedPoseCallback(const geometry_msgs::PoseStampedConstPtr 
           t_map_cam.z()));
   tf::StampedTransform st(tf, ps_msg->header.stamp, ps_msg->header.frame_id, dvs_frame_id_.c_str());
   tf_->setTransform(st);
+
   if (msm_ == PURE_EMVS || msm_ == PURE_EMVS_PLUS_ESTIMATION)
   {
     // add pose to mAllPoses_

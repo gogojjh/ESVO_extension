@@ -276,6 +276,7 @@ class esvo_MVSMono
   int EMVS_Accu_event_;
 
   bool SAVE_RESULT_;
+  std::string strDataset_;
 
   Eigen::Matrix4d T_world_map_;
 };
