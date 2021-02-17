@@ -342,36 +342,44 @@ void esvo_MVSMono::MappingAtTime(const ros::Time& t)
     // LOG(INFO) << mVirtualPoses_.back().first.toSec() << " " << vEdgeletCoordinates.back()[2];
 
     double t_solve, t_fusion, t_optimization, t_regularization;
-
     tt_mapping.tic();
     if (isKeyframe_)
     {
-      // LOG(INFO) << "insert a keyframe";
-      if (emvs_mapper_.accumulate_events_ < EMVS_Accu_event_)
+      LOG(INFO) << "insert a keyframe: reset the DSI for the local map\r";
+      if (!emvs_mapper_.dsiInitFlag_)
         if (!dqvDepthPoints_.empty())
           dqvDepthPoints_.pop_back();
       dqvDepthPoints_.push_back(std::vector<DepthPoint>());
-
       emvs_mapper_.dsi_.writeGridNpy(std::string(resultPath_ + "dsi.npy").c_str());
-      emvs_mapper_.initializeDSI(T_w_keyframe_);
-      emvs_mapper_.updateDSI(mVirtualPoses_, vEdgeletCoordinates);
+      emvs_mapper_.reset();
     }
     else
     {
-      // LOG(INFO) << "insert an non-keyframe";
-      emvs_mapper_.updateDSI(mVirtualPoses_, vEdgeletCoordinates);
+      LOG(INFO) << "insert an non-keyframe: add events onto the DSI\r";
     }
 
+    emvs_mapper_.storeEventsPose(mVirtualPoses_, vEdgeletCoordinates);
+    if (emvs_mapper_.storeEventNum() > EMVS_Accu_event_)
+    {
+      Eigen::Matrix4d T_w_rv;
+      ros::Time t_rv = emvs_mapper_.getRVTime();
+      trajectory_.getPoseAt(mAllPoses_, t_rv, T_w_rv);
+      emvs_mapper_.initializeDSI(T_w_rv);
+    }
+    if (emvs_mapper_.dsiInitFlag_)
+    {
+      emvs_mapper_.updateDSI();
+      emvs_mapper_.clearEvents();
+    }
     cv::Mat depth_map, confidence_map, semidense_mask;
     emvs_mapper_.getDepthMapFromDSI(depth_map, confidence_map, semidense_mask, emvs_opts_depth_map_, meanDepth_);
     cv::Mat mean_map, variance_map;
-    emvs_mapper_.getProbMapFromDSI(mean_map, variance_map);
-    if (emvs_mapper_.accumulate_events_ >= EMVS_Accu_event_) // only enough point cloud to extract map
-    {
-      std::vector<DepthPoint> &vdp = dqvDepthPoints_.back(); // depth points on the current observations
-      emvs_mapper_.getDepthPoint(depth_map, confidence_map, semidense_mask, vdp);
-    }
+    variance_map = cv::Mat::zeros(240, 320, CV_32FC1);
+    // emvs_mapper_.getProbMapFromDSI(mean_map, variance_map);
+    std::vector<DepthPoint> &vdp = dqvDepthPoints_.back(); // depth points on the current observations
+    emvs_mapper_.getDepthPoint(depth_map, confidence_map, semidense_mask, vdp);
     t_solve = tt_mapping.toc();
+    LOG(INFO) << "Get DP from DSI costs: " << t_solve << " ms\r"; // 20ms
 
     if (msm_ == PURE_EMVS)
     {
@@ -475,8 +483,7 @@ void esvo_MVSMono::MappingAtTime(const ros::Time& t)
     std::thread tPublishMappingResult(&esvo_MVSMono::publishMappingResults, this,
                                       depthFramePtr_->dMap_, depthFramePtr_->T_world_frame_, t);
     tPublishMappingResult.detach();
-
-    LOG_EVERY_N(INFO, 10) << "Depth point size: " << depthFramePtr_->dMap_->size(); // 4000
+    LOG_EVERY_N(INFO, 20) << "Depth point size: " << depthFramePtr_->dMap_->size(); // 4000
 
     // To save the depth result, set it to true.
     if (SAVE_RESULT_)

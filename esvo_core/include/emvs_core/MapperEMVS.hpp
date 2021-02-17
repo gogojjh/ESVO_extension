@@ -29,6 +29,7 @@ namespace EMVS
 	using TypeDepthVector = LinearDepthVector;
 #endif
 
+	// (Constant) parameters that define the DSI (size and intrinsics)
 	struct ShapeDSI
 	{
 	public:
@@ -102,10 +103,10 @@ namespace EMVS
 		MapperEMVS() {}
 		MapperEMVS(const esvo_core::container::PerspectiveCamera::Ptr &camPtr, ShapeDSI &dsi_shape, const float &min_parallex);
 
-		void initializeDSI(const Eigen::Matrix4d &T_w_rv);
+		void reset();
 
-		bool updateDSI(const std::vector<std::pair<ros::Time, Eigen::Matrix4d>> &pVirtualPoses,
-					   const std::vector<Eigen::Vector4d> &pvEventsPtr);
+		void initializeDSI(const Eigen::Matrix4d &T_w_rv);
+		bool updateDSI();
 
 		void getDepthMapFromDSI(cv::Mat &depth_map,
 								cv::Mat &confidence_map,
@@ -120,40 +121,46 @@ namespace EMVS
 						   const cv::Mat &mask,
 						   std::vector<esvo_core::container::DepthPoint> &vdp);
 
-		void getDepthPointFromMean(const cv::Mat &mean_map,
-								   const cv::Mat &variance_map,
-								   const cv::Mat &mask,
-								   std::vector<esvo_core::container::DepthPoint> &vdp);
-
 		void getPointcloud(const cv::Mat &depth_map,
 						   const cv::Mat &mask,
 						   const OptionsPointCloud &options_pc,
 						   pcl::PointCloud<pcl::PointXYZI>::Ptr &pc_);
 
-		Grid3D dsi_;
+		void storeEventsPose(std::vector<std::pair<ros::Time, Eigen::Matrix4d>> &pVirtualPoses,
+							 std::vector<Eigen::Vector4d> &pvEventsPtr);
 
+		inline size_t storeEventNum()
+		{
+			return vpEventsPose_.size();
+		}
+
+		inline void clearEvents()
+		{
+			vpEventsPose_.clear();
+			vpEventsPose_.reserve(2e5);
+		}
+
+		inline ros::Time getRVTime()
+		{
+			return ros::Time((*vpEventsPose_[vpEventsPose_.size() / 2].first)[2]);
+		}
+
+		Grid3D dsi_;
+		
 		Eigen::Matrix4d T_w_rv_;
 
-	// private:
+		bool dsiInitFlag_;
+
+	private:
 		void precomputeRectifiedPoints();
 		void fillVoxelGrid(const std::vector<Eigen::Vector4f> &event_locations_z0,
 						   const std::vector<Eigen::Vector3f> &camera_centers);
 		void convertDepthIndicesToValues(const cv::Mat &depth_cell_indices, cv::Mat &depth_map);
 		void removeMaskBoundary(cv::Mat &mask, int border_size);
 
-		// Intrinsics of the camera
-		// camodocal::CameraPtr camera_ptr_;
-		// camodocal::CameraPtr camera_virtual_ptr_;
-
-		// std::vector<double> camera_params_;
-		// std::vector<double> camera_virtual_params_;
-
 		Eigen::Matrix3f K_virtual_, K_;
 		int width_;
 		int height_;
-
-		// (Constant) parameters that define the DSI (size and intrinsics)
-		// ShapeDSI dsi_shape_;
 
 		// Precomputed vector of num_depth_cells_ inverse depths,
 		// uniformly sampled in inverse depth space
@@ -163,8 +170,7 @@ namespace EMVS
 		// Precomputed (normalized) bearing vectors for each pixel of the reference image
 		Eigen::Matrix2Xf precomputed_rectified_points_;
 
-		size_t accumulate_events_;
-
+		std::vector<std::pair<std::shared_ptr<Eigen::Vector4d>, std::shared_ptr<Eigen::Matrix4d>>> vpEventsPose_;
 		float MIN_PARALLEX_;
 	};
 
