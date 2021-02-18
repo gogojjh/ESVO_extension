@@ -273,7 +273,7 @@ class esvo_MVStereo
   double meanDepth_;
   double KEYFRAME_LINEAR_DIS_, KEYFRAME_ORIENTATION_DIS_, KEYFRAME_MEANDEPTH_DIS_;
   image_transport::Publisher depthMap_pub_, confidenceMap_pub_, semiDenseMask_pub_, varianceMap_pub_;
-  int EMVS_Accu_event_;
+  int EMVS_Keyframe_event_;
 
   bool SAVE_RESULT_;
 

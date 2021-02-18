@@ -151,6 +151,28 @@ namespace EMVS
 		}
 	}
 
+	void MapperEMVS::computeObservation(const int &num_event)
+	{
+		pTSNegative_ = std::make_shared<Eigen::MatrixXd>(height_, width_);
+		pTSNegative_->setZero();
+		for (size_t i = vpEventsPose_.size() / 2 - num_event; i < vpEventsPose_.size() / 2 + num_event; i++)
+		{
+			double x = (*vpEventsPose_[i].first)[0];
+			double y = (*vpEventsPose_[i].first)[1];
+			if (x < 0.0 || y < 0.0 || x >= pTSNegative_->cols() - 1 || y >= pTSNegative_->rows() - 1)
+				continue;
+			(*pTSNegative_)(floor(y), floor(x)) = 255.0;
+			(*pTSNegative_)(floor(y) + 1, floor(x)) = 255.0;
+			(*pTSNegative_)(floor(y), floor(x) + 1) = 255.0;
+			(*pTSNegative_)(floor(y) + 1, floor(x) + 1) = 255.0;
+		}
+		cv::Mat eventMap;
+		cv::eigen2cv(*pTSNegative_, eventMap);
+		eventMap.convertTo(eventMap, CV_8UC1);
+		cv::imshow("eventMap", eventMap);
+		cv::waitKey(30);
+	}
+
 	bool MapperEMVS::observedTS(const float &x, const float &y)
 	{
 		if (x < 0.0f || y < 0.0f || x >= pTSNegative_->cols() || y >= pTSNegative_->rows())
@@ -171,8 +193,11 @@ namespace EMVS
 		SrcPatch_DownRight[1] = SrcPatch_DownRight[1] >= pTSNegative_->rows() ? pTSNegative_->rows() - 1 : SrcPatch_DownRight[1];
 		for (int y = SrcPatch_UpLeft[1]; y <= SrcPatch_DownRight[1]; y++)
 			for (int x = SrcPatch_UpLeft[0]; x <= SrcPatch_DownRight[0]; x++)
-				if ((*pTSNegative_)(y, x) <= static_cast<double>(min_TS_Score_)) // any event is triggered
+				if ((*pTSNegative_)(y, x) > static_cast<double>(0.0)) // any event is triggered
 					return true;
+
+				// if ((*pTSNegative_)(y, x) <= static_cast<double>(min_TS_Score_)) // any event is triggered
+				// 	return true;
 		// Eigen::MatrixXd SrcPatch = pTSNegative_->block(SrcPatch_UpLeft[1],
 		// 											   SrcPatch_UpLeft[0],
 		// 											   SrcPatch_DownRight[1] - SrcPatch_UpLeft[1] + 1,
@@ -206,6 +231,7 @@ namespace EMVS
 										   std::make_shared<Eigen::Matrix4d>(T_w_ev));
 			}
 		}
+		accu_event_number_ += pvEventsPtr.size();
 	}
 
 	void MapperEMVS::reset()
@@ -214,6 +240,7 @@ namespace EMVS
 		vpEventsPose_.clear();
 		vpEventsPose_.reserve(2e5);
 		dsiInitFlag_ = false;
+		accu_event_number_ = 0;
 	}
 
 	void MapperEMVS::precomputeRectifiedPoints()
@@ -317,17 +344,17 @@ namespace EMVS
 			mean_depth /= depth_cnt;
 
 		// remove outliers by checking the voting on a patch
-		size_t patchSize = 3;
-		for (size_t y = 0; y < confidence_map.rows / patchSize; y++)
-		{
-			for (size_t x = 0; x < confidence_map.cols / patchSize; x++)
-			{
-				cv::Rect roi(x * patchSize, y * patchSize, patchSize, patchSize);
-				double contrast = cv::norm(confidence_map(roi), cv::NORM_L2SQR);
-				if (contrast <= options_depth_map.contrast_threshold_)
-					mask(roi).setTo(cv::Scalar(0));
-			}
-		}
+		// size_t patchSize = 3;
+		// for (size_t y = 0; y < confidence_map.rows / patchSize; y++)
+		// {
+		// 	for (size_t x = 0; x < confidence_map.cols / patchSize; x++)
+		// 	{
+		// 		cv::Rect roi(x * patchSize, y * patchSize, patchSize, patchSize);
+		// 		double contrast = cv::norm(confidence_map(roi), cv::NORM_L2SQR);
+		// 		if (contrast <= options_depth_map.contrast_threshold_)
+		// 			mask(roi).setTo(cv::Scalar(0));
+		// 	}
+		// }
 	}
 
 	void MapperEMVS::getProbMapFromDSI(cv::Mat &mean_map, cv::Mat &variance_map)
@@ -350,7 +377,7 @@ namespace EMVS
 				float variance = 0.0;
 				for (unsigned int k = 0; k < dimZ; ++k)
 				{
-					float inv_depth = 1.0 / depths_vec_.cellIndexToDepth(k);
+					float inv_depth = 255.0 / depths_vec_.cellIndexToDepth(k);
 					mean += grid_vals_vec.at(k) / sum * inv_depth;
 					variance += grid_vals_vec.at(k) / sum * inv_depth * inv_depth;
 				}

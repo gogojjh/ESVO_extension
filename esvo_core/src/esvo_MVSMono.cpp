@@ -197,7 +197,8 @@ namespace esvo_core
     confidenceMap_pub_ = it_.advertise("DSI_Confidence_Map", 1);
     semiDenseMask_pub_ = it_.advertise("DSI_Semi_Dense_Mask", 1);
     varianceMap_pub_ = it_.advertise("DSI_Variance_Map", 1);
-    EMVS_Accu_event_ = tools::param(pnh_, "EMVS_Accu_event", 2e5);
+    EMVS_Init_event_ = tools::param(pnh_, "EMVS_Init_event", 5e4);
+    EMVS_Keyframe_event_ = tools::param(pnh_, "EMVS_Accu_event", 2e5); // it should be: EMVS_Keyframe_event_ > EMVS_Init_event_
     SAVE_RESULT_ = tools::param(pnh_, "SAVE_RESULT", false);
     strDataset_ = tools::param(pnh_, "Dataset_Name", std::string("rpg_stereo"));
     T_world_map_.setIdentity();
@@ -348,8 +349,8 @@ void esvo_MVSMono::MappingAtTime(const ros::Time& t)
     tt_mapping.tic();
     if (isKeyframe_)
     {
-      // LOG(INFO) << "insert a keyframe: reset the DSI for the local map\r";
-      if (!emvs_mapper_.dsiInitFlag_)
+      LOG(INFO) << "insert a keyframe: reset the DSI for the local map\r";
+      if (emvs_mapper_.accu_event_number_ <= EMVS_Keyframe_event_)
         if (!dqvDepthPoints_.empty())
           dqvDepthPoints_.pop_back();
       dqvDepthPoints_.push_back(std::vector<DepthPoint>());
@@ -366,7 +367,7 @@ void esvo_MVSMono::MappingAtTime(const ros::Time& t)
     {
       TS_obs_.second.getTimeSurfaceNegative(0);
       TS_map_negative_history_.emplace(t, std::make_shared<Eigen::MatrixXd>(TS_obs_.second.TS_negative_left_));
-      if (emvs_mapper_.storeEventNum() > EMVS_Accu_event_)
+      if (emvs_mapper_.storeEventNum() > EMVS_Init_event_)
       {
         Eigen::Matrix4d T_w_rv;
         ros::Time t_rv = emvs_mapper_.getRVTime();
@@ -376,16 +377,11 @@ void esvo_MVSMono::MappingAtTime(const ros::Time& t)
                             [](const ros::Time &t, const std::pair<ros::Time, std::shared_ptr<Eigen::MatrixXd>> &tso) {
                               return t.toSec() < tso.first.toSec();
                             });
-        // LOG(INFO) << "t_rv: " << t_rv << ", " << "it_TS_negative: " << it_TS_negative->first;
         emvs_mapper_.initializeDSI(T_w_rv);
-        emvs_mapper_.setTSNegativeObservation(it_TS_negative->second);
+        // emvs_mapper_.computeObservation(2e3);
+        // emvs_mapper_.setTSNegativeObservation(it_TS_negative->second);
         TS_map_negative_history_.clear();
-
-        // cv::Mat TS_negative_mat;
-        // cv::eigen2cv(*it_TS_negative->second, TS_negative_mat);
-        // TS_negative_mat.convertTo(TS_negative_mat, CV_8UC1);
-        // cv::imshow("TS_negative_mat", TS_negative_mat);
-        // cv::waitKey(30);
+        // LOG(INFO) << "t_rv: " << t_rv << ", " << "it_TS_negative: " << it_TS_negative->first;
       }
     }
     if (emvs_mapper_.dsiInitFlag_)
@@ -395,9 +391,6 @@ void esvo_MVSMono::MappingAtTime(const ros::Time& t)
     }
     cv::Mat depth_map, confidence_map, semidense_mask;
     emvs_mapper_.getDepthMapFromDSI(depth_map, confidence_map, semidense_mask, emvs_opts_depth_map_, meanDepth_);
-    cv::Mat mean_map, variance_map;
-    variance_map = cv::Mat::zeros(240, 320, CV_32FC1);
-    // emvs_mapper_.getProbMapFromDSI(mean_map, variance_map);
     std::vector<DepthPoint> &vdp = dqvDepthPoints_.back(); // depth points on the current observations
     emvs_mapper_.getDepthPoint(depth_map, confidence_map, semidense_mask, vdp);
     t_solve = tt_mapping.toc();
@@ -498,7 +491,7 @@ void esvo_MVSMono::MappingAtTime(const ros::Time& t)
     }
 
     std::thread tPublishDSIResult(&esvo_MVSMono::publishDSIResults, this,
-                                  t, semidense_mask, depth_map, confidence_map, variance_map);
+                                  t, semidense_mask, depth_map, confidence_map);
     tPublishDSIResult.detach();
 
     // visualization
@@ -756,7 +749,6 @@ void esvo_MVSMono::stampedPoseCallback(const geometry_msgs::PoseStampedConstPtr 
   {
     // add pose to mAllPoses_
     mAllPoses_.emplace(ps_msg->header.stamp, T_map_cam);
-    // mAllPoses_.emplace(ps_msg->header.stamp, T_world_cam);
   }
 }
 
@@ -1015,8 +1007,7 @@ void esvo_MVSMono::onlineParameterChangeCallback(DVS_MappingStereoConfig &config
 }
 
 void esvo_MVSMono::publishDSIResults(const ros::Time &t, const cv::Mat &semiDenseMask,
-                                      const cv::Mat &depthMap, const cv::Mat &confidenceMap,
-                                      const cv::Mat &varianceMap)
+                                      const cv::Mat &depthMap, const cv::Mat &confidenceMap)
 {
   publishImage(255 * semiDenseMask, t, semiDenseMask_pub_, "mono8");
 
@@ -1031,10 +1022,6 @@ void esvo_MVSMono::publishDSIResults(const ros::Time &t, const cv::Mat &semiDens
   cv::Mat confidenceMap255;
   cv::normalize(confidenceMap, confidenceMap255, 0, 255.0, cv::NORM_MINMAX, CV_8UC1);
   publishImage(confidenceMap255, t, confidenceMap_pub_, "mono8");
-
-  cv::Mat varianceMap255;
-  cv::normalize(varianceMap, varianceMap255, 0, 255.0, cv::NORM_MINMAX, CV_8UC1);
-  publishImage(varianceMap255, t, varianceMap_pub_, "mono8");
 }
 
 void esvo_MVSMono::publishMappingResults(

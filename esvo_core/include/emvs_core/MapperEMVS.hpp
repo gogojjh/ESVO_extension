@@ -5,9 +5,10 @@
 
 #include <dvs_msgs/Event.h>
 
-#include <opencv2/opencv.hpp>
-
 #include <eigen3/Eigen/Dense>
+
+#include <opencv2/opencv.hpp>
+#include <opencv2/core/eigen.hpp>
 
 #include <pcl/point_types.h>
 #include <pcl_ros/point_cloud.h>
@@ -150,6 +151,8 @@ namespace EMVS
 			pTSNegative_ = pTSNegative;
 		}
 
+		void computeObservation(const int &num_event);
+
 		inline size_t storeEventNum()
 		{
 			return vpEventsPose_.size();
@@ -167,10 +170,9 @@ namespace EMVS
 		}
 
 		Grid3D dsi_;
-		
 		Eigen::Matrix4d T_w_rv_;
-
 		bool dsiInitFlag_;
+		size_t accu_event_number_;
 
 	private:
 		void precomputeRectifiedPoints();

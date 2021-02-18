@@ -255,8 +255,7 @@ class esvo_MVSMono
   // EMVS_Mapping
   void insertKeyframe();
   void publishDSIResults(const ros::Time &t, const cv::Mat &semiDenseMask,
-                         const cv::Mat &depthMap, const cv::Mat &confidenceMap,
-                         const cv::Mat &varianceMap);
+                         const cv::Mat &depthMap, const cv::Mat &confidenceMap);
 
   EMVS::ShapeDSI emvs_dsi_shape_;
   EMVS::OptionsDepthMap emvs_opts_depth_map_;
@@ -274,7 +273,7 @@ class esvo_MVSMono
   double meanDepth_;
   double KEYFRAME_LINEAR_DIS_, KEYFRAME_ORIENTATION_DIS_, KEYFRAME_MEANDEPTH_DIS_;
   image_transport::Publisher depthMap_pub_, confidenceMap_pub_, semiDenseMask_pub_, varianceMap_pub_;
-  int EMVS_Accu_event_;
+  int EMVS_Keyframe_event_, EMVS_Init_event_;
 
   bool SAVE_RESULT_;
   std::string strDataset_;
