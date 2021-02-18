@@ -365,23 +365,27 @@ void esvo_MVSMono::MappingAtTime(const ros::Time& t)
     emvs_mapper_.storeEventsPose(mVirtualPoses_, vEdgeletCoordinates);
     if (!emvs_mapper_.dsiInitFlag_)
     {
+#ifdef EMVS_CHECK_OBS
       TS_obs_.second.getTimeSurfaceNegative(0);
       TS_map_negative_history_.emplace(t, std::make_shared<Eigen::MatrixXd>(TS_obs_.second.TS_negative_left_));
+#endif
       if (emvs_mapper_.storeEventNum() > EMVS_Init_event_)
       {
         Eigen::Matrix4d T_w_rv;
         ros::Time t_rv = emvs_mapper_.getRVTime();
         trajectory_.getPoseAt(mAllPoses_, t_rv, T_w_rv);
+#ifdef EMVS_CHECK_OBS
         std::map<ros::Time, std::shared_ptr<Eigen::MatrixXd>>::iterator it_TS_negative =
             std::upper_bound(TS_map_negative_history_.begin(), TS_map_negative_history_.end(), t_rv,
                             [](const ros::Time &t, const std::pair<ros::Time, std::shared_ptr<Eigen::MatrixXd>> &tso) {
                               return t.toSec() < tso.first.toSec();
                             });
-        emvs_mapper_.initializeDSI(T_w_rv);
-        // emvs_mapper_.computeObservation(2e3);
-        // emvs_mapper_.setTSNegativeObservation(it_TS_negative->second);
+        emvs_mapper_.computeObservation(2e3);
+        emvs_mapper_.setTSNegativeObservation(it_TS_negative->second);
         TS_map_negative_history_.clear();
         // LOG(INFO) << "t_rv: " << t_rv << ", " << "it_TS_negative: " << it_TS_negative->first;
+#endif
+        emvs_mapper_.initializeDSI(T_w_rv);
       }
     }
     if (emvs_mapper_.dsiInitFlag_)
