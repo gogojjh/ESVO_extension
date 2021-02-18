@@ -395,6 +395,7 @@ namespace EMVS
 								   const double &stdVar_init)
 	{
 		vdp.clear();
+		vdp.reserve(depth_map.rows * depth_map.cols);
 		for (size_t y = 0; y < depth_map.rows; ++y)
 		{
 			for (size_t x = 0; x < depth_map.cols; ++x)

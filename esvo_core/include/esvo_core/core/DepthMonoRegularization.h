@@ -18,6 +18,7 @@ namespace esvo_core
       virtual ~DepthMonoRegularization();
 
       void apply(DepthMap::Ptr &depthMapPtr);
+      void applyEdgeBased(DepthMap::Ptr &depthMapPtr);
 
     private:
       std::shared_ptr<DepthProblemConfig> dpConfigPtr_;

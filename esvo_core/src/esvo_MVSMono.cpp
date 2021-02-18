@@ -396,11 +396,15 @@ void esvo_MVSMono::MappingAtTime(const ros::Time& t)
     }
     cv::Mat depth_map, confidence_map, semidense_mask;
     emvs_mapper_.getDepthMapFromDSI(depth_map, confidence_map, semidense_mask, emvs_opts_depth_map_, meanDepth_);
-    std::vector<DepthPoint> &vdp = dqvDepthPoints_.back(); // depth points on the current observations
-    emvs_mapper_.getDepthPoint(depth_map, confidence_map, semidense_mask, vdp, stdVar_init_);
     t_solve = tt_mapping.toc();
     LOG_EVERY_N(INFO, 100) << "Get DP from DSI costs: " << t_solve << " ms\r"; // 40ms
-    LOG_EVERY_N(INFO, 50) << "Depth point size: " << vdp.size(); // 4000
+    
+    if (emvs_mapper_.accu_event_number_ >= EMVS_Keyframe_event_)
+    {
+      std::vector<DepthPoint> &vdp = dqvDepthPoints_.back(); // depth points on the current observations
+      emvs_mapper_.getDepthPoint(depth_map, confidence_map, semidense_mask, vdp, stdVar_init_);
+      LOG_EVERY_N(INFO, 50) << "Depth point size: " << vdp.size(); // 4000
+    }
 
     if (msm_ == PURE_EMVS)
     {
