@@ -7,7 +7,7 @@ age_max_range: 10
 age_vis_threshold: 1
 fusion_radius: 0
 FUSION_STRATEGY: "CONST_FRAMES" #"CONST_FRAMES" or "CONST_POINTS"
-maxNumFusionFrames: 40
+maxNumFusionFrames: 5 # the near merged keyframes
 maxNumFusionPoints: 5000
 Denoising: False
 SmoothTimeSurface: False
@@ -37,8 +37,13 @@ BM_max_disparity: 40
 BM_step: 1
 BM_ZNCC_Threshold: 0.1
 BM_bUpDownConfiguration: False
+# Publish result parameters
+bVisualizeGlobalPC: True
+visualizeGPC_interval: 3.0
+NumGPC_added_oper_refresh: 2000
+
 # MVStereo Mode
-MVStereoMode: 6
+MVSMonoMode: 6
 #  PURE_EVENT_MATCHING           //0 EM [26]
 #  PURE_BLOCK_MATCHING           //1 BM
 #  EM_PLUS_ESTIMATION            //2 EM [26] + nonlinear opt.
@@ -48,7 +53,8 @@ MVStereoMode: 6
 #  PURE_EMVS_PLUS_ESTIMATION     //6 [33] + nonlinear opt.
 
 SAVE_RESULT: false
-PATH_TO_SAVE_RESULT: "/home/jjiao/ESVO_result/rpg/" # CHANGE THIS PATH
+PATH_TO_SAVE_RESULT: "/home/jjiao/ESVO_result/rpg_stereo/" # CHANGE THIS PATH
+Dataset_Name: "rpg_stereo"
 
 # EMVS Mapping
 opts_dim_x: 0
@@ -69,5 +75,3 @@ KEYFRAME_ORIENTATION_DIS: 5 # degree
 KEYFRAME_MEANDEPTH_DIS: 0.3 # percentage
 EMVS_Init_event: 50000 #200000
 EMVS_Keyframe_event: 200000 #200000
-
-Dataset_Name: "rpg_stereo"

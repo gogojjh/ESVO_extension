@@ -8,6 +8,7 @@
                 "/usr/include/pcl-1.8/",
                 "/opt/ros/melodic/include/**",
                 "~/catkin_ws/devel/include/**",
+                "~/catkin_ws/src/localization/eth_asl/",
                 "/usr/include/eigen3"
             ],
             "defines": [],
