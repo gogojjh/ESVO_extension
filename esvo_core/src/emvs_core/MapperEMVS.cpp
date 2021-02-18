@@ -166,11 +166,11 @@ namespace EMVS
 			(*pTSNegative_)(floor(y), floor(x) + 1) = 255.0;
 			(*pTSNegative_)(floor(y) + 1, floor(x) + 1) = 255.0;
 		}
-		cv::Mat eventMap;
-		cv::eigen2cv(*pTSNegative_, eventMap);
-		eventMap.convertTo(eventMap, CV_8UC1);
-		cv::imshow("eventMap", eventMap);
-		cv::waitKey(30);
+		// cv::Mat eventMap;
+		// cv::eigen2cv(*pTSNegative_, eventMap);
+		// eventMap.convertTo(eventMap, CV_8UC1);
+		// cv::imshow("eventMap", eventMap);
+		// cv::waitKey(30);
 	}
 
 	bool MapperEMVS::observedTS(const float &x, const float &y)
@@ -391,7 +391,8 @@ namespace EMVS
 	void MapperEMVS::getDepthPoint(const cv::Mat &depth_map,
 								   const cv::Mat &confidence_map,
 								   const cv::Mat &mask,
-								   std::vector<esvo_core::container::DepthPoint> &vdp)
+								   std::vector<esvo_core::container::DepthPoint> &vdp,
+								   const double &stdVar_init)
 	{
 		vdp.clear();
 		for (size_t y = 0; y < depth_map.rows; ++y)
@@ -406,14 +407,13 @@ namespace EMVS
 					if (xyz_rv.z() <= 1e-6)
 						continue;
 
-					double var_pseudo = 0; //pow(stdVar_vis_threshold_*0.99,2);
 					esvo_core::container::DepthPoint dp(x, y);
 					Eigen::Vector2d p_img(x * 1.0, y * 1.0);
 					dp.update_x(p_img);
 					Eigen::Vector3d p_cam;
 					p_cam = xyz_rv.cast<double>();
 					dp.update_p_cam(p_cam);
-					dp.update(1.0 / xyz_rv.z(), var_pseudo);
+					dp.update(1.0 / xyz_rv.z(), stdVar_init * stdVar_init);
 					// dp.update(1.0 / xyz_rv.z(), static_cast<double>(variance_map.at<float>(y, x)));
 					// dp.update_confidence(1.0 / xyz_rv.z(), static_cast<double>(confidence_map.at<float>(y, x)));
 					dp.residual() = 0.0;

@@ -21,11 +21,11 @@ namespace esvo_core
       Eigen::Vector3d p_prop = T_prop_prior.block<3, 3>(0, 0) * dp_prior.p_cam() +
                                T_prop_prior.block<3, 1>(0, 3);
 
-      // TODO: is the camera region too small?
       Eigen::Vector2d x_prop;
       camSysPtr_->cam_left_ptr_->world2Cam(p_prop, x_prop);
       if (!boundaryCheck(x_prop(0), x_prop(1),
-                         camSysPtr_->cam_left_ptr_->width_, camSysPtr_->cam_left_ptr_->height_))
+                         camSysPtr_->cam_left_ptr_->width_, 
+                         camSysPtr_->cam_left_ptr_->height_))
         return false;
 
       // create a depth point with propagated attributes.
@@ -34,7 +34,6 @@ namespace esvo_core
       dp_prop = DepthPoint(row, col);
       dp_prop.update_x(x_prop);
 
-      // compute the new inverse depth
       double invDepth = 1.0 / p_prop(2);
 
       // compute the jacobian
@@ -44,7 +43,12 @@ namespace esvo_core
       // double J = T_prop_prior(2, 2) / pow(denominator, 2);
 
       // propagation
-      // double variance, scale2, nu;
+      double variance, scale2, nu;
+      if (strcmp(dpConfigPtr_->Noise_Model_.c_str(), "Gaussian") == 0)
+      {
+        variance = dp_prior.variance();
+        dp_prop.update(invDepth, variance);
+      }
       // if (strcmp(dpConfigPtr_->LSnorm_.c_str(), "l2") == 0)
       // {
       //   variance = J * J * dp_prior.variance();
@@ -57,12 +61,12 @@ namespace esvo_core
       //   variance = nu / (nu - 2) * scale2;
       //   dp_prop.update_studentT(invDepth, scale2, variance, nu);
       // }
-      // else
-      //   exit(-1);
+      else
+        exit(-1);
 
-      dp_prop.update_confidence(invDepth, dp_prior.confidence());
+      // dp_prop.update_confidence(invDepth, dp_prior.confidence());
       dp_prop.update_p_cam(p_prop);
-      // dp_prop.residual() = dp_prior.residual();
+      dp_prop.residual() = dp_prior.residual();
       dp_prop.age() = dp_prior.age();
       return true;
     }
@@ -134,8 +138,13 @@ namespace esvo_core
           // }
           // else
           //   exit(-1);
-          dp_new.update_confidence(dp_prop.invDepth(), dp_prop.confidence());
-          // dp_new.residual() = dp_prop.residual();
+          // dp_new.update_confidence(dp_prop.invDepth(), dp_prop.confidence());
+
+          if (strcmp(dpConfigPtr_->Noise_Model_.c_str(), "Gaussian") == 0)
+            dp_new.update(dp_prop.invDepth(), dp_prop.variance());
+          else
+            exit(-1);
+          dp_new.residual() = dp_prop.residual();
           Eigen::Vector3d p_cam;
           camSysPtr_->cam_left_ptr_->cam2World(dp_new.x(), dp_prop.invDepth(), p_cam);
           dp_new.update_p_cam(p_cam);
@@ -156,7 +165,12 @@ namespace esvo_core
           // else
           //   exit(-1);
 
-          bool bCompatibility = true;
+          bool bCompatibility = false;
+          if (strcmp(dpConfigPtr_->Noise_Model_.c_str(), "Gaussian") == 0)
+            bCompatibility = chiSquareTest(dp_prop.invDepth(), dm->at(row, col).invDepth(),
+                                           dp_prop.variance(), dm->at(row, col).variance());
+          else
+            exit(-1);
 
           // case 2.1 compatible
           if (bCompatibility)
@@ -167,26 +181,30 @@ namespace esvo_core
             //   dm->get(row, col).update_studentT(dp_prop.invDepth(), dp_prop.scaleSquared(), dp_prop.variance(), dp_prop.nu());
             // else
             //   exit(-1);
+            // dm->get(row, col).update_confidence(dp_prop.invDepth(), dp_prop.confidence());
 
-            dm->get(row, col).update_confidence(dp_prop.invDepth(), dp_prop.confidence());
+            if (strcmp(dpConfigPtr_->Noise_Model_.c_str(), "Gaussian") == 0)
+              dm->get(row, col).update(dp_prop.invDepth(), dp_prop.variance());
+            else
+              exit(-1);
 
             dm->get(row, col).age()++;
-            // dm->get(row, col).residual() = min(dm->get(row, col).residual(), dp_prop.residual());
+            dm->get(row, col).residual() = min(dm->get(row, col).residual(), dp_prop.residual());
             Eigen::Vector3d p_update;
             camSysPtr_->cam_left_ptr_->cam2World(dm->get(row, col).x(), dp_prop.invDepth(), p_update);
             dm->get(row, col).update_p_cam(p_update);
             numFusion++;
           }
-          // else // case 2.2 not compatible
-          // {
-          //   // consider occlusion (the pixel is already assigned with a point that is closer to the camera)
-          //   if (dm->at(row, col).invDepth() - 2 * sqrt(dm->at(row, col).variance()) > dp_prop.invDepth())
-          //     continue;
-          //   if (dp_prop.variance() < dm->at(row, col).variance() && dp_prop.residual() < dm->at(row, col).residual()) //&& other requirement? such as cost?
-          //   {
-          //     dm->get(row, col) = dp_prop;
-          //   }
-          // }
+          else // case 2.2 not compatible
+          {
+            // consider occlusion (the pixel is already assigned with a point that is closer to the camera)
+            if (dm->at(row, col).invDepth() - 2 * sqrt(dm->at(row, col).variance()) > dp_prop.invDepth())
+              continue;
+            if (dp_prop.variance() < dm->at(row, col).variance() && dp_prop.residual() < dm->at(row, col).residual()) //&& other requirement? such as cost?
+            {
+              dm->get(row, col) = dp_prop;
+            }
+          }
         }
       }
       return numFusion;

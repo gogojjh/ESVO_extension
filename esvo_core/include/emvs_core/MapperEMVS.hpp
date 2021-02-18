@@ -136,7 +136,8 @@ namespace EMVS
 		void getDepthPoint(const cv::Mat &depth_map,
 						   const cv::Mat &confidence_map,
 						   const cv::Mat &mask,
-						   std::vector<esvo_core::container::DepthPoint> &vdp);
+						   std::vector<esvo_core::container::DepthPoint> &vdp,
+						   const double &stdVar_init);
 
 		void getPointcloud(const cv::Mat &depth_map,
 						   const cv::Mat &mask,

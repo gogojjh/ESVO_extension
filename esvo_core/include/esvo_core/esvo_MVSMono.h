@@ -16,6 +16,7 @@
 #include <esvo_core/container/EventMatchPair.h>
 #include <esvo_core/container/TimeSurfaceObservation.h>
 #include <esvo_core/core/DepthFusion.h>
+#include <esvo_core/core/DepthMonoFusion.h>
 #include <esvo_core/core/DepthRegularization.h>
 #include <esvo_core/core/DepthProblem.h>
 #include <esvo_core/core/DepthProblemSolver.h>
@@ -166,7 +167,8 @@ class esvo_MVSMono
   eMVStereoMode msm_;
   DepthProblemConfig::Ptr dpConfigPtr_;
   DepthProblemSolver dpSolver_;
-  DepthFusion dFusor_;
+  // DepthFusion dFusor_;
+  DepthMonoFusion dFusor_;
   DepthRegularization dRegularizor_;
   Visualization visualizor_;
   EventMatcher em_;
@@ -199,6 +201,7 @@ class esvo_MVSMono
   size_t patch_area_;
   double residual_vis_threshold_;
   double stdVar_vis_threshold_;
+  double stdVar_init_;
   size_t age_max_range_;
   size_t age_vis_threshold_;
   int fusion_radius_;

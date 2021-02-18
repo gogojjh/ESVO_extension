@@ -73,6 +73,7 @@ namespace esvo_core
     residual_vis_threshold_ = tools::param(pnh_, "residual_vis_threshold", 15);
     cost_vis_threshold_ = pow(residual_vis_threshold_, 2) * patch_area_;
     stdVar_vis_threshold_ = tools::param(pnh_, "stdVar_vis_threshold", 0.005);
+    stdVar_init_ = tools::param(pnh_, "stdVar_init", 0.1);
     age_max_range_ = tools::param(pnh_, "age_max_range", 5);
     age_vis_threshold_ = tools::param(pnh_, "age_vis_threshold", 0);
     fusion_radius_ = tools::param(pnh_, "fusion_radius", 0);
@@ -198,7 +199,7 @@ namespace esvo_core
     semiDenseMask_pub_ = it_.advertise("DSI_Semi_Dense_Mask", 1);
     varianceMap_pub_ = it_.advertise("DSI_Variance_Map", 1);
     EMVS_Init_event_ = tools::param(pnh_, "EMVS_Init_event", 5e4);
-    EMVS_Keyframe_event_ = tools::param(pnh_, "EMVS_Accu_event", 2e5); // it should be: EMVS_Keyframe_event_ > EMVS_Init_event_
+    EMVS_Keyframe_event_ = tools::param(pnh_, "EMVS_Keyframe_event", 2e5); // it should be: EMVS_Keyframe_event_ > EMVS_Init_event_
     SAVE_RESULT_ = tools::param(pnh_, "SAVE_RESULT", false);
     strDataset_ = tools::param(pnh_, "Dataset_Name", std::string("rpg_stereo"));
     T_world_map_.setIdentity();
@@ -396,9 +397,10 @@ void esvo_MVSMono::MappingAtTime(const ros::Time& t)
     cv::Mat depth_map, confidence_map, semidense_mask;
     emvs_mapper_.getDepthMapFromDSI(depth_map, confidence_map, semidense_mask, emvs_opts_depth_map_, meanDepth_);
     std::vector<DepthPoint> &vdp = dqvDepthPoints_.back(); // depth points on the current observations
-    emvs_mapper_.getDepthPoint(depth_map, confidence_map, semidense_mask, vdp);
+    emvs_mapper_.getDepthPoint(depth_map, confidence_map, semidense_mask, vdp, stdVar_init_);
     t_solve = tt_mapping.toc();
-    LOG_EVERY_N(INFO, 50) << "Get DP from DSI costs: " << t_solve << " ms\r"; // 40ms
+    LOG_EVERY_N(INFO, 100) << "Get DP from DSI costs: " << t_solve << " ms\r"; // 40ms
+    LOG_EVERY_N(INFO, 50) << "Depth point size: " << vdp.size(); // 4000
 
     if (msm_ == PURE_EMVS)
     {
@@ -427,11 +429,12 @@ void esvo_MVSMono::MappingAtTime(const ros::Time& t)
         LOG(INFO) << "Invalid FusionStrategy is assigned.";
         exit(-1);
       }
+
       for (auto it = dqvDepthPoints_.rbegin(); it != dqvDepthPoints_.rend(); it++)
         dFusor_.naive_propagation(*it, depthFramePtr_);
 
       // regularization
-      if (bRegularization_)
+      if (bRegularization_) // to be fixed to modify the variance
       {
         tt_mapping.tic();
         dRegularizor_.apply(depthFramePtr_->dMap_);
@@ -479,8 +482,10 @@ void esvo_MVSMono::MappingAtTime(const ros::Time& t)
       }
 
       TotalNumFusion_ += numFusionCount;
-      depthFramePtr_->dMap_->clean(
-          pow(stdVar_vis_threshold_, 2), age_vis_threshold_, invDepth_max_range_, invDepth_min_range_);
+      depthFramePtr_->dMap_->clean(pow(stdVar_vis_threshold_, 2),
+                                   age_vis_threshold_,
+                                   invDepth_max_range_,
+                                   invDepth_min_range_);
       t_fusion = tt_mapping.toc();
 
       // regularization
@@ -494,15 +499,14 @@ void esvo_MVSMono::MappingAtTime(const ros::Time& t)
       t_overall_count += t_optimization;
     }
 
+    // visualization
     std::thread tPublishDSIResult(&esvo_MVSMono::publishDSIResults, this,
                                   t, semidense_mask, depth_map, confidence_map);
     tPublishDSIResult.detach();
 
-    // visualization
     std::thread tPublishMappingResult(&esvo_MVSMono::publishMappingResults, this,
                                       depthFramePtr_->dMap_, depthFramePtr_->T_world_frame_, t);
     tPublishMappingResult.detach();
-    // LOG_EVERY_N(INFO, 20) << "Depth point size: " << depthFramePtr_->dMap_->size(); // 4000
 
     // To save the depth result, set it to true.
     if (SAVE_RESULT_)
@@ -552,7 +556,6 @@ void esvo_MVSMono::insertKeyframe()
   // a new key-frame is taken.
   T_w_frame_ = TS_obs_.second.tr_.getTransformationMatrix();
   double dis = (T_w_frame_.topRightCorner<3, 1>() - T_w_keyframe_.topRightCorner<3, 1>()).norm();
-  // if (dis > KEYFRAME_LINEAR_DIS_)
   if (meanDepth_ < 0 || (meanDepth_ != 0 && dis > KEYFRAME_MEANDEPTH_DIS_ * meanDepth_)) // 1e5: system just starts; > 0.15: move at a long distance
   {
     isKeyframe_ = true;
@@ -1038,10 +1041,10 @@ void esvo_MVSMono::publishMappingResults(
   visualizor_.plot_map(depthMapPtr, tools::InvDepthMap, invDepthImage, invDepth_max_range_, invDepth_min_range_, stdVar_vis_threshold_, age_vis_threshold_);
   publishImage(invDepthImage, t, invDepthMap_pub_);
 
-  visualizor_.plot_map(depthMapPtr, tools::StdVarMap,stdVarImage, stdVar_vis_threshold_, 0.0, stdVar_vis_threshold_);
+  visualizor_.plot_map(depthMapPtr, tools::StdVarMap, stdVarImage, stdVar_vis_threshold_, 0.0, stdVar_vis_threshold_);
   publishImage(stdVarImage, t, stdVarMap_pub_);
 
-  visualizor_.plot_map(depthMapPtr, tools::AgeMap,ageImage, age_max_range_, 0, age_vis_threshold_);
+  visualizor_.plot_map(depthMapPtr, tools::AgeMap, ageImage, age_max_range_, 0, age_vis_threshold_);
   publishImage(ageImage, t, ageMap_pub_);
 
   visualizor_.plot_map(depthMapPtr, tools::CostMap, costImage, cost_vis_threshold_, 0.0, cost_vis_threshold_);
