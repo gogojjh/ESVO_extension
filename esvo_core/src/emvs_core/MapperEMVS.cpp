@@ -216,7 +216,6 @@ namespace EMVS
 		CHECK_GE(pVirtualPoses.back().first.toSec(), pvEventsPtr.back()[2]);
 
 		auto it_ev_begin = pvEventsPtr.rbegin();
-		#pragma omp parallel for if (pvEventsPtr.size() >= 20000)
 		for (auto it_vp = pVirtualPoses.begin(); it_vp != pVirtualPoses.end(); it_vp++)
 		{
 			Eigen::Matrix4d T_w_ev = it_vp->second;

@@ -364,7 +364,8 @@ namespace esvo_core
 					if (!dqvDepthPoints_.empty())
 						dqvDepthPoints_.pop_back();
 				dqvDepthPoints_.push_back(std::vector<DepthPoint>());
-				emvs_mapper_.dsi_.writeGridNpy(std::string(resultPath_ + "dsi.npy").c_str());
+				if (SAVE_RESULT_ && boost::filesystem::exists(resultPath_))
+					emvs_mapper_.dsi_.writeGridNpy(std::string(resultPath_ + "dsi.npy").c_str());
 				emvs_mapper_.reset();
 			}
 			else
@@ -383,19 +384,21 @@ namespace esvo_core
 				{
 					Eigen::Matrix4d T_w_rv;
 					ros::Time t_rv = emvs_mapper_.getRVTime();
-					trajectory_.getPoseAt(mAllPoses_, t_rv, T_w_rv);
+					if (trajectory_.getPoseAt(mAllPoses_, t_rv, T_w_rv))
+					{
 #ifdef EMVS_CHECK_OBS
-					std::map<ros::Time, std::shared_ptr<Eigen::MatrixXd>>::iterator it_TS_negative =
-						std::upper_bound(TS_map_negative_history_.begin(), TS_map_negative_history_.end(), t_rv,
-										 [](const ros::Time &t, const std::pair<ros::Time, std::shared_ptr<Eigen::MatrixXd>> &tso) {
-											 return t.toSec() < tso.first.toSec();
-										 });
-					emvs_mapper_.computeObservation(2e3);
-					emvs_mapper_.setTSNegativeObservation(it_TS_negative->second);
-					TS_map_negative_history_.clear();
-					// LOG(INFO) << "t_rv: " << t_rv << ", " << "it_TS_negative: " << it_TS_negative->first;
+						std::map<ros::Time, std::shared_ptr<Eigen::MatrixXd>>::iterator it_TS_negative =
+							std::upper_bound(TS_map_negative_history_.begin(), TS_map_negative_history_.end(), t_rv,
+											[](const ros::Time &t, const std::pair<ros::Time, std::shared_ptr<Eigen::MatrixXd>> &tso) {
+												return t.toSec() < tso.first.toSec();
+											});
+						emvs_mapper_.computeObservation(2e3);
+						emvs_mapper_.setTSNegativeObservation(it_TS_negative->second);
+						TS_map_negative_history_.clear();
+						// LOG(INFO) << "t_rv: " << t_rv << ", " << "it_TS_negative: " << it_TS_negative->first;
 #endif
-					emvs_mapper_.initializeDSI(T_w_rv);
+						emvs_mapper_.initializeDSI(T_w_rv);
+					}
 				}
 			}
 			if (emvs_mapper_.dsiInitFlag_)
@@ -421,7 +424,7 @@ namespace esvo_core
 			}
 			else
 			{
-				meanDepth_ = 0;
+				meanDepth_ = 0.0;
 			}
 
 			if (msm_ == PURE_EMVS)
@@ -713,7 +716,7 @@ namespace esvo_core
 		{
 			T_marker_cam.setIdentity();
 		}
-		else if (!strDataset_.compare("upen"))
+		else if (!strDataset_.compare("upenn"))
 		{
 			T_marker_cam.setIdentity();
 		}

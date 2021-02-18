@@ -40,6 +40,8 @@
 #include <mutex>
 #include <future>
 
+#include <boost/filesystem.hpp>
+
 #include <cv_bridge/cv_bridge.h>
 #include <pcl/point_types.h>
 #include <pcl_ros/point_cloud.h>

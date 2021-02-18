@@ -1,8 +1,7 @@
-invDepth_min_range: 0.2
+invDepth_min_range: 0.3
 invDepth_max_range: 2
 residual_vis_threshold: 20
 stdVar_vis_threshold: 0.05
-stdVar_init: 0.05
 age_max_range: 10
 age_vis_threshold: 1
 fusion_radius: 0
@@ -11,7 +10,7 @@ maxNumFusionFrames: 5 # the near merged keyframes
 maxNumFusionPoints: 5000
 Denoising: False
 SmoothTimeSurface: False
-Regularization: True
+Regularization: False
 PROCESS_EVENT_NUM: 10000
 TS_HISTORY_LENGTH: 100
 mapping_rate_hz: 20
@@ -38,9 +37,9 @@ BM_step: 1
 BM_ZNCC_Threshold: 0.1
 BM_bUpDownConfiguration: False
 # Publish result parameters
-bVisualizeGlobalPC: True
+bVisualizeGlobalPC: False
 visualizeGPC_interval: 3.0
-NumGPC_added_oper_refresh: 2000
+NumGPC_added_oper_refresh: 1000
 
 # MVStereo Mode
 MVSMonoMode: 6
@@ -53,8 +52,8 @@ MVSMonoMode: 6
 #  PURE_EMVS_PLUS_ESTIMATION     //6 [33] + nonlinear opt.
 
 SAVE_RESULT: false
-PATH_TO_SAVE_RESULT: "/home/jjiao/ESVO_result/rpg_stereo/" # CHANGE THIS PATH
-Dataset_Name: "rpg_stereo"
+PATH_TO_SAVE_RESULT: "/home/jjiao/ESVO_result/rpg_slider/" # CHANGE THIS PATH
+Dataset_Name: "rpg_slider"
 
 # EMVS Mapping
 opts_dim_x: 0
@@ -72,6 +71,7 @@ opts_mapper_PatchSize_Y: 3
 opts_mapper_TS_score: 1.0
 KEYFRAME_LINEAR_DIS: 0.15 # m
 KEYFRAME_ORIENTATION_DIS: 5 # degree
-KEYFRAME_MEANDEPTH_DIS: 0.3 # percentage
-EMVS_Init_event: 50000 #200000
-EMVS_Keyframe_event: 200000 #200000
+KEYFRAME_MEANDEPTH_DIS: 1.0 # percentage
+EMVS_Init_event: 75000 #200000
+EMVS_Keyframe_event: 75000 #200000
+stdVar_init: 0.05

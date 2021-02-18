@@ -1,6 +1,12 @@
 <launch>
-  <node name="EventMessageEditor" pkg="events_repacking_helper" type="EventMessageEditor" output="screen" required="true"
-    args="/home/zhouyi/workspace/dataset/DVS/hkust_HDR/2020-07-14-12-38-42.bag
-          /home/zhouyi/workspace/dataset/DVS/hkust_HDR/hahaha.bag">
+  <!-- <node name="EventMessageEditor" pkg="events_repacking_helper" type="EventMessageEditor" output="screen" required="true"
+    args="/Monster/dataset/event_camera/rpg_dataset/slider_depth.bag
+          /Monster/dataset/event_camera/rpg_dataset/slider_depth_edited.bag">
+  </node> -->
+
+  <node name="EventMessageEditor_Mono" pkg="events_repacking_helper" type="EventMessageEditor_Mono" output="screen" required="true"
+    args="/Monster/dataset/event_camera/rpg_dataset/slider_depth.bag
+          /Monster/dataset/event_camera/rpg_dataset/slider_depth_edited.bag">
   </node>
+
 </launch>

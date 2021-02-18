@@ -1,26 +1,26 @@
-invDepth_min_range: 0.16
-invDepth_max_range: 1.0
+invDepth_min_range: 0.2
+invDepth_max_range: 2
 residual_vis_threshold: 20
-stdVar_vis_threshold: 0.15
+stdVar_vis_threshold: 0.05
 age_max_range: 10
 age_vis_threshold: 1
 fusion_radius: 0
 FUSION_STRATEGY: "CONST_FRAMES" #"CONST_FRAMES" or "CONST_POINTS"
-maxNumFusionFrames: 5
-maxNumFusionPoints: 3000
+maxNumFusionFrames: 5 # the near merged keyframes
+maxNumFusionPoints: 5000
 Denoising: False
 SmoothTimeSurface: False
 Regularization: True
-PROCESS_EVENT_NUM: 1000
+PROCESS_EVENT_NUM: 10000
 TS_HISTORY_LENGTH: 100
 mapping_rate_hz: 20
 # DepthProblemConfig
 patch_size_X: 15
 patch_size_Y: 7
 LSnorm: Tdist #(Tdist or l2)
-Tdist_nu: 2.182
-Tdist_scale: 17.277
-Tdist_stdvar: 59.763
+Tdist_nu: 2.1897
+Tdist_scale: 16.6397
+Tdist_stdvar: 56.5347
 # Event Matcher (EM) parameters
 EM_Slice_Thickness: 0.001
 EM_Time_THRESHOLD: 0.0005
@@ -41,7 +41,7 @@ bVisualizeGlobalPC: False
 visualizeGPC_interval: 3.0
 NumGPC_added_oper_refresh: 1000
 
-# MVSMonoMode Mode
+# MVStereo Mode
 MVSMonoMode: 6
 #  PURE_EVENT_MATCHING           //0 EM [26]
 #  PURE_BLOCK_MATCHING           //1 BM
@@ -52,8 +52,8 @@ MVSMonoMode: 6
 #  PURE_EMVS_PLUS_ESTIMATION     //6 [33] + nonlinear opt.
 
 SAVE_RESULT: false
-PATH_TO_SAVE_RESULT: "/home/jjiao/ESVO_result/upenn/" # CHANGE THIS PATH
-Dataset_Name: "upenn"
+PATH_TO_SAVE_RESULT: "/home/jjiao/ESVO_result/rpg_stereo/" # CHANGE THIS PATH
+Dataset_Name: "rpg_stereo"
 
 # EMVS Mapping
 opts_dim_x: 0
