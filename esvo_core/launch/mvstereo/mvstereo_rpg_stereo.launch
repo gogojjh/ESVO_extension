@@ -25,7 +25,7 @@
   </node>
 
   <!-- Calibration folder -->
-  <arg name="calibInfoDirStr" default="$(find esvo_core)/calib/rpg"/>
+  <arg name="calibInfoDirStr" default="$(find esvo_core)/calib/rpg_stereo"/>
 
   <!-- Mapping node -->
   <!-- launch-prefix="gdb -ex run -\-args" -->
@@ -42,7 +42,7 @@
     <rosparam param="world_frame_id">"map"</rosparam>
     <rosparam param="calibInfoDir" subst_value="true">$(arg calibInfoDirStr)</rosparam>
 
-    <rosparam command="load" file="$(find esvo_core)/cfg/mvstereo/mvstereo_rpg.yaml" />
+    <rosparam command="load" file="$(find esvo_core)/cfg/mvstereo/mvstereo_rpg_stereo.yaml" />
   </node>
 
   <!-- Tracking node -->

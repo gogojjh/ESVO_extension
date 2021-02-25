@@ -2,7 +2,7 @@
   <!-- ROS BAG -->
   <rosparam param="/use_sim_time">true</rosparam>
   <node pkg="rosbag" type="play" name="play" output="screen" required="true"
-    args="/Monster/dataset/event_camera/ijrr_rpg_dataset/slider_depth_edited.bag -r 0.5 --clock --pause">
+    args="/Monster/dataset/event_camera/ijrr_rpg_dataset/dynamic_6dof_edited.bag -r 0.3 --clock --pause">
     <!-- MODIFY THE ABOVE DIRECTORY -->
   </node>
 

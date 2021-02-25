@@ -1,5 +1,5 @@
-invDepth_min_range: 0.3
-invDepth_max_range: 2
+invDepth_min_range: 0.333
+invDepth_max_range: 2.127
 residual_vis_threshold: 20
 stdVar_vis_threshold: 0.05
 age_max_range: 10
@@ -42,7 +42,7 @@ visualizeGPC_interval: 3.0
 NumGPC_added_oper_refresh: 1000
 
 # MVStereo Mode
-MVSMonoMode: 6
+MVSMonoMode: 5
 #  PURE_EVENT_MATCHING           //0 EM [26]
 #  PURE_BLOCK_MATCHING           //1 BM
 #  EM_PLUS_ESTIMATION            //2 EM [26] + nonlinear opt.
@@ -51,7 +51,7 @@ MVSMonoMode: 6
 #  PURE_EMVS                     //5 [33]
 #  PURE_EMVS_PLUS_ESTIMATION     //6 [33] + nonlinear opt.
 
-SAVE_RESULT: false
+SAVE_RESULT: False
 PATH_TO_SAVE_RESULT: "/home/jjiao/ESVO_result/rpg_slider/" # CHANGE THIS PATH
 Dataset_Name: "rpg_slider"
 
@@ -63,7 +63,7 @@ opts_depth_map_kernal_size: 5 # Size of the Gaussian kernel used for adaptive th
 opts_depth_map_threshold_c: 7 # A value in [0, 255]. The smaller the noisier and more dense reconstruction"
 opts_depth_map_median_filter_size: 15 # Size of the median filter used to clean the depth map"
 opts_depth_map_contrast_threshold: 1 # Threshold of the contrast to remove outliers in the mask 
-opts_pc_radius_search: 0.03
+opts_pc_radius_search: 0.05
 opts_pc_min_num_neighbors: 3
 opts_mapper_parallex: 5.0
 opts_mapper_PatchSize_X: 3
@@ -72,6 +72,6 @@ opts_mapper_TS_score: 1.0
 KEYFRAME_LINEAR_DIS: 0.15 # m
 KEYFRAME_ORIENTATION_DIS: 5 # degree
 KEYFRAME_MEANDEPTH_DIS: 1.0 # percentage
-EMVS_Init_event: 75000 #200000
-EMVS_Keyframe_event: 75000 #200000
+EMVS_Init_event: 200000 #200000
+EMVS_Keyframe_event: 200000 #200000
 stdVar_init: 0.05
