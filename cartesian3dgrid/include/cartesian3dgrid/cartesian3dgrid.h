@@ -39,8 +39,6 @@ public:
     return data_array_.at(ix + size_[0]*(iy + size_[1]*iz));
   }
 
-  inline float GridValueRatio(const float v);
-
   // At floating point location within a Z slice. Bilinear interpolation or voting.
   inline void accumulateGridValueAt(const float x_f, const float y_f, float* grid);
 
@@ -70,7 +68,8 @@ public:
   {
     if (x_f >= 0.f && y_f >= 0.f && x_f < size_[0] && y_f < size_[1])
       return true;
-    else return false;
+    else 
+      return false;
   }
 
 private:
@@ -80,35 +79,26 @@ private:
   
 };
 
-
-inline float Grid3D::GridValueRatio(const float v)
-{
-  // const float r[10] = {1.0, 1.2, 1.4, 1.6, 1.8, 2.0, 2.2, 2.4, 2.6, 2.8};
-  // // const float r[10] = {1.0, 1.5, 2.0, 2.5, 3.0, 4.5, 5.0, 5.5, 6.0, 6.5};
-  // return (int(v / 30) >= 10 ? r[9] : r[int(v / 30)]);
-  return 1.0f;
-}
-
 // Function implementation
 // Bilinear voting within a Z-slice, if point (x,y) is given as float
 inline void Grid3D::accumulateGridValueAt(const float x_f, const float y_f, float* grid)
 {
-  if (x_f >= 0.f && y_f >= 0.f)
+  if (x_f >= 0.f && y_f >= 0.f) // check if stay in the DSI
   {
     const int x = x_f, y = y_f;
-    if (x+1 < size_[0] &&
-        y+1 < size_[1])
+    if (x + 1 < size_[0] &&
+        y + 1 < size_[1])
     {
       float* g = grid + x + y * size_[0];
       const float fx = x_f - x,
-          fy = y_f - y,
-          fx1 = 1.f - fx,
-          fy1 = 1.f - fy;
+                  fy = y_f - y,
+                  fx1 = 1.f - fx,
+                  fy1 = 1.f - fy;
 
-      g[0] += GridValueRatio(g[0]) * fx1*fy1;
-      g[1] += GridValueRatio(g[1]) * fx*fy1;
-      g[size_[0]]   += GridValueRatio(g[size_[0]]) * fx1*fy;
-      g[size_[0]+1] += GridValueRatio(g[size_[0]+1]) * fx*fy;
+      g[0] += fx1 * fy1;
+      g[1] += fx * fy1;
+      g[size_[0]] += fx1 * fy;
+      g[size_[0] + 1] += fx * fy;
     }
   }
 }

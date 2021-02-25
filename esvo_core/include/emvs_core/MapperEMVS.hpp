@@ -57,7 +57,7 @@ namespace EMVS
 		{
 			std::cout << "************ DSI info ************" << std::endl;
 			std::cout << "dimension (XYZ): " << dimX_ << ", " << dimY_ << ", " << dimZ_ << std::endl;
-			std::cout << "depth range: " << min_depth_ << " -> " << max_depth_ << std::endl;
+			std::cout << "depth range [m]: " << min_depth_ << " -> " << max_depth_ << std::endl;
 			std::cout << "fov: " << fov_ << std::endl;
 			std::cout << "**********************************" << std::endl;
 		}

@@ -150,9 +150,9 @@ namespace esvo_core
 		// callbacks functions
 		// events_right_sub_ = nh_.subscribe<dvs_msgs::EventArray>("events_right", 0, boost::bind(&esvo_MVSMono::eventsCallback, this, _1, boost::ref(events_right_)));
 		// TS_sync_.registerCallback(boost::bind(&esvo_MVSMono::timeSurfaceCallback, this, _1));
-		events_left_sub_ = nh_.subscribe<dvs_msgs::EventArray>("events_left", 0, boost::bind(&esvo_MVSMono::eventsCallback, this, _1, boost::ref(events_left_)));
-		stampedPose_sub_ = nh_.subscribe("stamped_pose", 0, &esvo_MVSMono::stampedPoseCallback, this);
-		TS_left_sub_ = nh_.subscribe("time_surface_left", 0, &esvo_MVSMono::timeSurfaceCallback, this);
+		events_left_sub_ = nh_.subscribe<dvs_msgs::EventArray>("events_left", 10, boost::bind(&esvo_MVSMono::eventsCallback, this, _1, boost::ref(events_left_)));
+		stampedPose_sub_ = nh_.subscribe("stamped_pose", 10, &esvo_MVSMono::stampedPoseCallback, this);
+		TS_left_sub_ = nh_.subscribe("time_surface_left", 10, &esvo_MVSMono::timeSurfaceCallback, this);
 		// TF
 		tf_ = std::make_shared<tf::Transformer>(true, ros::Duration(100.0));
 
@@ -331,10 +331,12 @@ namespace esvo_core
 				vDenoisedEventsPtr_left_.reserve(PROCESS_EVENT_NUM_);
 				vDenoisedEventsPtr_left_.insert(vDenoisedEventsPtr_left_.end(), vCloseEventsPtr_left_.begin(),
 												vCloseEventsPtr_left_.begin() + min(vCloseEventsPtr_left_.size(), PROCESS_EVENT_NUM_));
+				// vDenoisedEventsPtr_left_.insert(vDenoisedEventsPtr_left_.end(), vCloseEventsPtr_left_.begin(), vCloseEventsPtr_left_.end());
 			}
 
 			// undistort events' coordinates
 			std::vector<Eigen::Vector4d> vEdgeletCoordinates;
+			vEdgeletCoordinates.reserve(vDenoisedEventsPtr_left_.size());
 			for (size_t i = 0; i < vDenoisedEventsPtr_left_.size(); i++)
 			{
 				// undistortion + rectification
@@ -370,7 +372,7 @@ namespace esvo_core
 			}
 			else
 			{
-				// LOG(INFO) << "insert an non-keyframe: add events onto the DSI\r";
+				LOG(INFO) << "insert an non-keyframe: add events onto the DSI\r";
 			}
 
 			emvs_mapper_.storeEventsPose(mVirtualPoses_, vEdgeletCoordinates);
@@ -382,6 +384,7 @@ namespace esvo_core
 #endif
 				if (emvs_mapper_.storeEventNum() > EMVS_Init_event_)
 				{
+					LOG(INFO) << "initialize DSI";
 					Eigen::Matrix4d T_w_rv;
 					ros::Time t_rv = emvs_mapper_.getRVTime();
 					if (trajectory_.getPoseAt(mAllPoses_, t_rv, T_w_rv))
@@ -398,13 +401,19 @@ namespace esvo_core
 						// LOG(INFO) << "t_rv: " << t_rv << ", " << "it_TS_negative: " << it_TS_negative->first;
 #endif
 						emvs_mapper_.initializeDSI(T_w_rv);
+						LOG(INFO) << "initialize DSI time: " << t_rv;
+						// data_mutex_.lock();
+						// LOG(INFO) << "receive events: " << events_left_.size();
+						// data_mutex_.unlock();
 					}
 				}
 			}
 			if (emvs_mapper_.dsiInitFlag_)
 			{
+				LOG(INFO) << "update DSI";
 				emvs_mapper_.updateDSI();
 				emvs_mapper_.clearEvents();
+				LOG(INFO) << "Mean square = " << emvs_mapper_.dsi_.computeMeanSquare();
 
 				cv::Mat depth_map, confidence_map, semidense_mask;
 				emvs_mapper_.getDepthMapFromDSI(depth_map, confidence_map, semidense_mask, emvs_opts_depth_map_, meanDepth_);
@@ -427,14 +436,18 @@ namespace esvo_core
 				meanDepth_ = 0.0;
 			}
 
+			size_t numFusionPoints = 0;
+			for (size_t n = 0; n < dqvDepthPoints_.size(); n++)
+				numFusionPoints += dqvDepthPoints_[n].size();
+			LOG(INFO) << "Fusing depth points: " << numFusionPoints;
+			if (numFusionPoints == 0)
+				return;
+
 			if (msm_ == PURE_EMVS)
 			{
 				if (FusionStrategy_ == "CONST_POINTS")
 				{
-					size_t numFusionPoints = 0;
 					tt_mapping.tic();
-					for (size_t n = 0; n < dqvDepthPoints_.size(); n++)
-						numFusionPoints += dqvDepthPoints_[n].size();
 					while (numFusionPoints > 1.5 * maxNumFusionPoints_)
 					{
 						dqvDepthPoints_.pop_front();
@@ -455,6 +468,7 @@ namespace esvo_core
 					exit(-1);
 				}
 
+				LOG(INFO) << "propagation";
 				for (auto it = dqvDepthPoints_.rbegin(); it != dqvDepthPoints_.rend(); it++)
 					dFusor_.naive_propagation(*it, depthFramePtr_);
 
@@ -473,10 +487,7 @@ namespace esvo_core
 			{
 				if (FusionStrategy_ == "CONST_POINTS")
 				{
-					size_t numFusionPoints = 0;
 					tt_mapping.tic();
-					for (size_t n = 0; n < dqvDepthPoints_.size(); n++)
-						numFusionPoints += dqvDepthPoints_[n].size();
 					while (numFusionPoints > 1.5 * maxNumFusionPoints_)
 					{
 						dqvDepthPoints_.pop_front();
@@ -523,12 +534,9 @@ namespace esvo_core
 				t_overall_count += t_optimization;
 			}
 
-			if (depthFramePtr_->dMap_->size() > 0)
-			{
-				std::thread tPublishMappingResult(&esvo_MVSMono::publishMappingResults, this,
-												  depthFramePtr_->dMap_, depthFramePtr_->T_world_frame_, t);
-				tPublishMappingResult.detach();
-			}
+			std::thread tPublishMappingResult(&esvo_MVSMono::publishMappingResults, this,
+											  depthFramePtr_->dMap_, depthFramePtr_->T_world_frame_, t);
+			tPublishMappingResult.detach();
 
 			// To save the depth result, set it to true.
 			if (SAVE_RESULT_)
@@ -630,7 +638,7 @@ namespace esvo_core
 			ros::Time t_begin(std::max(0.0, t_end.toSec() - 10 * BM_half_slice_thickness_));
 			auto ev_end_it = tools::EventBuffer_lower_bound(events_left_, t_end);
 			auto ev_begin_it = tools::EventBuffer_lower_bound(events_left_, t_begin); //events_left_.begin();
-			const size_t MAX_NUM_Event_INVOLVED = 20000;
+			const size_t MAX_NUM_Event_INVOLVED = 100000;
 			vALLEventsPtr_left_.reserve(MAX_NUM_Event_INVOLVED);
 			vCloseEventsPtr_left_.reserve(MAX_NUM_Event_INVOLVED);
 			while (ev_end_it != ev_begin_it && vALLEventsPtr_left_.size() < MAX_NUM_Event_INVOLVED)
@@ -713,6 +721,10 @@ namespace esvo_core
 				0, 0, 0, 1;
 		}
 		else if (!strDataset_.compare("rpg_slider"))
+		{
+			T_marker_cam.setIdentity();
+		}
+		else if (!strDataset_.compare("rpg_simulate"))
 		{
 			T_marker_cam.setIdentity();
 		}
@@ -1066,46 +1078,32 @@ namespace esvo_core
 
 		if (!pc_->empty())
 		{
-#ifdef ESVO_MVSMONO_TRACKING_DEBUG // EMVS outlier rejection
-			pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_filtered(new pcl::PointCloud<pcl::PointXYZ>());
-			pcl::RadiusOutlierRemoval<pcl::PointXYZ> outlier_rm;
-			outlier_rm.setInputCloud(pc_);
-			outlier_rm.setRadiusSearch(emvs_opts_pc_.radius_search_);
-			outlier_rm.setMinNeighborsInRadius(emvs_opts_pc_.min_num_neighbors_);
-			outlier_rm.filter(*cloud_filtered);
-			pc_->swap(*cloud_filtered);
-#endif
-
-#ifdef ESVO_CORE_MVSTEREO_LOG
-			LOG(INFO) << "<<<<<<<<<(pointcloud)<<<<<<<<" << pc_->size() << " points are published";
-#endif
 			pcl::toROSMsg(*pc_, *pc_to_publish);
 			pc_to_publish->header.stamp = t;
 			pc_pub_.publish(pc_to_publish);
-		}
 
-		// publish global pointcloud
-		if (bVisualizeGlobalPC_)
-		{
-			if (t.toSec() - t_last_pub_pc_ > visualizeGPC_interval_)
+			// publish global pointcloud
+			if (bVisualizeGlobalPC_)
 			{
-				PointCloud::Ptr pc_filtered(new PointCloud());
-				pcl::VoxelGrid<pcl::PointXYZ> sor;
-				sor.setInputCloud(pc_);
-				sor.setLeafSize(0.03, 0.03, 0.03);
-				sor.filter(*pc_filtered);
+				if (t.toSec() - t_last_pub_pc_ > visualizeGPC_interval_)
+				{
+					PointCloud::Ptr pc_filtered(new PointCloud());
+					pcl::VoxelGrid<pcl::PointXYZ> sor;
+					sor.setInputCloud(pc_);
+					sor.setLeafSize(0.03, 0.03, 0.03);
+					sor.filter(*pc_filtered);
 
-				// copy the most current pc tp pc_global
-				size_t pc_length = pc_filtered->size();
-				CHECK_GT(pc_length, static_cast<size_t>(0));
-				size_t numAddedPC = min(pc_length, numAddedPC_threshold_) - 1;
-				pc_global_->insert(pc_global_->end(), pc_filtered->end() - numAddedPC, pc_filtered->end());
+					// copy the most current pc tp pc_global
+					size_t pc_length = pc_filtered->size();
+					size_t numAddedPC = min(pc_length, numAddedPC_threshold_) - 1;
+					pc_global_->insert(pc_global_->end(), pc_filtered->end() - numAddedPC, pc_filtered->end());
 
-				// publish point cloud
-				pcl::toROSMsg(*pc_global_, *pc_to_publish);
-				pc_to_publish->header.stamp = t;
-				gpc_pub_.publish(pc_to_publish);
-				t_last_pub_pc_ = t.toSec();
+					// publish point cloud
+					pcl::toROSMsg(*pc_global_, *pc_to_publish);
+					pc_to_publish->header.stamp = t;
+					gpc_pub_.publish(pc_to_publish);
+					t_last_pub_pc_ = t.toSec();
+				}
 			}
 		}
 	}
