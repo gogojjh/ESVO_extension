@@ -19,16 +19,16 @@ namespace EMVS
 		raw_depths_vec_ = depths_vec_.getDepthVector();
 		dsi_shape.dimX_ = (dsi_shape.dimX_ > 0) ? dsi_shape.dimX_ : width_;
 		dsi_shape.dimY_ = (dsi_shape.dimY_ > 0) ? dsi_shape.dimY_ : height_;
-		dsi_shape.fov_ = (dsi_shape.fov_ > 0) ? dsi_shape.fov_ : 45.0; // using event camera's fov
+		dsi_shape.fov_ = (dsi_shape.fov_ > 0) ? dsi_shape.fov_ : 0.0; // using event camera's fov
 		dsi_ = Grid3D(dsi_shape.dimX_, dsi_shape.dimY_, dsi_shape.dimZ_);
 
 		K_ = camPtr->P_.cast<float>().topLeftCorner<3, 3>();
-		// K_virtual_ << K_(0, 0), 0.0, 0.5 * static_cast<float>(dsi_shape.dimX_),
-		// 	0.0, K_(1, 1), 0.5 * static_cast<float>(dsi_shape.dimY_),
-		// 	0.0, 0.0, 1.0;
-		K_virtual_ << K_(0, 0), 0.0, K_(0, 2),
-			0.0, K_(1, 1), K_(1, 2),
+		K_virtual_ << K_(0, 0), 0.0, 0.5 * static_cast<float>(dsi_shape.dimX_),
+			0.0, K_(0, 0), 0.5 * static_cast<float>(dsi_shape.dimY_),
 			0.0, 0.0, 1.0;
+		// K_virtual_ << K_(0, 0), 0.0, K_(0, 2),
+		// 	0.0, K_(1, 1), K_(1, 2),
+		// 	0.0, 0.0, 1.0;
 		std::cout << "K_: " << std::endl
 				  << K_ << std::endl;
 		std::cout << "K_virtual_: " << std::endl
@@ -54,12 +54,12 @@ namespace EMVS
 	{
 		// 2D coordinates of the events transferred to reference view using plane Z = Z_0.
 		// We use Vector4f because Eigen is optimized for matrix multiplications with inputs whose size is a multiple of 4
-		std::vector<Eigen::Vector4f> event_locations_z0;
+		static std::vector<Eigen::Vector4f> event_locations_z0;
 		event_locations_z0.clear();
 		event_locations_z0.reserve(vpEventsPose_.size());
 
 		// List of camera centers
-		std::vector<Eigen::Vector3f> camera_centers;
+		static std::vector<Eigen::Vector3f> camera_centers;
 		camera_centers.clear();
 		camera_centers.reserve(vpEventsPose_.size());
 
@@ -77,15 +77,19 @@ namespace EMVS
 			// Planar homography  (H_z0) transforms [u, v] to [X(Z0), Y(Z0), 1]
 			// Planar homography  (H_zi) transforms [u, v] to [X(Zi), Y(Zi), 1]
 			Eigen::Matrix3f H_z0 = (R.cast<float>() * z0 +
-									t.cast<float>() * Eigen::Vector3f(0, 0, 1).transpose())
-									   .inverse();
+									t.cast<float>() * Eigen::Vector3f(0, 0, 1).transpose());
+			// Eigen::Matrix3f H_z0 = R.cast<float>();
+			// H_z0 *= z0;
+			// H_z0.col(2) += t.cast<float>();
 
 			// Compute H_z0 in pixel coordinates using the intrinsic parameters
-			Eigen::Matrix3f H_z0_px = K_virtual_ * H_z0 * K_.inverse(); // transform [u, v] to [X(Z0), Y(Z0), 1]
+			Eigen::Matrix3f H_z0_px = K_virtual_ * H_z0.inverse() * K_.inverse(); // transform [u, v] to [X(Z0), Y(Z0), 1]
 
 			// Use a 4x4 matrix to allow Eigen to optimize the speed
-			Eigen::Matrix4f H_z0_px_4x4 = Eigen::Matrix4f::Zero();
+			Eigen::Matrix4f H_z0_px_4x4;
 			H_z0_px_4x4.block<3, 3>(0, 0) = H_z0_px;
+			H_z0_px_4x4.col(3).setZero();
+			H_z0_px_4x4.row(3).setZero();
 
 			// For each event, precompute the warped event locations according to Eq. (11) in the IJCV paper.
 			Eigen::Vector4f p;
@@ -139,14 +143,14 @@ namespace EMVS
 				float dx = event_locations_z0[i][0] - X;
 				float dy = event_locations_z0[i][1] - Y;
 				float ev_parallax = sqrt(dx * dx + dy * dy); // pixel distance
-#ifdef EMVS_CHECK_OBS
-				if (ev_parallax > min_Parallax_)
-					if (observedTS(X, Y))
-						dsi_.accumulateGridValueAt(X, Y, pgrid);
-#else
+// #ifdef EMVS_CHECK_OBS
+// 				if (ev_parallax > min_Parallax_)
+// 					if (observedTS(X, Y))
+// 						dsi_.accumulateGridValueAt(X, Y, pgrid);
+// #else
 				if (ev_parallax > min_Parallax_)
 					dsi_.accumulateGridValueAt(X, Y, pgrid);
-#endif
+// #endif
 			}
 		}
 	}
@@ -323,24 +327,29 @@ namespace EMVS
 		removeMaskBoundary(mask, border_size);
 
 		// Convert depth indices to depth values
-		convertDepthIndicesToValues(depth_cell_indices_filtered, depth_map);
+		// convertDepthIndicesToValues(depth_cell_indices_filtered, depth_map);
+		convertDepthIndicesToValues(depth_cell_indices, depth_map);
 
 		// compute the mean depth
 		mean_depth = 0;
-		size_t depth_cnt = 0;
-		for (size_t y = 0; y < depth_map.rows; ++y)
-		{
-			for (size_t x = 0; x < depth_map.cols; ++x)
-			{
-				if (mask.at<uint8_t>(y, x) > 0)
-				{
-					mean_depth += static_cast<double>(depth_map.at<float>(y, x));
-					depth_cnt++;
-				}
-			}
-		}
-		if (depth_cnt != 0)
-			mean_depth /= depth_cnt;
+		mean_depth = cv::mean(depth_map, mask)[0];
+		// LOG(INFO) << "mean 1: " << mean_depth;
+
+		// size_t depth_cnt = 0;
+		// for (size_t y = 0; y < depth_map.rows; ++y)
+		// {
+		// 	for (size_t x = 0; x < depth_map.cols; ++x)
+		// 	{
+		// 		if (mask.at<uint8_t>(y, x) > 0)
+		// 		{
+		// 			mean_depth += static_cast<double>(depth_map.at<float>(y, x));
+		// 			depth_cnt++;
+		// 		}
+		// 	}
+		// }
+		// if (depth_cnt != 0)
+		// 	mean_depth /= depth_cnt;
+		// LOG(INFO) << "mean 2: " << mean_depth;
 
 		// remove outliers by checking the voting on a patch
 		// size_t patchSize = 3;
