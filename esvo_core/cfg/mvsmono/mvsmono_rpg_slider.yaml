@@ -11,7 +11,7 @@ maxNumFusionPoints: 5000
 Denoising: False
 SmoothTimeSurface: False
 Regularization: False
-PROCESS_EVENT_NUM: 10000
+PROCESS_EVENT_NUM: 100000
 TS_HISTORY_LENGTH: 100
 mapping_rate_hz: 20
 # DepthProblemConfig
@@ -72,6 +72,6 @@ opts_mapper_TS_score: 1.0
 KEYFRAME_LINEAR_DIS: 0.15 # m
 KEYFRAME_ORIENTATION_DIS: 5 # degree
 KEYFRAME_MEANDEPTH_DIS: 1.0 # percentage
-EMVS_Init_event: 200000 #200000
-EMVS_Keyframe_event: 200000 #200000
+EMVS_Init_event: 900000 #200000
+EMVS_Keyframe_event: 900000 #200000
 stdVar_init: 0.05

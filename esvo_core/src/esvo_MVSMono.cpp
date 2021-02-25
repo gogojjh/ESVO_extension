@@ -175,20 +175,6 @@ namespace esvo_core
 
 		TotalNumFusion_ = 0;
 
-		// multi-thread management
-		mapping_thread_future_ = mapping_thread_promise_.get_future();
-		reset_future_ = reset_promise_.get_future();
-
-		// stereo mapping detached thread
-		std::thread MappingThread(&esvo_MVSMono::MappingLoop, this,
-								  std::move(mapping_thread_promise_), std::move(reset_future_));
-		MappingThread.detach();
-
-		// Dynamic reconfigure
-		dynamic_reconfigure_callback_ = boost::bind(&esvo_MVSMono::onlineParameterChangeCallback, this, _1, _2);
-		server_.reset(new dynamic_reconfigure::Server<DVS_MappingStereoConfig>(nh_private));
-		server_->setCallback(dynamic_reconfigure_callback_);
-
 		resultPath_ = tools::param(pnh_, "PATH_TO_SAVE_RESULT", std::string());
 		KEYFRAME_LINEAR_DIS_ = tools::param(pnh_, "KEYFRAME_LINEAR_DIS", 0.2);
 		KEYFRAME_ORIENTATION_DIS_ = tools::param(pnh_, "KEYFRAME_ORIENTATION_DIS", 5); // deg
@@ -212,6 +198,20 @@ namespace esvo_core
 		SAVE_RESULT_ = tools::param(pnh_, "SAVE_RESULT", false);
 		strDataset_ = tools::param(pnh_, "Dataset_Name", std::string("rpg_stereo"));
 		T_world_map_.setIdentity();
+
+		// multi-thread management
+		mapping_thread_future_ = mapping_thread_promise_.get_future();
+		reset_future_ = reset_promise_.get_future();
+
+		// stereo mapping detached thread
+		std::thread MappingThread(&esvo_MVSMono::MappingLoop, this,
+								  std::move(mapping_thread_promise_), std::move(reset_future_));
+		MappingThread.detach();
+
+		// Dynamic reconfigure
+		dynamic_reconfigure_callback_ = boost::bind(&esvo_MVSMono::onlineParameterChangeCallback, this, _1, _2);
+		server_.reset(new dynamic_reconfigure::Server<DVS_MappingStereoConfig>(nh_private));
+		server_->setCallback(dynamic_reconfigure_callback_);
 	}
 
 	esvo_MVSMono::~esvo_MVSMono()
@@ -268,7 +268,7 @@ namespace esvo_core
 					r.sleep();
 					continue;
 				}
-				publishKFPose(TS_obs_.first, TS_obs_.second.tr_);
+				publishKFPose(TS_obs_.first, TS_obs_.second.T_w_obs_);
 				if (msm_ == PURE_EMVS || msm_ == PURE_EMVS_PLUS_ESTIMATION)
 				{
 					insertKeyframe();
@@ -298,7 +298,8 @@ namespace esvo_core
 		DepthFrame::Ptr depthFramePtr_new = std::make_shared<DepthFrame>(
 			camSysPtr_->cam_left_ptr_->height_, camSysPtr_->cam_left_ptr_->width_);
 		depthFramePtr_new->setId(TS_obs_.second.id_);
-		depthFramePtr_new->setTransformation(TS_obs_.second.tr_);
+		Transformation tr(TS_obs_.second.T_w_obs_);
+		depthFramePtr_new->setTransformation(tr);
 		depthFramePtr_ = depthFramePtr_new;
 
 		/******************************************************************/
@@ -511,7 +512,7 @@ namespace esvo_core
 			}
 
 			std::thread tPublishMappingResult(&esvo_MVSMono::publishMappingResults, this,
-											  depthFramePtr_->dMap_, depthFramePtr_->T_world_frame_, t);
+											  depthFramePtr_->dMap_, depthFramePtr_->T_world_frame_.getTransformationMatrix(), t);
 			tPublishMappingResult.detach();
 
 			// To save the depth result, set it to true.
@@ -560,7 +561,7 @@ namespace esvo_core
 		// This is done based on two weights, the relative distance to the current key-frame and
 		// the angle to the current key-frame. Is the weighted sum of these two larger than a certain threshold,
 		// a new key-frame is taken.
-		T_w_frame_ = TS_obs_.second.tr_.getTransformationMatrix();
+		T_w_frame_ = TS_obs_.second.T_w_obs_;
 		double dis = (T_w_frame_.topRightCorner<3, 1>() - T_w_keyframe_.topRightCorner<3, 1>()).norm();
 		if (meanDepth_ < 0 || (meanDepth_ != 0 && dis > KEYFRAME_MEANDEPTH_DIS_ * meanDepth_)) // 1e5: system just starts; > 0.15: move at a long distance
 		{
@@ -588,11 +589,10 @@ namespace esvo_core
 		auto it_begin = TS_history_.begin();
 		while (TS_obs_.second.isEmpty())
 		{
-			Eigen::Matrix4d T;
-			if (trajectory_.getPoseAt(mAllPoses_, it_end->first, T)) // check if poses are ready
+			Eigen::Matrix4d T_w_obs;
+			if (trajectory_.getPoseAt(mAllPoses_, it_end->first, T_w_obs)) // check if poses are ready
 			{
-				Transformation Tr(T);
-				it_end->second.setTransformation(Tr);
+				it_end->second.setTransformation(T_w_obs);
 				TS_obs_ = *it_end;
 			}
 			if (it_end->first == it_begin->first)
@@ -632,6 +632,7 @@ namespace esvo_core
 			//   pose_0 (t0), pose_1 (t1), ..., pose_N (tN)
 			// t_begin, t_tmp, ...,                     t_end
 			mVirtualPoses_.clear();
+			mVirtualPoses_.reserve(dt_events / dt_pose + 1);
 			ros::Time t_tmp = t_begin;
 			while (t_tmp.toSec() <= t_end.toSec())
 			{
@@ -648,9 +649,6 @@ namespace esvo_core
 				t_tmp = ros::Time(t_tmp.toSec() + dt_pose);
 			}
 		}
-		static size_t accu_event_number = 0;
-		accu_event_number += totalNumCount_;
-		LOG(INFO) << accu_event_number;
 		return true;
 	}
 
@@ -754,8 +752,7 @@ namespace esvo_core
 		mAllPoses_.emplace(ps_msg->header.stamp, T_map_cam);
 	}
 
-	void esvo_MVSMono::eventsCallback(const dvs_msgs::EventArray::ConstPtr &msg,
-									  EventQueue &EQ)
+	void esvo_MVSMono::eventsCallback(const dvs_msgs::EventArray::ConstPtr &msg, EventQueue &EQ)
 	{
 		std::lock_guard<std::mutex> lock(data_mutex_);
 
@@ -988,7 +985,7 @@ namespace esvo_core
 	}
 
 	void esvo_MVSMono::publishMappingResults(DepthMap::Ptr depthMapPtr,
-											 Transformation tr,
+											 Eigen::Matrix4d T,
 											 ros::Time t)
 	{
 		cv::Mat invDepthImage, stdVarImage, ageImage, costImage, eventImage, confidenceMap;
@@ -1005,7 +1002,7 @@ namespace esvo_core
 		visualizor_.plot_map(depthMapPtr, tools::CostMap, costImage, cost_vis_threshold_, 0.0, cost_vis_threshold_);
 		publishImage(costImage, t, costMap_pub_);
 
-		publishPointCloud(depthMapPtr, tr, t);
+		publishPointCloud(depthMapPtr, T, t);
 	}
 
 	void esvo_MVSMono::saveDepthMap(DepthMap::Ptr &depthMapPtr,
@@ -1028,11 +1025,11 @@ namespace esvo_core
 	}
 
 	void esvo_MVSMono::publishPointCloud(DepthMap::Ptr &depthMapPtr,
-										 Transformation &tr,
+										 Eigen::Matrix4d &T,
 										 ros::Time &t)
 	{
 		sensor_msgs::PointCloud2::Ptr pc_to_publish(new sensor_msgs::PointCloud2);
-		Eigen::Matrix<double, 4, 4> T_world_result = tr.getTransformationMatrix();
+		Eigen::Matrix<double, 4, 4> T_world_result = T;
 		pc_->clear();
 		pc_->reserve(std::min(static_cast<size_t>(50000), depthMapPtr->size()));
 		double FarthestDistance = 0.0;
@@ -1085,18 +1082,21 @@ namespace esvo_core
 		}
 	}
 
-	void esvo_MVSMono::publishKFPose(const ros::Time &t, Transformation &tr)
+	void esvo_MVSMono::publishKFPose(const ros::Time &t, const Eigen::Matrix4d &T)
 	{
 		geometry_msgs::PoseStampedPtr ps_ptr(new geometry_msgs::PoseStamped());
+		Eigen::Vector3d tr = T.topRightCorner<3, 1>();
+		Eigen::Matrix3d R = T.topLeftCorner<3, 3>();
+		Eigen::Quaterniond q(R);
 		ps_ptr->header.stamp = t;
 		ps_ptr->header.frame_id = world_frame_id_;
-		ps_ptr->pose.position.x = tr.getPosition()(0);
-		ps_ptr->pose.position.y = tr.getPosition()(1);
-		ps_ptr->pose.position.z = tr.getPosition()(2);
-		ps_ptr->pose.orientation.x = tr.getRotation().x();
-		ps_ptr->pose.orientation.y = tr.getRotation().y();
-		ps_ptr->pose.orientation.z = tr.getRotation().z();
-		ps_ptr->pose.orientation.w = tr.getRotation().w();
+		ps_ptr->pose.position.x = tr(0);
+		ps_ptr->pose.position.y = tr(1);
+		ps_ptr->pose.position.z = tr(2);
+		ps_ptr->pose.orientation.x = q.x();
+		ps_ptr->pose.orientation.y = q.y();
+		ps_ptr->pose.orientation.z = q.z();
+		ps_ptr->pose.orientation.w = q.w();
 		pose_pub_.publish(ps_ptr);
 	}
 

@@ -53,6 +53,7 @@ namespace esvo_core
           LOG(INFO) << "@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@Sobel computation (" << id_ << ") takes " << tt.toc() << " ms.";
 #endif
         }
+        T_w_obs_.setIdentity();
       }
 
       // override version without initializing the transformation in the constructor.
@@ -86,6 +87,7 @@ namespace esvo_core
           LOG(INFO) << "@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@Sobel computation (" << id_ << ") takes " << tt.toc() << " ms.";
 #endif
         }
+        T_w_obs_.setIdentity();
       }
 
       TimeSurfaceObservation(){};
@@ -101,6 +103,16 @@ namespace esvo_core
       inline void setTransformation(Transformation &tr)
       {
         tr_ = tr;
+      }
+
+      inline void setTransformation(Eigen::Matrix4d &T_w_obs)
+      {
+        T_w_obs_ = T_w_obs;
+      }
+
+      Eigen::Matrix4d getTransformation()
+      {
+        return T_w_obs_;
       }
 
       inline void GaussianBlurTS(size_t kernelSize)
@@ -154,6 +166,7 @@ namespace esvo_core
       Transformation tr_;
       Eigen::MatrixXd dTS_du_left_, dTS_dv_left_;
       Eigen::MatrixXd dTS_negative_du_left_, dTS_negative_dv_left_;
+      Eigen::Matrix4d T_w_obs_;
       size_t id_;
     };
 

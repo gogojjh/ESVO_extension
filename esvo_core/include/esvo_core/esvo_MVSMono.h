@@ -85,25 +85,25 @@ namespace esvo_core
 		void onlineParameterChangeCallback(DVS_MappingStereoConfig &config, uint32_t level);
 
 		// utils
-		bool getPoseAt(const ros::Time &t, Transformation &Tr, const std::string &source_frame);
+		// bool getPoseAt(const ros::Time &t, Transformation &Tr, const std::string &source_frame);
 		void clearEventQueue(EventQueue &EQ);
 		void reset();
 
 		// results
 		void publishMappingResults(
 			DepthMap::Ptr depthMapPtr,
-			Transformation tr,
+			Eigen::Matrix4d T,
 			ros::Time t);
 		void publishPointCloud(
 			DepthMap::Ptr &depthMapPtr,
-			Transformation &tr,
+			Eigen::Matrix4d &T,
 			ros::Time &t);
 		void publishImage(
 			const cv::Mat &image,
 			const ros::Time &t,
 			image_transport::Publisher &pub,
 			std::string encoding = "bgr8");
-		void publishKFPose(const ros::Time &t, Transformation &tr);
+		void publishKFPose(const ros::Time &t, const Eigen::Matrix4d &T);
 		void saveDepthMap(
 			DepthMap::Ptr &depthMapPtr,
 			std::string &saveDir,
