@@ -97,77 +97,27 @@ int main(int argc, char *argv[])
 	const double frequency = 1000;
 
 	// process events
+	std::vector<std::string> topics;
+	topics.push_back(std::string(argv[3]));
+	std::vector<std::string> topics_rename;
+	topics_rename.push_back(std::string(argv[3]));
+	for (size_t i = 0; i < topics.size(); i++)
 	{
-		std::vector<std::string> topics;
-		topics.push_back(std::string("/dvs/events"));
-		std::vector<std::string> topics_rename;
-		topics_rename.push_back(std::string("/dvs/events"));
-		for (size_t i = 0; i < topics.size(); i++)
-		{
-			rosbag::View view(bag_src, rosbag::TopicQuery(topics[i]));
-			EventMessageEditor eArrayEditor(frequency, topics_rename[i]);
+		rosbag::View view(bag_src, rosbag::TopicQuery(topics[i]));
+		EventMessageEditor eArrayEditor(frequency, topics_rename[i]);
 
-			// topic loop
-			for (rosbag::MessageInstance const m : view)
+		// topic loop
+		for (rosbag::MessageInstance const m : view)
+		{
+			dvs_msgs::EventArray::ConstPtr msg = m.instantiate<dvs_msgs::EventArray>();
+			eArrayEditor.resetArraySize(msg->width, msg->height);
+			// message loop
+			for (const dvs_msgs::Event &e : msg->events)
 			{
-				dvs_msgs::EventArray::ConstPtr msg = m.instantiate<dvs_msgs::EventArray>();
-				eArrayEditor.resetArraySize(msg->width, msg->height);
-				// message loop
-				for (const dvs_msgs::Event &e : msg->events)
-				{
-					eArrayEditor.insertEvent(const_cast<dvs_msgs::Event &>(e), &bag_dst);
-				}
+				eArrayEditor.insertEvent(const_cast<dvs_msgs::Event &>(e), &bag_dst);
 			}
 		}
 	}
-
-	// {
-	// 	std::vector<std::string> topics;
-	// 	topics.push_back(std::string("/dvs/camera_info"));
-	// 	std::vector<std::string> topics_rename;
-	// 	topics_rename.push_back(std::string("/dvs/camera_info"));
-	// 	for (size_t i = 0; i < topics.size(); i++)
-	// 	{
-	// 		rosbag::View view(bag_src, rosbag::TopicQuery(topics[i]));
-	// 		for (rosbag::MessageInstance const m : view)
-	// 		{
-	// 			sensor_msgs::CameraInfo::ConstPtr msg = m.instantiate<sensor_msgs::CameraInfo>();
-	// 			bag_dst.write(topics_rename[i], msg->header.stamp, *msg);
-	// 		}
-	// 	}
-	// }
-
-	// {
-	// 	std::vector<std::string> topics;
-	// 	topics.push_back(std::string("/dvs/image_raw"));
-	// 	std::vector<std::string> topics_rename;
-	// 	topics_rename.push_back(std::string("/dvs/image_raw"));
-	// 	for (size_t i = 0; i < topics.size(); i++)
-	// 	{
-	// 		rosbag::View view(bag_src, rosbag::TopicQuery(topics[i]));
-	// 		for (rosbag::MessageInstance const m : view)
-	// 		{
-	// 			sensor_msgs::Image::ConstPtr msg = m.instantiate<sensor_msgs::Image>();
-	// 			bag_dst.write(topics_rename[i], msg->header.stamp, *msg);
-	// 		}
-	// 	}
-	// }
-
-	// {
-	// 	std::vector<std::string> topics;
-	// 	topics.push_back(std::string("/optitrack/davis"));
-	// 	std::vector<std::string> topics_rename;
-	// 	topics_rename.push_back(std::string("/optitrack/davis"));
-	// 	for (size_t i = 0; i < topics.size(); i++)
-	// 	{
-	// 		rosbag::View view(bag_src, rosbag::TopicQuery(topics[i]));
-	// 		for (rosbag::MessageInstance const m : view)
-	// 		{
-	// 			geometry_msgs::PoseStamped::ConstPtr msg = m.instantiate<geometry_msgs::PoseStamped>();
-	// 			bag_dst.write(topics_rename[i], msg->header.stamp, *msg);
-	// 		}
-	// 	}
-	// }
 
 	bag_src.close();
 	bag_dst.close();

@@ -1,0 +1,8 @@
+<launch>
+  <!-- ROS BAG -->
+  <rosparam param="/use_sim_time">true</rosparam>
+  <node pkg="rosbag" type="play" name="play" output="screen" required="true"
+    args="/Monster/dataset/event_camera/ijrr_rpg_dataset/slider_far_edited.bag -r 0.5 --clock --pause">
+    <!-- MODIFY THE ABOVE DIRECTORY -->
+  </node>
+</launch>

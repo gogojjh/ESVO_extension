@@ -5,8 +5,8 @@
   </node> -->
 
   <node name="EventMessageEditor_Mono" pkg="events_repacking_helper" type="EventMessageEditor_Mono" output="screen" required="true"
-    args="/Monster/dataset/event_camera/ijrr_rpg_dataset/slider_depth.bag
-          /Monster/dataset/event_camera/ijrr_rpg_dataset/slider_depth_edited.bag">
+    args="/Monster/dataset/event_camera/ijrr_rpg_dataset/slider_far.bag
+          /Monster/dataset/event_camera/ijrr_rpg_dataset/slider_far.bag.events">
   </node>
 
 </launch>

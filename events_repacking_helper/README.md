@@ -41,3 +41,7 @@ This command will return a bag file (e.g., output.bag.extracted) which contains 
    `$ rosrun dvs_hot_pixel_filter hot_pixel_filter path_to_input.bag`
 
 This command will generate a bag file named xxx.bag.filtered, which is good to feed to ESVO.
+
+### 5. Or directly run the scripts
+
+

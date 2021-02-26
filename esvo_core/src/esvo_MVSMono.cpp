@@ -356,7 +356,7 @@ namespace esvo_core
 			tt_mapping.tic();
 			if (isKeyframe_)
 			{
-				LOG(INFO) << "insert a keyframe: reset the DSI for the local map";
+				LOG_EVERY_N(INFO, 20) << "insert a keyframe: reset the DSI for the local map";
 				if (emvs_mapper_.accu_event_number_ <= EMVS_Keyframe_event_)
 					if (!dqvDepthPoints_.empty())
 						dqvDepthPoints_.pop_back();
@@ -367,7 +367,7 @@ namespace esvo_core
 			}
 			else
 			{
-				LOG(INFO) << "insert an non-keyframe: add events onto the DSI";
+				LOG_EVERY_N(INFO, 20) << "insert an non-keyframe: add events onto the DSI";
 			}
 
 			emvs_mapper_.storeEventsPose(mVirtualPoses_, vEdgeletCoordinates);
@@ -389,19 +389,19 @@ namespace esvo_core
 			{
 				emvs_mapper_.updateDSI();
 				emvs_mapper_.clearEvents();
-				LOG(INFO) << "Mean square = " << emvs_mapper_.dsi_.computeMeanSquare();
+				LOG_EVERY_N(INFO, 20) << "Mean square = " << emvs_mapper_.dsi_.computeMeanSquare();
 
 				cv::Mat depth_map, confidence_map, semidense_mask;
 				emvs_mapper_.getDepthMapFromDSI(depth_map, confidence_map, semidense_mask, emvs_opts_depth_map_, meanDepth_);
 				t_solve = tt_mapping.toc();
-				LOG_EVERY_N(INFO, 100) << "Get DP from DSI costs: " << t_solve << " ms\r"; // 40ms
+				LOG_EVERY_N(INFO, 20) << "Get DP from DSI costs: " << t_solve << " ms\r"; // 40ms
 
 				if (emvs_mapper_.accu_event_number_ >= EMVS_Keyframe_event_)
 				{
 					std::vector<DepthPoint> &vdp = dqvDepthPoints_.back(); // depth points on the current observations
 					emvs_mapper_.getDepthPoint(depth_map, confidence_map, semidense_mask, vdp, stdVar_init_);
 					LOG_EVERY_N(INFO, 50) << "Depth point size: " << vdp.size(); // 4000
-					LOG(INFO) << "Number of events processed: " << emvs_mapper_.accu_event_number_;
+					LOG_EVERY_N(INFO, 20) << "Number of events processed: " << emvs_mapper_.accu_event_number_;
 				}
 				// visualization
 				std::thread tPublishDSIResult(&esvo_MVSMono::publishDSIResults, this,
@@ -416,7 +416,7 @@ namespace esvo_core
 			size_t numFusionPoints = 0;
 			for (size_t n = 0; n < dqvDepthPoints_.size(); n++)
 				numFusionPoints += dqvDepthPoints_[n].size();
-			LOG(INFO) << "Fusing depth points: " << numFusionPoints;
+			LOG_EVERY_N(INFO, 20) << "Fusing depth points: " << numFusionPoints;
 			if (numFusionPoints == 0)
 				return;
 
