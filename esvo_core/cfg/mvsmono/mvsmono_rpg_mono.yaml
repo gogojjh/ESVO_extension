@@ -52,8 +52,8 @@ MVSMonoMode: 6
 #  PURE_EMVS_PLUS_ESTIMATION     //6 [33] + nonlinear opt.
 
 SAVE_RESULT: False
-PATH_TO_SAVE_RESULT: "/home/jjiao/ESVO_result/rpg_slider/" # CHANGE THIS PATH
-Dataset_Name: "rpg_slider"
+PATH_TO_SAVE_RESULT: "/home/jjiao/ESVO_result/rpg_mono/" # CHANGE THIS PATH
+Dataset_Name: "rpg_mono"
 
 # EMVS Mapping
 opts_dim_x: 0

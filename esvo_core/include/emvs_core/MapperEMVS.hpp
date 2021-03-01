@@ -15,8 +15,6 @@
 
 #include "esvo_core/container/DepthPoint.h"
 #include "esvo_core/container/CameraSystem.h"
-#include "camodocal/camera_models/CameraFactory.h"
-#include "camodocal/camera_models/PinholeCamera.h"
 #include "cartesian3dgrid/cartesian3dgrid.h"
 #include "DepthVector.hpp"
 

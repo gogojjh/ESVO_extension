@@ -35,11 +35,8 @@ namespace esvo_core
 			  tools::param(pnh_, "ITERATION_OPTIMIZATION", 10))),
 		  invDepth_min_range_(tools::param(pnh_, "invDepth_min_range", 0.16)),
 		  invDepth_max_range_(tools::param(pnh_, "invDepth_max_range", 2.0)),
-		  dpSolver_(camSysPtr_, dpConfigPtr_, NUMERICAL, NUM_THREAD_MAPPING),
 		  dFusor_(camSysPtr_, dpConfigPtr_),
 		  dRegularizor_(dpConfigPtr_),
-		  em_(camSysPtr_, NUM_THREAD_MAPPING),
-		  ebm_(camSysPtr_, NUM_THREAD_MAPPING, tools::param(pnh_, "SmoothTimeSurface", false)),
 		  pc_(new PointCloud()),
 		  pc_global_(new PointCloud()),
 		  depthFramePtr_(new DepthFrame(camSysPtr_->cam_left_ptr_->height_, camSysPtr_->cam_left_ptr_->width_)),
@@ -90,62 +87,9 @@ namespace esvo_core
 		TS_HISTORY_LENGTH_ = tools::param(pnh_, "TS_HISTORY_LENGTH", 100);
 		mapping_rate_hz_ = tools::param(pnh_, "mapping_rate_hz", 20);
 
-		// EM parameters [26]
-		EM_Slice_Thickness_ = tools::param(pnh_, "EM_Slice_Thickness", 1e-3);
-		EM_Time_THRESHOLD_ = tools::param(pnh_, "EM_Time_THRESHOLD", 5e-5);
-		EM_EPIPOLAR_THRESHOLD_ = tools::param(pnh_, "EM_EPIPOLAR_THRESHOLD", 0.5);
-		EM_TS_NCC_THRESHOLD_ = tools::param(pnh_, "EM_TS_NCC_THRESHOLD", 0.1);
-		EM_patch_size_X_ = tools::param(pnh_, "patch_size_X", 25);
-		EM_patch_size_Y_ = tools::param(pnh_, "patch_size_Y", 25);
-		EM_numEventMatching_ = tools::param(pnh_, "EM_NUM_EVENT_MATCHING", 3000);
-		EM_patch_intensity_threshold_ = tools::param(pnh_, "EM_PATCH_INTENSITY_THRESHOLD", 125);
-		EM_patch_valid_ratio_ = tools::param(pnh_, "EM_PATCH_VALID_RATIO", 0.1);
-		em_.resetParameters(EM_Time_THRESHOLD_, EM_EPIPOLAR_THRESHOLD_, EM_TS_NCC_THRESHOLD_,
-							EM_patch_size_X_, EM_patch_size_Y_, EM_patch_intensity_threshold_, EM_patch_valid_ratio_);
-		// Event Block Matching (BM) parameters
-		BM_half_slice_thickness_ = tools::param(pnh_, "BM_half_slice_thickness", 0.001);
-		BM_MAX_NUM_EVENTS_PER_MATCHING_ = tools::param(pnh_, "BM_MAX_NUM_EVENTS_PER_MATCHING", 300);
-		BM_patch_size_X_ = tools::param(pnh_, "patch_size_X", 25);
-		BM_patch_size_Y_ = tools::param(pnh_, "patch_size_Y", 25);
-		BM_min_disparity_ = tools::param(pnh_, "BM_min_disparity", 3);
-		BM_max_disparity_ = tools::param(pnh_, "BM_max_disparity", 40);
-		BM_step_ = tools::param(pnh_, "BM_step", 1);
-		BM_ZNCC_Threshold_ = tools::param(pnh_, "BM_ZNCC_Threshold", 0.1);
-		BM_bUpDownConfiguration_ = tools::param(pnh_, "BM_bUpDownConfiguration", false);
-
-		// SGM [45] parameters
-		num_disparities_ = 16 * 3;
-		block_size_ = 11;
-		P1_ = 8 * 1 * block_size_ * block_size_;
-		P2_ = 32 * 1 * block_size_ * block_size_;
-		uniqueness_ratio_ = 11;
-		sgbm_ = cv::StereoSGBM::create(0, num_disparities_, block_size_, P1_, P2_,
-									   -1, 0, uniqueness_ratio_);
-
-		// calcualte the min,max disparity
-		double f = (camSysPtr_->cam_left_ptr_->P_(0, 0) + camSysPtr_->cam_left_ptr_->P_(1, 1)) / 2;
-		double b = camSysPtr_->baseline_;
-		size_t minDisparity = max(size_t(std::floor(f * b * invDepth_min_range_)), (size_t)0);
-		size_t maxDisparity = size_t(std::ceil(f * b * invDepth_max_range_));
-		minDisparity = max(minDisparity, BM_min_disparity_);
-		maxDisparity = min(maxDisparity, BM_max_disparity_);
-
-#ifdef ESVO_CORE_MVSTEREO_LOG
-		LOG(INFO) << "f: " << f << " "
-				  << " b: " << b;
-		LOG(INFO) << "invDepth_min_range_: " << invDepth_min_range_;
-		LOG(INFO) << "invDepth_max_range_: " << invDepth_max_range_;
-		LOG(INFO) << "minDisparity: " << minDisparity;
-		LOG(INFO) << "maxDisparity: " << maxDisparity;
-#endif
-
 		// mvstereo mode
 		size_t MVSMonoMode = tools::param(pnh_, "MVSMonoMode", 1);
 		msm_ = (eMVSMonoMode)MVSMonoMode;
-
-		// initialize Event Block Matcher
-		ebm_.resetParameters(BM_patch_size_X_, BM_patch_size_Y_, minDisparity, maxDisparity,
-							 BM_step_, BM_ZNCC_Threshold_, BM_bUpDownConfiguration_);
 
 		// callbacks functions
 		// events_right_sub_ = nh_.subscribe<dvs_msgs::EventArray>("events_right", 0, boost::bind(&esvo_MVSMono::eventsCallback, this, _1, boost::ref(events_right_)));
@@ -705,7 +649,10 @@ namespace esvo_core
 		}
 		else if (!strDataset_.compare("rpg_simulate"))
 		{
-			T_marker_cam.setIdentity();
+			T_marker_cam << 1.0, 0.0, 0.0, 0.0,
+							0.0, -1.0, 0.0, 0.0,
+							0.0, 0.0, -1.0, 0.0,
+							0.0, 0.0, 0.0, 1.0;
 		}
 		else if (!strDataset_.compare("upenn"))
 		{
@@ -829,10 +776,7 @@ namespace esvo_core
 		// push back the new time surface map
 		ros::Time t_new_TS = time_surface_left->header.stamp;
 		// Made the gradient computation optional which is up to the jacobian choice.
-		if (dpSolver_.getProblemType() == NUMERICAL)
-			TS_history_.emplace(t_new_TS, TimeSurfaceObservation(cv_ptr_left, cv_ptr_right, TS_id_));
-		else
-			TS_history_.emplace(t_new_TS, TimeSurfaceObservation(cv_ptr_left, cv_ptr_right, TS_id_, true));
+		TS_history_.emplace(t_new_TS, TimeSurfaceObservation(cv_ptr_left, cv_ptr_right, TS_id_));
 		TS_id_++;
 
 		// keep TS_history's size constant
@@ -862,19 +806,9 @@ namespace esvo_core
 		TS_id_ = 0;
 		depthFramePtr_->clear();
 		dqvDepthPoints_.clear();
-
-		if (msm_ == PURE_EVENT_MATCHING || msm_ == EM_PLUS_ESTIMATION)
-			em_.resetParameters(EM_Time_THRESHOLD_, EM_EPIPOLAR_THRESHOLD_, EM_TS_NCC_THRESHOLD_,
-								EM_patch_size_X_, EM_patch_size_Y_, EM_patch_intensity_threshold_, EM_patch_valid_ratio_);
-		if (msm_ == PURE_BLOCK_MATCHING || msm_ == EM_PLUS_ESTIMATION)
-			ebm_.resetParameters(BM_patch_size_X_, BM_patch_size_Y_,
-								 BM_min_disparity_, BM_max_disparity_, BM_step_, BM_ZNCC_Threshold_, BM_bUpDownConfiguration_);
-
-		for (int i = 0; i < 2; i++)
-			LOG(INFO) << "****************************************************";
+		LOG(INFO) << "****************************************************";
 		LOG(INFO) << "****************** RESET THE SYSTEM *********************";
-		for (int i = 0; i < 2; i++)
-			LOG(INFO) << "****************************************************\n\n";
+		LOG(INFO) << "****************************************************\n";
 
 		// restart the mapping thread
 		reset_promise_ = std::promise<void>();
@@ -906,18 +840,7 @@ namespace esvo_core
 				bRegularization_ != config.Regularization ||
 				resetButton_ != config.ResetButton ||
 				PROCESS_EVENT_NUM_ != config.PROCESS_EVENT_NUM ||
-				TS_HISTORY_LENGTH_ != config.TS_HISTORY_LENGTH ||
-				EM_Time_THRESHOLD_ != config.EM_TIME_THRESHOLD ||
-				EM_EPIPOLAR_THRESHOLD_ != config.EM_EPIPOLAR_THRESHOLD ||
-				EM_TS_NCC_THRESHOLD_ != config.EM_TS_NCC_THRESHOLD ||
-				EM_numEventMatching_ != config.EM_NUM_EVENT_MATCHING ||
-				EM_patch_intensity_threshold_ != config.EM_PATCH_INTENSITY_THRESHOLD ||
-				EM_patch_valid_ratio_ != config.EM_PATCH_VALID_RATIO ||
-				BM_MAX_NUM_EVENTS_PER_MATCHING_ != config.BM_MAX_NUM_EVENTS_PER_MATCHING ||
-				BM_min_disparity_ != config.BM_min_disparity ||
-				BM_max_disparity_ != config.BM_max_disparity ||
-				BM_step_ != config.BM_step ||
-				BM_ZNCC_Threshold_ != config.BM_ZNCC_Threshold)
+				TS_HISTORY_LENGTH_ != config.TS_HISTORY_LENGTH)
 			{
 				have_display_parameters_changed = true;
 			}
@@ -936,19 +859,6 @@ namespace esvo_core
 			resetButton_ = config.ResetButton;
 			PROCESS_EVENT_NUM_ = config.PROCESS_EVENT_NUM;
 			TS_HISTORY_LENGTH_ = config.TS_HISTORY_LENGTH;
-
-			EM_Time_THRESHOLD_ = config.EM_TIME_THRESHOLD;
-			EM_EPIPOLAR_THRESHOLD_ = config.EM_EPIPOLAR_THRESHOLD;
-			EM_TS_NCC_THRESHOLD_ = config.EM_TS_NCC_THRESHOLD;
-			EM_numEventMatching_ = config.EM_NUM_EVENT_MATCHING;
-			EM_patch_intensity_threshold_ = config.EM_PATCH_INTENSITY_THRESHOLD;
-			EM_patch_valid_ratio_ = config.EM_PATCH_VALID_RATIO;
-
-			BM_MAX_NUM_EVENTS_PER_MATCHING_ = config.BM_MAX_NUM_EVENTS_PER_MATCHING;
-			BM_min_disparity_ = config.BM_min_disparity;
-			BM_max_disparity_ = config.BM_max_disparity;
-			BM_step_ = config.BM_step;
-			BM_ZNCC_Threshold_ = config.BM_ZNCC_Threshold;
 		}
 
 		if (config.mapping_rate_hz != mapping_rate_hz_)

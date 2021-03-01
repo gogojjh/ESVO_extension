@@ -2,7 +2,7 @@
 #define ESVO_CORE_CORE_DEPTHMONOREGULARIZATION_H
 
 #include <esvo_core/container/DepthMap.h>
-#include <esvo_core/core/DepthProblem.h>
+#include <esvo_core/core/DepthProblemConfig.h>
 #include <memory>
 namespace esvo_core
 {

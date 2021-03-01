@@ -6,7 +6,7 @@ Panels:
       Expanded:
         - /GlobalMap_mvs1
       Splitter Ratio: 0.5
-    Tree Height: 986
+    Tree Height: 438
   - Class: rviz/Selection
     Name: Selection
   - Class: rviz/Tool Properties
@@ -25,7 +25,7 @@ Panels:
     Experimental: false
     Name: Time
     SyncMode: 0
-    SyncSource: LocalMap_mvs
+    SyncSource: ""
 Preferences:
   PromptSaveOnExit: true
 Toolbars:
@@ -56,18 +56,13 @@ Visualization Manager:
       Frame Timeout: 999
       Frames:
         All Enabled: true
-        dvs:
-          Value: true
-        map:
-          Value: true
       Marker Scale: 0.5
       Name: TF
       Show Arrows: true
       Show Axes: true
       Show Names: true
       Tree:
-        map:
-          {}
+        {}
       Update Interval: 0
       Value: true
     - Alpha: 1
@@ -218,25 +213,25 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz/Orbit
-      Distance: 2.9592485427856445
+      Distance: 4.35861873626709
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.05999999865889549
         Stereo Focal Distance: 1
         Swap Stereo Eyes: false
         Value: false
       Focal Point:
-        X: 0.18342864513397217
-        Y: 0.24095918238162994
-        Z: 1.0787004232406616
+        X: 0.6881488561630249
+        Y: 0.526872456073761
+        Z: 1.0212432146072388
       Focal Shape Fixed Size: true
       Focal Shape Size: 0.05000000074505806
       Invert Z Axis: false
       Name: Current View
       Near Clip Distance: 0.009999999776482582
-      Pitch: -1.3547965288162231
+      Pitch: -0.9947974681854248
       Target Frame: <Fixed Frame>
       Value: Orbit (rviz)
-      Yaw: 4.6836090087890625
+      Yaw: 4.683608531951904
     Saved: ~
 Window Geometry:
   Displays:

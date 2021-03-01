@@ -15,14 +15,9 @@
 #include <esvo_core/container/DepthMap.h>
 #include <esvo_core/container/EventMatchPair.h>
 #include <esvo_core/container/TimeSurfaceObservation.h>
-#include <esvo_core/core/DepthFusion.h>
 #include <esvo_core/core/DepthMonoFusion.h>
-#include <esvo_core/core/DepthRegularization.h>
 #include <esvo_core/core/DepthMonoRegularization.h>
-#include <esvo_core/core/DepthProblem.h>
-#include <esvo_core/core/DepthProblemSolver.h>
-#include <esvo_core/core/EventBM.h>
-#include <esvo_core/core/EventMatcher.h>
+#include <esvo_core/core/DepthProblemConfig.h>
 #include <esvo_core/tools/Visualization.h>
 #include <esvo_core/tools/utils.h>
 #include <esvo_core/DVS_MappingStereoConfig.h>
@@ -167,14 +162,11 @@ namespace esvo_core
 		// system
 		eMVSMonoMode msm_;
 		DepthProblemConfig::Ptr dpConfigPtr_;
-		DepthProblemSolver dpSolver_;
 		// DepthFusion dFusor_;
 		DepthMonoFusion dFusor_;
 		// DepthRegularization dRegularizor_;
 		DepthMonoRegularization dRegularizor_;
 		Visualization visualizor_;
-		EventMatcher em_;
-		EventBM ebm_;
 
 		// data transfer
 		std::vector<dvs_msgs::Event *> vEventsPtr_left_, vEventsPtr_right_; // for EM
@@ -223,36 +215,6 @@ namespace esvo_core
 		bool bRegularization_;
 		bool resetButton_;
 		bool bDenoising_;
-
-		// Event Matching (EM [26]) parameters
-		double EM_Slice_Thickness_;
-		double EM_Time_THRESHOLD_;
-		double EM_EPIPOLAR_THRESHOLD_;
-		double EM_TS_NCC_THRESHOLD_;
-		size_t EM_patch_size_X_;
-		size_t EM_patch_size_Y_;
-		size_t EM_numEventMatching_;
-		size_t EM_patch_intensity_threshold_;
-		double EM_patch_valid_ratio_;
-
-		// Event Block Matching (BM) parameters
-		double BM_half_slice_thickness_;
-		size_t BM_MAX_NUM_EVENTS_PER_MATCHING_;
-		size_t BM_patch_size_X_;
-		size_t BM_patch_size_Y_;
-		size_t BM_min_disparity_;
-		size_t BM_max_disparity_;
-		size_t BM_step_;
-		double BM_ZNCC_Threshold_;
-		bool BM_bUpDownConfiguration_;
-
-		// SGM [45] parameters
-		int num_disparities_;
-		int block_size_;
-		int P1_;
-		int P2_;
-		int uniqueness_ratio_;
-		cv::Ptr<cv::StereoSGBM> sgbm_;
 
 		ros::Publisher pose_pub_;
 		image_transport::Publisher invDepthMap_pub_, stdVarMap_pub_, ageMap_pub_, costMap_pub_;
