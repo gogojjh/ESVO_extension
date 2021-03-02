@@ -33,11 +33,7 @@ namespace EMVS
 				  << K_ << std::endl;
 		std::cout << "K_virtual_: " << std::endl
 				  << K_virtual_ << std::endl;
-		pTSNegative_ = std::make_shared<Eigen::MatrixXd>();
 		min_Parallax_ = opts_mapper.min_parallex_;
-		obs_PatchSize_X_ = opts_mapper.obs_patch_size_x_;
-		obs_PatchSize_Y_ = opts_mapper.obs_patch_size_y_;
-		min_TS_Score_ = opts_mapper.min_ts_score_;
 	}
 
 	void MapperEMVS::initializeDSI(const Eigen::Matrix4d &T_w_rv)
@@ -78,9 +74,6 @@ namespace EMVS
 			// Planar homography  (H_zi) transforms [u, v] to [X(Zi), Y(Zi), 1]
 			Eigen::Matrix3f H_z0 = (R.cast<float>() * z0 +
 									t.cast<float>() * Eigen::Vector3f(0, 0, 1).transpose());
-			// Eigen::Matrix3f H_z0 = R.cast<float>();
-			// H_z0 *= z0;
-			// H_z0.col(2) += t.cast<float>();
 
 			// Compute H_z0 in pixel coordinates using the intrinsic parameters
 			Eigen::Matrix3f H_z0_px = K_virtual_ * H_z0.inverse() * K_.inverse(); // transform [u, v] to [X(Z0), Y(Z0), 1]
@@ -143,74 +136,10 @@ namespace EMVS
 				float dx = event_locations_z0[i][0] - X;
 				float dy = event_locations_z0[i][1] - Y;
 				float ev_parallax = sqrt(dx * dx + dy * dy); // pixel distance
-// #ifdef EMVS_CHECK_OBS
-// 				if (ev_parallax > min_Parallax_)
-// 					if (observedTS(X, Y))
-// 						dsi_.accumulateGridValueAt(X, Y, pgrid);
-// #else
 				if (ev_parallax > min_Parallax_)
 					dsi_.accumulateGridValueAt(X, Y, pgrid);
-// #endif
 			}
 		}
-	}
-
-	void MapperEMVS::computeObservation(const int &num_event)
-	{
-		pTSNegative_ = std::make_shared<Eigen::MatrixXd>(height_, width_);
-		pTSNegative_->setZero();
-		for (size_t i = vpEventsPose_.size() / 2 - num_event; i < vpEventsPose_.size() / 2 + num_event; i++)
-		{
-			double x = (*vpEventsPose_[i].first)[0];
-			double y = (*vpEventsPose_[i].first)[1];
-			if (x < 0.0 || y < 0.0 || x >= pTSNegative_->cols() - 1 || y >= pTSNegative_->rows() - 1)
-				continue;
-			(*pTSNegative_)(floor(y), floor(x)) = 255.0;
-			(*pTSNegative_)(floor(y) + 1, floor(x)) = 255.0;
-			(*pTSNegative_)(floor(y), floor(x) + 1) = 255.0;
-			(*pTSNegative_)(floor(y) + 1, floor(x) + 1) = 255.0;
-		}
-		// cv::Mat eventMap;
-		// cv::eigen2cv(*pTSNegative_, eventMap);
-		// eventMap.convertTo(eventMap, CV_8UC1);
-		// cv::imshow("eventMap", eventMap);
-		// cv::waitKey(30);
-	}
-
-	bool MapperEMVS::observedTS(const float &x, const float &y)
-	{
-		if (x < 0.0f || y < 0.0f || x >= pTSNegative_->cols() || y >= pTSNegative_->rows())
-			return false;
-
-		int wx = obs_PatchSize_X_;
-		int wy = obs_PatchSize_Y_;
-		// int patchSize = wx * wy;
-
-		// compute SrcPatch_UpLeft coordinate and SrcPatch_DownRight coordinate
-		// check patch boundary is inside img boundary
-		Eigen::Vector2i SrcPatch_UpLeft, SrcPatch_DownRight;
-		SrcPatch_UpLeft << floor(x) - (wx - 1) / 2, floor(y) - (wy - 1) / 2;
-		SrcPatch_DownRight << floor(x) + (wx - 1) / 2, floor(y) + (wy - 1) / 2;
-		SrcPatch_UpLeft[0] = SrcPatch_UpLeft[0] < 0 ? 0 : SrcPatch_UpLeft[0];
-		SrcPatch_UpLeft[1] = SrcPatch_UpLeft[1] < 0 ? 0 : SrcPatch_UpLeft[1];
-		SrcPatch_DownRight[0] = SrcPatch_DownRight[0] >= pTSNegative_->cols() ? pTSNegative_->cols() - 1 : SrcPatch_DownRight[0];
-		SrcPatch_DownRight[1] = SrcPatch_DownRight[1] >= pTSNegative_->rows() ? pTSNegative_->rows() - 1 : SrcPatch_DownRight[1];
-		for (int y = SrcPatch_UpLeft[1]; y <= SrcPatch_DownRight[1]; y++)
-			for (int x = SrcPatch_UpLeft[0]; x <= SrcPatch_DownRight[0]; x++)
-				if ((*pTSNegative_)(y, x) > static_cast<double>(0.0)) // any event is triggered
-					return true;
-
-				// if ((*pTSNegative_)(y, x) <= static_cast<double>(min_TS_Score_)) // any event is triggered
-				// 	return true;
-		// Eigen::MatrixXd SrcPatch = pTSNegative_->block(SrcPatch_UpLeft[1],
-		// 											   SrcPatch_UpLeft[0],
-		// 											   SrcPatch_DownRight[1] - SrcPatch_UpLeft[1] + 1,
-		// 											   SrcPatch_DownRight[0] - SrcPatch_UpLeft[0] + 1);
-		// for (size_t y = 0; y < SrcPatch.rows(); y++)
-		// 	for (size_t x = 0; x < SrcPatch.cols(); x++)
-		// 		if (SrcPatch(y, x) <= static_cast<double>(min_TS_Score_)) // any event is triggered
-		// 			return true;
-		return false;
 	}
 
 	void MapperEMVS::storeEventsPose(std::vector<std::pair<ros::Time, Eigen::Matrix4d>> &pVirtualPoses,
@@ -244,24 +173,6 @@ namespace EMVS
 		vpEventsPose_.reserve(2e5);
 		dsiInitFlag_ = false;
 		accu_event_number_ = 0;
-	}
-
-	void MapperEMVS::precomputeRectifiedPoints()
-	{
-		// (Mono) Create a lookup table that maps pixel coordinates to undistorted pixel coordinates
-		// precomputed_rectified_points_ = Eigen::Matrix2Xf(2, height_ * width_);
-		// for (int y = 0; y < height_; y++)
-		// {
-		// 	for (int x = 0; x < width_; ++x)
-		// 	{
-		// 		Eigen::Vector2d p_d(x, y);
-		// 		Eigen::Vector3d P_u;
-
-		// 		camera_ptr_->liftProjective(p_d, P_u);
-		// 		P_u /= P_u.z();
-		// 		precomputed_rectified_points_.col(y * width_ + x) = P_u.head<2>().cast<float>(); // lift a point on its projective ray
-		// 	}
-		// }
 	}
 
 	void MapperEMVS::convertDepthIndicesToValues(const cv::Mat &depth_cell_indices, cv::Mat &depth_map)
@@ -333,67 +244,6 @@ namespace EMVS
 		// compute the mean depth
 		mean_depth = 0;
 		mean_depth = cv::mean(depth_map, mask)[0];
-		// LOG(INFO) << "mean 1: " << mean_depth;
-
-		// size_t depth_cnt = 0;
-		// for (size_t y = 0; y < depth_map.rows; ++y)
-		// {
-		// 	for (size_t x = 0; x < depth_map.cols; ++x)
-		// 	{
-		// 		if (mask.at<uint8_t>(y, x) > 0)
-		// 		{
-		// 			mean_depth += static_cast<double>(depth_map.at<float>(y, x));
-		// 			depth_cnt++;
-		// 		}
-		// 	}
-		// }
-		// if (depth_cnt != 0)
-		// 	mean_depth /= depth_cnt;
-		// LOG(INFO) << "mean 2: " << mean_depth;
-
-		// remove outliers by checking the voting on a patch
-		// size_t patchSize = 3;
-		// for (size_t y = 0; y < confidence_map.rows / patchSize; y++)
-		// {
-		// 	for (size_t x = 0; x < confidence_map.cols / patchSize; x++)
-		// 	{
-		// 		cv::Rect roi(x * patchSize, y * patchSize, patchSize, patchSize);
-		// 		double contrast = cv::norm(confidence_map(roi), cv::NORM_L2SQR);
-		// 		if (contrast <= options_depth_map.contrast_threshold_)
-		// 			mask(roi).setTo(cv::Scalar(0));
-		// 	}
-		// }
-	}
-
-	void MapperEMVS::getProbMapFromDSI(cv::Mat &mean_map, cv::Mat &variance_map)
-	{
-		int dimX, dimY, dimZ;
-		dsi_.getDimensions(&dimX, &dimY, &dimZ);
-		mean_map = cv::Mat(dimY, dimX, CV_32FC1); // (y,x) as in images
-		variance_map = cv::Mat(dimY, dimX, CV_32FC1);
-
-		std::vector<float> grid_vals_vec(dimZ);
-		for (unsigned int v = 0; v < dimY; v++)
-		{
-			for (unsigned int u = 0; u < dimX; u++)
-			{
-				for (unsigned int k = 0; k < dimZ; ++k)
-					grid_vals_vec.at(k) = dsi_.getGridValueAt(u, v, k);
-
-				float sum = std::accumulate(grid_vals_vec.begin(), grid_vals_vec.end(), 0);
-				float mean = 0.0;
-				float variance = 0.0;
-				for (unsigned int k = 0; k < dimZ; ++k)
-				{
-					float inv_depth = 255.0 / depths_vec_.cellIndexToDepth(k);
-					mean += grid_vals_vec.at(k) / sum * inv_depth;
-					variance += grid_vals_vec.at(k) / sum * inv_depth * inv_depth;
-				}
-				variance -= mean * mean;
-				mean_map.at<float>(v, u) = mean;
-				variance_map.at<float>(v, u) = variance;
-			}
-		}
 	}
 
 	void MapperEMVS::getDepthPoint(const cv::Mat &depth_map,

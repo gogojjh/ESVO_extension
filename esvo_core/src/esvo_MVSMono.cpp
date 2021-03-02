@@ -183,7 +183,7 @@ namespace esvo_core
 				changed_frame_rate_ = false;
 			}
 			//
-			if (TS_history_.size() >= 10) /* To assure the esvo_time_surface node has been working. */
+			if (TS_history_.size() >= 20) /* To assure the esvo_time_surface node has been working. */
 			{
 #ifdef ESVO_CORE_MVSTEREO_LOG
 				LOG(INFO) << "TS_history_.size(): " << TS_history_.size();
@@ -270,10 +270,10 @@ namespace esvo_core
 			else
 			{
 				vDenoisedEventsPtr_left_.clear();
-				// vDenoisedEventsPtr_left_.reserve(PROCESS_EVENT_NUM_);
-				// vDenoisedEventsPtr_left_.insert(vDenoisedEventsPtr_left_.end(), vCloseEventsPtr_left_.begin(),
-				// 								vCloseEventsPtr_left_.begin() + min(vCloseEventsPtr_left_.size(), PROCESS_EVENT_NUM_));
-				vDenoisedEventsPtr_left_.insert(vDenoisedEventsPtr_left_.end(), vCloseEventsPtr_left_.begin(), vCloseEventsPtr_left_.end());
+				vDenoisedEventsPtr_left_.reserve(PROCESS_EVENT_NUM_);
+				vDenoisedEventsPtr_left_.insert(vDenoisedEventsPtr_left_.end(), vCloseEventsPtr_left_.begin(),
+												vCloseEventsPtr_left_.begin() + min(vCloseEventsPtr_left_.size(), PROCESS_EVENT_NUM_));
+				// vDenoisedEventsPtr_left_.insert(vDenoisedEventsPtr_left_.end(), vCloseEventsPtr_left_.begin(), vCloseEventsPtr_left_.end());
 			}
 
 			// undistort events' coordinates
@@ -301,13 +301,15 @@ namespace esvo_core
 			if (isKeyframe_)
 			{
 				LOG_EVERY_N(INFO, 20) << "insert a keyframe: reset the DSI for the local map";
-				if (emvs_mapper_.accu_event_number_ <= EMVS_Keyframe_event_)
+				if (emvs_mapper_.accu_event_number_ <= EMVS_Keyframe_event_) 
 					if (!dqvDepthPoints_.empty())
 						dqvDepthPoints_.pop_back();
 				dqvDepthPoints_.push_back(std::vector<DepthPoint>());
 				if (SAVE_RESULT_ && boost::filesystem::exists(resultPath_))
 					emvs_mapper_.dsi_.writeGridNpy(std::string(resultPath_ + "dsi.npy").c_str());
 				emvs_mapper_.reset();
+				emvs_mapper_.initializeDSI(TS_obs_.second.T_w_obs_);
+				meanDepth_ = 0.0;
 			}
 			else
 			{
@@ -315,47 +317,74 @@ namespace esvo_core
 			}
 
 			emvs_mapper_.storeEventsPose(mVirtualPoses_, vEdgeletCoordinates);
-			if (!emvs_mapper_.dsiInitFlag_)
-			{
-				if (emvs_mapper_.storeEventNum() > EMVS_Init_event_)
-				{
-					// LOG(INFO) << "initialize DSI";
-					Eigen::Matrix4d T_w_rv;
-					ros::Time t_rv = emvs_mapper_.getRVTime();
-					if (trajectory_.getPoseAt(mAllPoses_, t_rv, T_w_rv))
-					{
-						emvs_mapper_.initializeDSI(T_w_rv);
-						// LOG(INFO) << "initialize DSI time: " << t_rv;
-					}
-				}
-			}
-			if (emvs_mapper_.dsiInitFlag_)
+			if (emvs_mapper_.storeEventNum() > EMVS_Init_event_) // not need to update the DSI at every time
 			{
 				emvs_mapper_.updateDSI();
 				emvs_mapper_.clearEvents();
-				LOG_EVERY_N(INFO, 20) << "Mean square = " << emvs_mapper_.dsi_.computeMeanSquare();
+				// LOG(INFO) << "Mean square = " << emvs_mapper_.dsi_.computeMeanSquare();
 
 				cv::Mat depth_map, confidence_map, semidense_mask;
 				emvs_mapper_.getDepthMapFromDSI(depth_map, confidence_map, semidense_mask, emvs_opts_depth_map_, meanDepth_);
 				t_solve = tt_mapping.toc();
-				LOG_EVERY_N(INFO, 20) << "Get DP from DSI costs: " << t_solve << " ms\r"; // 40ms
+				LOG(INFO) << "Time to update DSI and count DSI: " << t_solve << "ms"; // 40ms
 
 				if (emvs_mapper_.accu_event_number_ >= EMVS_Keyframe_event_)
 				{
 					std::vector<DepthPoint> &vdp = dqvDepthPoints_.back(); // depth points on the current observations
 					emvs_mapper_.getDepthPoint(depth_map, confidence_map, semidense_mask, vdp, stdVar_init_);
-					LOG_EVERY_N(INFO, 50) << "Depth point size: " << vdp.size(); // 4000
-					LOG_EVERY_N(INFO, 20) << "Number of events processed: " << emvs_mapper_.accu_event_number_;
+					LOG(INFO) << "Depth point size: " << vdp.size()
+			 				  << ", Number of events processed: " << emvs_mapper_.accu_event_number_;
 				}
 				// visualization
 				std::thread tPublishDSIResult(&esvo_MVSMono::publishDSIResults, this,
-											  t, semidense_mask, depth_map, confidence_map);
+											t, semidense_mask, depth_map, confidence_map);
 				tPublishDSIResult.detach();
 			}
-			else
-			{
-				meanDepth_ = 0.0;
-			}
+
+			// if (!emvs_mapper_.dsiInitFlag_)
+			// {
+			// 	if (emvs_mapper_.storeEventNum() > EMVS_Init_event_)
+			// 	{
+			// 		// LOG(INFO) << "initialize DSI";
+			// 		Eigen::Matrix4d T_w_rv;
+			// 		ros::Time t_rv = emvs_mapper_.getRVTime();
+			// 		if (trajectory_.getPoseAt(mAllPoses_, t_rv, T_w_rv))
+			// 		{
+			// 			emvs_mapper_.initializeDSI(T_w_rv);
+			// 			// LOG(INFO) << "initialize DSI time: " << t_rv;
+			// 		}
+			// 	}
+			// }
+			// if (emvs_mapper_.dsiInitFlag_)
+			// {
+			// 	if (emvs_mapper_.storeEventNum() > 1e5) // not need to update the DSI at every time
+			// 	{
+			// 		emvs_mapper_.updateDSI();
+			// 		emvs_mapper_.clearEvents();
+			// 		LOG(INFO) << "Mean square = " << emvs_mapper_.dsi_.computeMeanSquare();
+
+			// 		cv::Mat depth_map, confidence_map, semidense_mask;
+			// 		emvs_mapper_.getDepthMapFromDSI(depth_map, confidence_map, semidense_mask, emvs_opts_depth_map_, meanDepth_);
+			// 		t_solve = tt_mapping.toc();
+			// 		LOG(INFO) << "Get DP from DSI costs: " << t_solve << " ms\r"; // 40ms
+
+			// 		if (emvs_mapper_.accu_event_number_ >= EMVS_Keyframe_event_)
+			// 		{
+			// 			std::vector<DepthPoint> &vdp = dqvDepthPoints_.back(); // depth points on the current observations
+			// 			emvs_mapper_.getDepthPoint(depth_map, confidence_map, semidense_mask, vdp, stdVar_init_);
+			// 			LOG(INFO) << "Depth point size: " << vdp.size() 
+			// 					  << ", Number of events processed: " << emvs_mapper_.accu_event_number_;
+			// 		}
+			// 		// visualization
+			// 		std::thread tPublishDSIResult(&esvo_MVSMono::publishDSIResults, this,
+			// 									t, semidense_mask, depth_map, confidence_map);
+			// 		tPublishDSIResult.detach();
+			// 	}
+			// }
+			// else
+			// {
+			// 	meanDepth_ = 0.0;
+			// }
 
 			size_t numFusionPoints = 0;
 			for (size_t n = 0; n < dqvDepthPoints_.size(); n++)
@@ -389,7 +418,6 @@ namespace esvo_core
 					exit(-1);
 				}
 
-				LOG(INFO) << "propagation";
 				for (auto it = dqvDepthPoints_.rbegin(); it != dqvDepthPoints_.rend(); it++)
 					dFusor_.naive_propagation(*it, depthFramePtr_);
 
@@ -523,7 +551,7 @@ namespace esvo_core
 	bool esvo_MVSMono::dataTransferring()
 	{
 		TS_obs_ = std::make_pair(ros::Time(), TimeSurfaceObservation()); // clean the TS obs.
-		if (TS_history_.size() <= 10)
+		if (TS_history_.size() <= 20)
 			return false;
 		totalNumCount_ = 0;
 
@@ -555,12 +583,13 @@ namespace esvo_core
 
 			// load allEvent
 			double dt_events = 1.0 / mapping_rate_hz_; // 0.05s
-			double dt_pose = 0.05 * 0.001; // 5e-5s
+			double dt_pose = 0.00025;
 			ros::Time t_end = TS_obs_.first;
 			ros::Time t_begin(std::max(0.0, t_end.toSec() - dt_events));
 			auto ev_end_it = tools::EventBuffer_lower_bound(events_left_, t_end);
 			auto ev_begin_it = tools::EventBuffer_lower_bound(events_left_, t_begin); //events_left_.begin();
-			const size_t MAX_NUM_Event_INVOLVED = 100000;
+			const size_t MAX_NUM_Event_INVOLVED = 1e5;
+			// const size_t MAX_NUM_Event_INVOLVED = static_cast<size_t>(ev_end_it - ev_begin_it);
 			vALLEventsPtr_left_.reserve(MAX_NUM_Event_INVOLVED);
 			vCloseEventsPtr_left_.reserve(MAX_NUM_Event_INVOLVED);
 			while (ev_end_it != ev_begin_it && vALLEventsPtr_left_.size() < MAX_NUM_Event_INVOLVED)
@@ -604,7 +633,7 @@ namespace esvo_core
 		const ros::Time stamp_first_event = ps_msg->header.stamp;
 		std::string *err_tf = new std::string();
 		int iGetLastest_common_time =
-			tf_->getLatestCommonTime(dvs_frame_id_.c_str(), ps_msg->header.frame_id, tf_lastest_common_time_, err_tf);
+			tf_->getLatestCommonTime(dvs_frame_id_.c_str(), world_frame_id_.c_str(), tf_lastest_common_time_, err_tf);
 		delete err_tf;
 
 		if (tf_lastest_common_time_.toSec() != 0)
@@ -647,12 +676,13 @@ namespace esvo_core
 		{
 			T_marker_cam.setIdentity();
 		}
-		else if (!strDataset_.compare("rpg_simulate"))
+		else if (!strDataset_.compare("rpg_simu"))
 		{
-			T_marker_cam << 1.0, 0.0, 0.0, 0.0,
-							0.0, -1.0, 0.0, 0.0,
-							0.0, 0.0, -1.0, 0.0,
-							0.0, 0.0, 0.0, 1.0;
+			// T_marker_cam << 1.0, 0.0, 0.0, 0.0,
+			// 				0.0, -1.0, 0.0, 0.0,
+			// 				0.0, 0.0, -1.0, 0.0,
+			// 				0.0, 0.0, 0.0, 1.0;
+			T_marker_cam.setIdentity();
 		}
 		else if (!strDataset_.compare("upenn"))
 		{
@@ -691,7 +721,7 @@ namespace esvo_core
 				t_map_cam.x(),
 				t_map_cam.y(),
 				t_map_cam.z()));
-		tf::StampedTransform st(tf, ps_msg->header.stamp, ps_msg->header.frame_id, dvs_frame_id_.c_str());
+		tf::StampedTransform st(tf, ps_msg->header.stamp, world_frame_id_.c_str(), dvs_frame_id_.c_str());
 		tf_->setTransform(st);
 
 		// static tf::TransformBroadcaster br;
@@ -962,7 +992,15 @@ namespace esvo_core
 
 		if (!pc_->empty())
 		{
-			pcl::toROSMsg(*pc_, *pc_to_publish);
+			pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_filtered(new pcl::PointCloud<pcl::PointXYZ>);
+			pcl::RadiusOutlierRemoval<pcl::PointXYZ> outlier_rm;
+			outlier_rm.setInputCloud(pc_);
+			outlier_rm.setRadiusSearch(emvs_opts_pc_.radius_search_);
+			outlier_rm.setMinNeighborsInRadius(emvs_opts_pc_.min_num_neighbors_);
+			outlier_rm.filter(*cloud_filtered);
+			pc_->swap(*cloud_filtered);
+
+			pcl::toROSMsg(*pc_, *pc_to_publish);		
 			pc_to_publish->header.stamp = t;
 			pc_pub_.publish(pc_to_publish);
 

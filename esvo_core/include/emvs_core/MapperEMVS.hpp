@@ -145,13 +145,6 @@ namespace EMVS
 		void storeEventsPose(std::vector<std::pair<ros::Time, Eigen::Matrix4d>> &pVirtualPoses,
 							 std::vector<Eigen::Vector4d> &pvEventsPtr);
 
-		void setTSNegativeObservation(std::shared_ptr<Eigen::MatrixXd> &pTSNegative)
-		{
-			pTSNegative_ = pTSNegative;
-		}
-
-		void computeObservation(const int &num_event);
-
 		inline size_t storeEventNum()
 		{
 			return vpEventsPose_.size();
@@ -190,16 +183,8 @@ namespace EMVS
 		TypeDepthVector depths_vec_;
 		std::vector<float> raw_depths_vec_;
 
-		// Precomputed (normalized) bearing vectors for each pixel of the reference image
-		Eigen::Matrix2Xf precomputed_rectified_points_;
-
 		std::vector<std::pair<std::shared_ptr<Eigen::Vector4d>, std::shared_ptr<Eigen::Matrix4d>>> vpEventsPose_;
-		std::shared_ptr<Eigen::MatrixXd> pTSNegative_;
-
 		float min_Parallax_;
-		int obs_PatchSize_X_;
-		int obs_PatchSize_Y_;
-		float min_TS_Score_;
 	};
 
 } // namespace EMVS
