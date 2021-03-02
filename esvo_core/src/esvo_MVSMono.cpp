@@ -106,6 +106,7 @@ namespace esvo_core
 		ageMap_pub_ = it_.advertise("Age_Map", 1);
 		costMap_pub_ = it_.advertise("Cost_Map", 1);
 		pc_pub_ = nh_.advertise<PointCloud>("/esvo_mvsmono/pointcloud_local", 1);
+		emvs_pc_pub_ = nh_.advertise<PointCloud>("/esvo_mvsmono/pointcloud_emvs", 1);
 		pose_pub_ = nh_.advertise<geometry_msgs::PoseStamped>("/esvo_mvsmono/pose_pub", 1);
 		if (bVisualizeGlobalPC_)
 		{
@@ -153,9 +154,9 @@ namespace esvo_core
 		MappingThread.detach();
 
 		// Dynamic reconfigure
-		dynamic_reconfigure_callback_ = boost::bind(&esvo_MVSMono::onlineParameterChangeCallback, this, _1, _2);
-		server_.reset(new dynamic_reconfigure::Server<DVS_MappingStereoConfig>(nh_private));
-		server_->setCallback(dynamic_reconfigure_callback_);
+		// dynamic_reconfigure_callback_ = boost::bind(&esvo_MVSMono::onlineParameterChangeCallback, this, _1, _2);
+		// server_.reset(new dynamic_reconfigure::Server<DVS_MappingStereoConfig>(nh_private));
+		// server_->setCallback(dynamic_reconfigure_callback_);
 	}
 
 	esvo_MVSMono::~esvo_MVSMono()
@@ -300,7 +301,7 @@ namespace esvo_core
 			tt_mapping.tic();
 			if (isKeyframe_)
 			{
-				LOG_EVERY_N(INFO, 20) << "insert a keyframe: reset the DSI for the local map";
+				// LOG(INFO) << "insert a keyframe: reset the DSI for the local map";
 				if (emvs_mapper_.accu_event_number_ <= EMVS_Keyframe_event_) 
 					if (!dqvDepthPoints_.empty())
 						dqvDepthPoints_.pop_back();
@@ -313,15 +314,16 @@ namespace esvo_core
 			}
 			else
 			{
-				LOG_EVERY_N(INFO, 20) << "insert an non-keyframe: add events onto the DSI";
+				// LOG(INFO) << "insert an non-keyframe: add events onto the DSI";
 			}
 
+			// BUGS should be fixed
 			emvs_mapper_.storeEventsPose(mVirtualPoses_, vEdgeletCoordinates);
 			if (emvs_mapper_.storeEventNum() > EMVS_Init_event_) // not need to update the DSI at every time
 			{
 				emvs_mapper_.updateDSI();
 				emvs_mapper_.clearEvents();
-				// LOG(INFO) << "Mean square = " << emvs_mapper_.dsi_.computeMeanSquare();
+				LOG(INFO) << "Mean square = " << emvs_mapper_.dsi_.computeMeanSquare();
 
 				cv::Mat depth_map, confidence_map, semidense_mask;
 				emvs_mapper_.getDepthMapFromDSI(depth_map, confidence_map, semidense_mask, emvs_opts_depth_map_, meanDepth_);
@@ -335,61 +337,25 @@ namespace esvo_core
 					LOG(INFO) << "Depth point size: " << vdp.size()
 			 				  << ", Number of events processed: " << emvs_mapper_.accu_event_number_;
 				}
+
 				// visualization
 				std::thread tPublishDSIResult(&esvo_MVSMono::publishDSIResults, this,
 											t, semidense_mask, depth_map, confidence_map);
 				tPublishDSIResult.detach();
+
+				// visualize EMVS point cloud
+				// pcl::PointCloud<pcl::PointXYZI>::Ptr pc(new pcl::PointCloud<pcl::PointXYZI>);
+				// emvs_mapper_.getPointCloud(depth_map, semidense_mask, emvs_opts_pc_, pc);
+				// sensor_msgs::PointCloud2::Ptr pc_to_publish(new sensor_msgs::PointCloud2);
+				// pcl::toROSMsg(*pc, *pc_to_publish);
+				// pc_to_publish->header.stamp = t;
+				// pc_to_publish->header.frame_id = world_frame_id_;
+				// emvs_pc_pub_.publish(pc_to_publish);
 			}
-
-			// if (!emvs_mapper_.dsiInitFlag_)
-			// {
-			// 	if (emvs_mapper_.storeEventNum() > EMVS_Init_event_)
-			// 	{
-			// 		// LOG(INFO) << "initialize DSI";
-			// 		Eigen::Matrix4d T_w_rv;
-			// 		ros::Time t_rv = emvs_mapper_.getRVTime();
-			// 		if (trajectory_.getPoseAt(mAllPoses_, t_rv, T_w_rv))
-			// 		{
-			// 			emvs_mapper_.initializeDSI(T_w_rv);
-			// 			// LOG(INFO) << "initialize DSI time: " << t_rv;
-			// 		}
-			// 	}
-			// }
-			// if (emvs_mapper_.dsiInitFlag_)
-			// {
-			// 	if (emvs_mapper_.storeEventNum() > 1e5) // not need to update the DSI at every time
-			// 	{
-			// 		emvs_mapper_.updateDSI();
-			// 		emvs_mapper_.clearEvents();
-			// 		LOG(INFO) << "Mean square = " << emvs_mapper_.dsi_.computeMeanSquare();
-
-			// 		cv::Mat depth_map, confidence_map, semidense_mask;
-			// 		emvs_mapper_.getDepthMapFromDSI(depth_map, confidence_map, semidense_mask, emvs_opts_depth_map_, meanDepth_);
-			// 		t_solve = tt_mapping.toc();
-			// 		LOG(INFO) << "Get DP from DSI costs: " << t_solve << " ms\r"; // 40ms
-
-			// 		if (emvs_mapper_.accu_event_number_ >= EMVS_Keyframe_event_)
-			// 		{
-			// 			std::vector<DepthPoint> &vdp = dqvDepthPoints_.back(); // depth points on the current observations
-			// 			emvs_mapper_.getDepthPoint(depth_map, confidence_map, semidense_mask, vdp, stdVar_init_);
-			// 			LOG(INFO) << "Depth point size: " << vdp.size() 
-			// 					  << ", Number of events processed: " << emvs_mapper_.accu_event_number_;
-			// 		}
-			// 		// visualization
-			// 		std::thread tPublishDSIResult(&esvo_MVSMono::publishDSIResults, this,
-			// 									t, semidense_mask, depth_map, confidence_map);
-			// 		tPublishDSIResult.detach();
-			// 	}
-			// }
-			// else
-			// {
-			// 	meanDepth_ = 0.0;
-			// }
 
 			size_t numFusionPoints = 0;
 			for (size_t n = 0; n < dqvDepthPoints_.size(); n++)
 				numFusionPoints += dqvDepthPoints_[n].size();
-			LOG_EVERY_N(INFO, 20) << "Fusing depth points: " << numFusionPoints;
 			if (numFusionPoints == 0)
 				return;
 
@@ -398,7 +364,7 @@ namespace esvo_core
 				if (FusionStrategy_ == "CONST_POINTS")
 				{
 					tt_mapping.tic();
-					while (numFusionPoints > 1.5 * maxNumFusionPoints_)
+					while (numFusionPoints > 1.5 * maxNumFusionPoints_ && !dqvDepthPoints_.empty())
 					{
 						dqvDepthPoints_.pop_front();
 						numFusionPoints = 0;
@@ -437,7 +403,7 @@ namespace esvo_core
 				if (FusionStrategy_ == "CONST_POINTS")
 				{
 					tt_mapping.tic();
-					while (numFusionPoints > 1.5 * maxNumFusionPoints_)
+					while (numFusionPoints > 1.5 * maxNumFusionPoints_ && !dqvDepthPoints_.empty())
 					{
 						dqvDepthPoints_.pop_front();
 						numFusionPoints = 0;
@@ -582,12 +548,12 @@ namespace esvo_core
 			vCloseEventsPtr_left_.clear(); // will be denoised using the mask above.
 
 			// load allEvent
-			double dt_events = 1.0 / mapping_rate_hz_; // 0.05s
+			double dt_events = 1.0 / mapping_rate_hz_; // 0.01s
 			double dt_pose = 0.00025;
 			ros::Time t_end = TS_obs_.first;
 			ros::Time t_begin(std::max(0.0, t_end.toSec() - dt_events));
-			auto ev_end_it = tools::EventBuffer_lower_bound(events_left_, t_end);
-			auto ev_begin_it = tools::EventBuffer_lower_bound(events_left_, t_begin); //events_left_.begin();
+			auto ev_begin_it = tools::EventBuffer_upper_bound(events_left_, t_begin); //events_left_.begin();
+			auto ev_end_it = tools::EventBuffer_lower_bound(events_left_, t_end) - 1;
 			const size_t MAX_NUM_Event_INVOLVED = 1e5;
 			// const size_t MAX_NUM_Event_INVOLVED = static_cast<size_t>(ev_end_it - ev_begin_it);
 			vALLEventsPtr_left_.reserve(MAX_NUM_Event_INVOLVED);
@@ -606,8 +572,8 @@ namespace esvo_core
 			// t_begin, t_tmp, ...,                     t_end
 			mVirtualPoses_.clear();
 			mVirtualPoses_.reserve(dt_events / dt_pose + 1);
-			ros::Time t_tmp = t_begin;
-			while (t_tmp.toSec() <= t_end.toSec())
+			ros::Time t_tmp = t_end;
+			while (t_tmp.toSec() > t_begin.toSec() - dt_pose)
 			{
 				Eigen::Matrix4d T;
 				if (trajectory_.getPoseAt(mAllPoses_, t_tmp, T))
@@ -619,7 +585,7 @@ namespace esvo_core
 					LOG(INFO) << "waiting for new poses for events";
 					return false;
 				}
-				t_tmp = ros::Time(t_tmp.toSec() + dt_pose);
+				t_tmp = ros::Time(t_tmp.toSec() - dt_pose);
 			}
 		}
 		return true;
@@ -727,6 +693,18 @@ namespace esvo_core
 		// static tf::TransformBroadcaster br;
 		// br.sendTransform(st);
 		mAllPoses_.emplace(ps_msg->header.stamp, T_map_cam);
+		static constexpr size_t MAX_POSE_LENGTH = 1000; // the buffer size
+		if (mAllPoses_.size() > 2000)
+		{
+			size_t removeCnt = 0;
+			for (auto it_pose = mAllPoses_.begin(); it_pose != mAllPoses_.end();)
+			{
+				mAllPoses_.erase(it_pose++);
+				removeCnt++;
+				if (removeCnt >= mAllPoses_.size() - MAX_POSE_LENGTH)
+					break;
+			}
+		}
 	}
 
 	void esvo_MVSMono::eventsCallback(const dvs_msgs::EventArray::ConstPtr &msg, EventQueue &EQ)
@@ -1012,11 +990,13 @@ namespace esvo_core
 					PointCloud::Ptr pc_filtered(new PointCloud());
 					pcl::VoxelGrid<pcl::PointXYZ> sor;
 					sor.setInputCloud(pc_);
-					sor.setLeafSize(0.03, 0.03, 0.03);
+					sor.setLeafSize(0.05, 0.05, 0.05);
 					sor.filter(*pc_filtered);
 
 					// copy the most current pc tp pc_global
 					size_t pc_length = pc_filtered->size();
+					if (pc_length == 0)
+						return;
 					size_t numAddedPC = min(pc_length, numAddedPC_threshold_) - 1;
 					pc_global_->insert(pc_global_->end(), pc_filtered->end() - numAddedPC, pc_filtered->end());
 

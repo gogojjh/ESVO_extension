@@ -137,13 +137,13 @@ namespace EMVS
 						   std::vector<esvo_core::container::DepthPoint> &vdp,
 						   const double &stdVar_init);
 
-		void getPointcloud(const cv::Mat &depth_map,
+		void getPointCloud(const cv::Mat &depth_map,
 						   const cv::Mat &mask,
 						   const OptionsPointCloud &options_pc,
 						   pcl::PointCloud<pcl::PointXYZI>::Ptr &pc_);
 
-		void storeEventsPose(std::vector<std::pair<ros::Time, Eigen::Matrix4d>> &pVirtualPoses,
-							 std::vector<Eigen::Vector4d> &pvEventsPtr);
+		void storeEventsPose(std::vector<std::pair<ros::Time, Eigen::Matrix4d>> &vpVirtualPoses,
+							 std::vector<Eigen::Vector4d> &vEvent);
 
 		inline size_t storeEventNum()
 		{
@@ -153,7 +153,7 @@ namespace EMVS
 		inline void clearEvents()
 		{
 			vpEventsPose_.clear();
-			vpEventsPose_.reserve(1e5);
+			// vpEventsPose_.reserve(1e5);
 		}
 
 		inline ros::Time getRVTime()

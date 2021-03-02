@@ -50,13 +50,13 @@ namespace EMVS
 	{
 		// 2D coordinates of the events transferred to reference view using plane Z = Z_0.
 		// We use Vector4f because Eigen is optimized for matrix multiplications with inputs whose size is a multiple of 4
-		static std::vector<Eigen::Vector4f> event_locations_z0;
-		event_locations_z0.clear();
+		std::vector<Eigen::Vector4f> event_locations_z0;
+		// event_locations_z0.clear();
 		event_locations_z0.reserve(vpEventsPose_.size());
 
 		// List of camera centers
-		static std::vector<Eigen::Vector3f> camera_centers;
-		camera_centers.clear();
+		std::vector<Eigen::Vector3f> camera_centers;
+		// camera_centers.clear();
 		camera_centers.reserve(vpEventsPose_.size());
 
 		const float z0 = raw_depths_vec_[0];
@@ -124,7 +124,7 @@ namespace EMVS
 			float *pgrid = dsi_.getPointerToSlice(depth_plane); // the 2D cells
 			for (size_t i = 0; i < camera_centers.size(); i++)
 			{
-				// Precompute coefficients for Eq. (15)
+				// Precompute coefficients for Eq. (15)q
 				const Eigen::Vector3f &C = camera_centers[i];
 				const float zi = static_cast<float>(raw_depths_vec_[depth_plane]);
 				const float a = z0 * (zi - C[2]);
@@ -142,17 +142,17 @@ namespace EMVS
 		}
 	}
 
-	void MapperEMVS::storeEventsPose(std::vector<std::pair<ros::Time, Eigen::Matrix4d>> &pVirtualPoses,
-									 std::vector<Eigen::Vector4d> &pvEventsPtr)
+	void MapperEMVS::storeEventsPose(std::vector<std::pair<ros::Time, Eigen::Matrix4d>> &vpVirtualPoses,
+									 std::vector<Eigen::Vector4d> &vEvent)
 	{
-		CHECK_GT(pVirtualPoses.size(), 1);
-		CHECK_GE(pVirtualPoses.back().first.toSec(), pvEventsPtr.back()[2]);
+		CHECK_GT(vpVirtualPoses.size(), 1);
+		CHECK_GE(vpVirtualPoses.front().first.toSec(), vEvent.front()[2]);
 
-		auto it_ev_begin = pvEventsPtr.rbegin();
-		for (auto it_vp = pVirtualPoses.begin(); it_vp != pVirtualPoses.end(); it_vp++)
+		auto it_ev_begin = vEvent.begin();
+		for (auto it_vp = vpVirtualPoses.begin(); it_vp != vpVirtualPoses.end(); it_vp++)
 		{
-			Eigen::Matrix4d T_w_ev = it_vp->second;
-			for (auto it_ev = it_ev_begin; it_ev != pvEventsPtr.rend(); it_ev++)
+			const Eigen::Matrix4d &T_w_ev = it_vp->second;
+			for (auto it_ev = it_ev_begin; it_ev != vEvent.end(); it_ev++)
 			{
 				if ((*it_ev)[2] > it_vp->first.toSec()) // check the timestamp
 				{
@@ -163,7 +163,7 @@ namespace EMVS
 										   std::make_shared<Eigen::Matrix4d>(T_w_ev));
 			}
 		}
-		accu_event_number_ += pvEventsPtr.size();
+		accu_event_number_ += vEvent.size();
 	}
 
 	void MapperEMVS::reset()
@@ -284,7 +284,7 @@ namespace EMVS
 		}
 	}
 
-	void MapperEMVS::getPointcloud(const cv::Mat &depth_map,
+	void MapperEMVS::getPointCloud(const cv::Mat &depth_map,
 								   const cv::Mat &mask,
 								   const OptionsPointCloud &options_pc,
 								   pcl::PointCloud<pcl::PointXYZI>::Ptr &pc_)
@@ -303,6 +303,8 @@ namespace EMVS
 					Eigen::Vector3f p(x, y, 1);
 					Eigen::Vector3f P = K_virtual_.inverse() * p;
 					Eigen::Vector3f xyz_rv = (P / P.z() * depth_map.at<float>(y, x));
+					if (xyz_rv.z() <= 1e-6)
+						continue;
 
 					pcl::PointXYZI p_rv; // 3D point in reference view
 					p_rv.x = xyz_rv.x();

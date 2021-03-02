@@ -133,7 +133,7 @@ namespace esvo_core
 		// message_filters::Subscriber<sensor_msgs::Image> TS_left_sub_, TS_right_sub_;
 
 		// Publishers
-		ros::Publisher pc_pub_, gpc_pub_;
+		ros::Publisher pc_pub_, gpc_pub_, emvs_pc_pub_;
 		image_transport::ImageTransport it_;
 
 		// Time-Surface sync policy

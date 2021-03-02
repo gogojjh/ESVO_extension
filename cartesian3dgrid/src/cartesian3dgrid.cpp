@@ -84,17 +84,15 @@ void Grid3D::collapseMaxZSlice(cv::Mat* max_val, cv::Mat* max_pos_idx) const
 
 /**
  * @brief: This function computes the mean square score of each cell
- */ 
+ */
 double Grid3D::computeMeanSquare() const
 {
   double result = 0.;
-  for (int i=0; i<numCells_; i++)
+  for (int i = 0; i < numCells_; i++)
   {
-    double tmp = (double) data_array_.at(i);
-    result += tmp*tmp;
+    double tmp = (double)data_array_.at(i);
+    result += tmp * tmp;
   }
-  
-  return result/numCells_;
+
+  return result / numCells_;
 }
-
-
