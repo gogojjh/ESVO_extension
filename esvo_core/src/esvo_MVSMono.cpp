@@ -157,6 +157,8 @@ namespace esvo_core
 		// dynamic_reconfigure_callback_ = boost::bind(&esvo_MVSMono::onlineParameterChangeCallback, this, _1, _2);
 		// server_.reset(new dynamic_reconfigure::Server<DVS_MappingStereoConfig>(nh_private));
 		// server_->setCallback(dynamic_reconfigure_callback_);
+
+		solverFlag_ = INITIAL;
 	}
 
 	esvo_MVSMono::~esvo_MVSMono()
@@ -214,11 +216,16 @@ namespace esvo_core
 					continue;
 				}
 				publishKFPose(TS_obs_.first, TS_obs_.second.T_w_obs_);
-				if (msm_ == PURE_EMVS || msm_ == PURE_EMVS_PLUS_ESTIMATION)
+
+				if (solverFlag_ == INITIAL)
+				{
+					InitializationAtTime(TS_obs_.first);
+				}
+				else
 				{
 					insertKeyframe();
+					MappingAtTime(TS_obs_.first);
 				}
-				MappingAtTime(TS_obs_.first);
 			}
 			else
 			{
@@ -229,6 +236,54 @@ namespace esvo_core
 				}
 			}
 			r.sleep();
+		}
+	}
+
+	void esvo_MVSMono::InitializationAtTime(const ros::Time &t)
+	{
+		cv::Mat image;
+		cv::eigen2cv(TS_obs_.second.TS_left_, image);
+		Eigen::Matrix3d K = camSysPtr_->cam_left_ptr_->P_.topLeftCorner<3, 3>();
+		initializer_.trackImage(t.toSec(), image, K);
+
+		cv::imshow("trackImage", initializer_.getTrackImage());
+		cv::waitKey(10);
+
+		// initializer.addFeature();
+		// initializer.initialize();
+
+		// vDenoisedEventsPtr_left_.clear();
+		// vDenoisedEventsPtr_left_.reserve(PROCESS_EVENT_NUM_);
+		// vDenoisedEventsPtr_left_.insert(vDenoisedEventsPtr_left_.end(), vCloseEventsPtr_left_.begin(),
+		// 								vCloseEventsPtr_left_.begin() + min(vCloseEventsPtr_left_.size(), PROCESS_EVENT_NUM_));
+
+		// std::vector<Eigen::Vector4d> vEdgeletCoordinates;
+		// vEdgeletCoordinates.reserve(vDenoisedEventsPtr_left_.size());
+		// for (size_t i = 0; i < vDenoisedEventsPtr_left_.size(); i++)
+		// {
+		// 	bool bDistorted = true;
+		// 	Eigen::Vector2d coor;
+		// 	if (bDistorted)
+		// 		coor = camSysPtr_->cam_left_ptr_->getRectifiedUndistortedCoordinate(vDenoisedEventsPtr_left_[i]->x, vDenoisedEventsPtr_left_[i]->y);
+		// 	else
+		// 		coor = Eigen::Vector2d(vDenoisedEventsPtr_left_[i]->x, vDenoisedEventsPtr_left_[i]->y);
+		// 	Eigen::Vector4d tmp_coor;
+		// 	tmp_coor[0] = coor[0];
+		// 	tmp_coor[1] = coor[1];
+		// 	tmp_coor[2] = vDenoisedEventsPtr_left_[i]->ts.toSec();
+		// 	tmp_coor[3] = double(vDenoisedEventsPtr_left_[i]->polarity);
+		// 	vEdgeletCoordinates.push_back(tmp_coor);
+		// }
+
+		// emvs_mapper_.storeEventsPose(mVirtualPoses_, vEdgeletCoordinates);
+		// if (emvs_mapper_.accu_event_number_ > EMVS_Keyframe_event_)
+		// {
+		// 	emvs_mapper_.reset();
+		// 	emvs_mapper_.initializeDSI(Eigen::Matrix4d::Identity());
+		// 	emvs_mapper_.updateDSI();
+		// 	emvs_mapper_.clearEvents();
+			// solverFlag_ = MAPPING;
+		// }
 		}
 	}
 
@@ -301,7 +356,7 @@ namespace esvo_core
 			tt_mapping.tic();
 			if (isKeyframe_)
 			{
-				// LOG(INFO) << "insert a keyframe: reset the DSI for the local map";
+				LOG(INFO) << "insert a keyframe: reset the DSI for the local map";
 				if (emvs_mapper_.accu_event_number_ <= EMVS_Keyframe_event_) 
 					if (!dqvDepthPoints_.empty())
 						dqvDepthPoints_.pop_back();
@@ -317,7 +372,6 @@ namespace esvo_core
 				// LOG(INFO) << "insert an non-keyframe: add events onto the DSI";
 			}
 
-			// BUGS should be fixed
 			emvs_mapper_.storeEventsPose(mVirtualPoses_, vEdgeletCoordinates);
 			if (emvs_mapper_.storeEventNum() > EMVS_Init_event_) // not need to update the DSI at every time
 			{
@@ -342,15 +396,6 @@ namespace esvo_core
 				std::thread tPublishDSIResult(&esvo_MVSMono::publishDSIResults, this,
 											t, semidense_mask, depth_map, confidence_map);
 				tPublishDSIResult.detach();
-
-				// visualize EMVS point cloud
-				// pcl::PointCloud<pcl::PointXYZI>::Ptr pc(new pcl::PointCloud<pcl::PointXYZI>);
-				// emvs_mapper_.getPointCloud(depth_map, semidense_mask, emvs_opts_pc_, pc);
-				// sensor_msgs::PointCloud2::Ptr pc_to_publish(new sensor_msgs::PointCloud2);
-				// pcl::toROSMsg(*pc, *pc_to_publish);
-				// pc_to_publish->header.stamp = t;
-				// pc_to_publish->header.frame_id = world_frame_id_;
-				// emvs_pc_pub_.publish(pc_to_publish);
 			}
 
 			size_t numFusionPoints = 0;

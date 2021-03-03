@@ -184,6 +184,7 @@ cs_add_library(${PROJECT_NAME}_mono_LIB ${SOURCES} ${HEADERS})
 
 cs_add_library(mc_lib src/core/InitialMotionEstimator.cpp)
 cs_add_library(emvs_lib src/emvs_core/MapperEMVS.cpp src/emvs_core/MedianFilter.cpp)
+cs_add_library(initial_lib src/initial/MonoInitializer.cpp)
 
 # Node esvo_MonoTracking
 cs_add_executable(esvo_MonoTracking src/esvo_MonoTrackingNode.cpp
@@ -192,9 +193,7 @@ target_link_libraries(esvo_MonoTracking ${PROJECT_NAME}_mono_LIB mc_lib
     ${catkin_LIBRARIES} ${OpenCV_LIBRARIES} ${gsl_LIBRARIES} yaml-cpp)
 
 # Node esvo_MVSMono (newly added in branch "mvs")
-cs_add_executable(esvo_MVSMono
-    src/esvo_MVSMonoNode.cpp
-    src/esvo_MVSMono.cpp
-    include/esvo_core/esvo_MVSMono.h)
-target_link_libraries(esvo_MVSMono ${PROJECT_NAME}_mono_LIB emvs_lib
+cs_add_executable(esvo_MVSMono src/esvo_MVSMonoNode.cpp 
+  src/esvo_MVSMono.cpp include/esvo_core/esvo_MVSMono.h)
+target_link_libraries(esvo_MVSMono ${PROJECT_NAME}_mono_LIB emvs_lib initial_lib
     ${catkin_LIBRARIES} ${OpenCV_LIBRARIES} yaml-cpp)

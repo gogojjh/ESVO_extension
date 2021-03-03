@@ -26,6 +26,8 @@
 #include <emvs_core/MapperEMVS.hpp>
 #include <emvs_core/Trajectory.hpp>
 
+#include <initial/MonoInitializer.h>
+
 #include <opencv2/core/core.hpp>
 #include <opencv2/imgproc/imgproc.hpp>
 #include <opencv2/calib3d/calib3d.hpp>
@@ -59,6 +61,12 @@ namespace esvo_core
 		PURE_EMVS_PLUS_ESTIMATION  //6 (this one implements EMVS [33] + nonliear opt.)
 	};
 
+	enum SolverFlag
+	{
+		INITIAL,
+		MAPPING
+	};
+
 	class esvo_MVSMono
 	{
 	public:
@@ -70,6 +78,7 @@ namespace esvo_core
 
 		// functions regarding mapping
 		void MappingLoop(std::promise<void> prom_mapping, std::future<void> future_reset);
+		void InitializationAtTime(const ros::Time &t);
 		void MappingAtTime(const ros::Time &t);
 		bool dataTransferring();
 
@@ -239,7 +248,6 @@ namespace esvo_core
 		EMVS::LinearTrajectory trajectory_;
 		bool isKeyframe_;
 		Eigen::Matrix4d T_w_keyframe_, T_w_frame_;
-		// pcl::PointCloud<pcl::PointXYZI>::Ptr emvs_pc_, pc_map_;
 
 		double meanDepth_;
 		double KEYFRAME_LINEAR_DIS_, KEYFRAME_ORIENTATION_DIS_, KEYFRAME_MEANDEPTH_DIS_;
@@ -249,8 +257,12 @@ namespace esvo_core
 		bool SAVE_RESULT_;
 		std::string strDataset_;
 
-		std::map<ros::Time, std::shared_ptr<Eigen::MatrixXd>> TS_map_negative_history_;
 		Eigen::Matrix4d T_world_map_;
+
+		// MonoInitializer
+		MonoInitializer initializer_;
+
+		SolverFlag solverFlag_;
 	};
 
 } // namespace esvo_core

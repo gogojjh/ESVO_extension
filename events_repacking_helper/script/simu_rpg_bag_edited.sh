@@ -22,7 +22,7 @@ python extract_topics.py \
     $FOLDER_NAME/$BAG_NAME.bag $FOLDER_NAME/$BAG_NAME.bag.extracted \
     /$CAM_NAME/camera_info /$CAM_NAME/depthmap /$CAM_NAME/image_corrupted \
     /$CAM_NAME/image_raw /$CAM_NAME/optic_flow /$CAM_NAME/pointcloud \
-    /$CAM_NAME/pose /$CAM_NAME/twist /imu /tf
+    /$CAM_NAME/pose /$CAM_NAME/twist /imu
 
 python merge.py \
     $FOLDER_NAME/$BAG_NAME.bag.events $FOLDER_NAME/$BAG_NAME.bag.extracted \
