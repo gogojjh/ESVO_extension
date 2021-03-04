@@ -163,8 +163,6 @@ namespace esvo_core
 
 		last_timestampe_ = 0.0;
 
-		T_world_cur_.setIdentity();
-
 		solverFlag_ = INITIAL;
 	}
 

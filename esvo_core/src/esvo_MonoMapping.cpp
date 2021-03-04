@@ -45,7 +45,7 @@ namespace esvo_core
 		  pc_(new PointCloud()),
 		  pc_near_(new PointCloud()),
 		  pc_global_(new PointCloud()),
-		  depthFramePtr_(new DepthFrame(camSysPtr_->cam_left_ptr_->height_, camSysPtr_->cam_left_ptr_->width_))
+		  depthFramePtr_(new DepthFrame(camSysPtr_->cam_left_ptr_->height_, camSysPtr_->cam_left_ptr_->width_)),
 		  // MapperEMVS
 		  emvs_dsi_shape_(tools::param(pnh_, "opts_dim_x", 0),
 						  tools::param(pnh_, "opts_dim_y", 0),
@@ -76,6 +76,7 @@ namespace esvo_core
 		residual_vis_threshold_ = tools::param(pnh_, "residual_vis_threshold", 15);
 		cost_vis_threshold_ = pow(residual_vis_threshold_, 2) * patch_area_;
 		stdVar_vis_threshold_ = tools::param(pnh_, "stdVar_vis_threshold", 0.005);
+		stdVar_init_ = tools::param(pnh_, "stdVar_init", 0.1);
 		age_max_range_ = tools::param(pnh_, "age_max_range", 5);
 		age_vis_threshold_ = tools::param(pnh_, "age_vis_threshold", 0);
 		fusion_radius_ = tools::param(pnh_, "fusion_radius", 0);
@@ -104,9 +105,9 @@ namespace esvo_core
 		nh_.setParam("/ESVO_SYSTEM_STATUS", ESVO_System_Status_);
 
 		// callback functions
-		events_left_sub_ = nh_.subscribe<dvs_msgs::EventArray>("events_left", 10, boost::bind(&esvo_MVSMono::eventsCallback, this, _1, boost::ref(events_left_)));
+		events_left_sub_ = nh_.subscribe<dvs_msgs::EventArray>("events_left", 10, boost::bind(&esvo_MonoMapping::eventsCallback, this, _1, boost::ref(events_left_)));
 		stampedPose_sub_ = nh_.subscribe("stamped_pose", 0, &esvo_MonoMapping::stampedPoseCallback, this);
-		TS_left_sub_ = nh_.subscribe("time_surface_left", 10, &esvo_MVSMono::timeSurfaceCallback, this);
+		TS_left_sub_ = nh_.subscribe("time_surface_left", 10, &esvo_MonoMapping::timeSurfaceCallback, this);
 		// TF
 		tf_ = std::make_shared<tf::Transformer>(true, ros::Duration(100.0));
 
@@ -115,10 +116,10 @@ namespace esvo_core
 		stdVarMap_pub_ = it_.advertise("Standard_Variance_Map", 1);
 		ageMap_pub_ = it_.advertise("Age_Map", 1);
 		costMap_pub_ = it_.advertise("cost_map", 1);
-		pc_pub_ = nh_.advertise<PointCloud>("/esvo_mvsmono/pointcloud_local", 1);
+		pc_pub_ = nh_.advertise<PointCloud>("/esvo_monomapping/pointcloud_local", 1);
 		if (bVisualizeGlobalPC_)
 		{
-			gpc_pub_ = nh_.advertise<PointCloud>("/esvo_mvsmono/pointcloud_global", 1);
+			gpc_pub_ = nh_.advertise<PointCloud>("/esvo_monomapping/pointcloud_global", 1);
 			pc_global_->reserve(500000);
 			t_last_pub_pc_ = 0.0;
 		}
@@ -137,7 +138,7 @@ namespace esvo_core
 		meanDepth_ = -1.0;
 		mAllPoses_.clear();
 
-		depthMap_pub = it_.advertise("DSI_Depth_Map", 1);
+		depthMap_pub_ = it_.advertise("DSI_Depth_Map", 1);
 		confidenceMap_pub_ = it_.advertise("DSI_Confidence_Map", 1);
 		semiDenseMask_pub_ = it_.advertise("DSI_Semi_Dense_Mask", 1);
 		EMVS_Init_event_ = tools::param(pnh_, "EMVS_Init_event", 5e4);
@@ -167,7 +168,7 @@ namespace esvo_core
 		stdVarMap_pub_.shutdown();
 		ageMap_pub_.shutdown();
 		costMap_pub_.shutdown();
-		depthMap_pub.shutdown();
+		depthMap_pub_.shutdown();
 		confidenceMap_pub_.shutdown();
 		semiDenseMask_pub_.shutdown();		
 	}
@@ -270,206 +271,164 @@ namespace esvo_core
 		/******************************************************************/
 		/*************** Event Multi-Stereo Mapping (EMVS) ****************/
 		/******************************************************************/
-		if (msm_ == PURE_EMVS || msm_ == PURE_EMVS_PLUS_ESTIMATION)
+		double t_denoising;
+		if (bDenoising_) // Set it to "True" to deal with flicker effect caused by VICON.
 		{
-			double t_denoising;
-			if (bDenoising_) // Set it to "True" to deal with flicker effect caused by VICON.
-			{
-				tt_mapping.tic();
-				// Draw one mask image for denoising
-				cv::Mat denoising_mask;
-				createDenoisingMask(vALLEventsPtr_left_, denoising_mask, camSysPtr_->cam_left_ptr_->height_, camSysPtr_->cam_left_ptr_->width_);
-
-				// Extract events (appear on edges likely) for each TS
-				vDenoisedEventsPtr_left_.clear();
-				extractDenoisedEvents(vCloseEventsPtr_left_, vDenoisedEventsPtr_left_, denoising_mask, PROCESS_EVENT_NUM_);
-				totalNumCount_ = vDenoisedEventsPtr_left_.size();
-				t_denoising = tt_mapping.toc();
-			}
-			else
-			{
-				vDenoisedEventsPtr_left_.clear();
-				vDenoisedEventsPtr_left_.reserve(PROCESS_EVENT_NUM_);
-				vDenoisedEventsPtr_left_.insert(vDenoisedEventsPtr_left_.end(), vCloseEventsPtr_left_.begin(),
-												vCloseEventsPtr_left_.begin() + min(vCloseEventsPtr_left_.size(), PROCESS_EVENT_NUM_));
-				// vDenoisedEventsPtr_left_.insert(vDenoisedEventsPtr_left_.end(), vCloseEventsPtr_left_.begin(), vCloseEventsPtr_left_.end());
-			}
-
-			// undistort events' coordinates
-			std::vector<Eigen::Vector4d> vEdgeletCoordinates;
-			vEdgeletCoordinates.reserve(vDenoisedEventsPtr_left_.size());
-			for (size_t i = 0; i < vDenoisedEventsPtr_left_.size(); i++)
-			{
-				// undistortion + rectification
-				bool bDistorted = true;
-				Eigen::Vector2d coor;
-				if (bDistorted)
-					coor = camSysPtr_->cam_left_ptr_->getRectifiedUndistortedCoordinate(vDenoisedEventsPtr_left_[i]->x, vDenoisedEventsPtr_left_[i]->y);
-				else
-					coor = Eigen::Vector2d(vDenoisedEventsPtr_left_[i]->x, vDenoisedEventsPtr_left_[i]->y);
-				Eigen::Vector4d tmp_coor;
-				tmp_coor[0] = coor[0];
-				tmp_coor[1] = coor[1];
-				tmp_coor[2] = vDenoisedEventsPtr_left_[i]->ts.toSec();
-				tmp_coor[3] = double(vDenoisedEventsPtr_left_[i]->polarity);
-				vEdgeletCoordinates.push_back(tmp_coor);
-			}
-
-			double t_solve, t_fusion, t_optimization, t_regularization;
 			tt_mapping.tic();
-			if (isKeyframe_)
-			{
-				LOG(INFO) << "insert a keyframe: reset the DSI for the local map";
-				if (emvs_mapper_.accu_event_number_ <= EMVS_Keyframe_event_)
-					if (!dqvDepthPoints_.empty())
-						dqvDepthPoints_.pop_back();
-				dqvDepthPoints_.push_back(std::vector<DepthPoint>());
-				if (SAVE_RESULT_ && boost::filesystem::exists(resultPath_))
-					emvs_mapper_.dsi_.writeGridNpy(std::string(resultPath_ + "dsi.npy").c_str());
-				emvs_mapper_.reset();
-				emvs_mapper_.initializeDSI(TS_obs_.second.T_w_obs_);
-				meanDepth_ = 0.0;
-			}
+			// Draw one mask image for denoising
+			cv::Mat denoising_mask;
+			createDenoisingMask(vALLEventsPtr_left_, denoising_mask, camSysPtr_->cam_left_ptr_->height_, camSysPtr_->cam_left_ptr_->width_);
+
+			// Extract events (appear on edges likely) for each TS
+			vDenoisedEventsPtr_left_.clear();
+			extractDenoisedEvents(vCloseEventsPtr_left_, vDenoisedEventsPtr_left_, denoising_mask, PROCESS_EVENT_NUM_);
+			totalNumCount_ = vDenoisedEventsPtr_left_.size();
+			t_denoising = tt_mapping.toc();
+		}
+		else
+		{
+			vDenoisedEventsPtr_left_.clear();
+			vDenoisedEventsPtr_left_.reserve(PROCESS_EVENT_NUM_);
+			vDenoisedEventsPtr_left_.insert(vDenoisedEventsPtr_left_.end(), vCloseEventsPtr_left_.begin(),
+											vCloseEventsPtr_left_.begin() + min(vCloseEventsPtr_left_.size(), PROCESS_EVENT_NUM_));
+			// vDenoisedEventsPtr_left_.insert(vDenoisedEventsPtr_left_.end(), vCloseEventsPtr_left_.begin(), vCloseEventsPtr_left_.end());
+		}
+
+		// undistort events' coordinates
+		std::vector<Eigen::Vector4d> vEdgeletCoordinates;
+		vEdgeletCoordinates.reserve(vDenoisedEventsPtr_left_.size());
+		for (size_t i = 0; i < vDenoisedEventsPtr_left_.size(); i++)
+		{
+			// undistortion + rectification
+			bool bDistorted = true;
+			Eigen::Vector2d coor;
+			if (bDistorted)
+				coor = camSysPtr_->cam_left_ptr_->getRectifiedUndistortedCoordinate(vDenoisedEventsPtr_left_[i]->x, vDenoisedEventsPtr_left_[i]->y);
 			else
+				coor = Eigen::Vector2d(vDenoisedEventsPtr_left_[i]->x, vDenoisedEventsPtr_left_[i]->y);
+			Eigen::Vector4d tmp_coor;
+			tmp_coor[0] = coor[0];
+			tmp_coor[1] = coor[1];
+			tmp_coor[2] = vDenoisedEventsPtr_left_[i]->ts.toSec();
+			tmp_coor[3] = double(vDenoisedEventsPtr_left_[i]->polarity);
+			vEdgeletCoordinates.push_back(tmp_coor);
+		}
+
+		double t_solve, t_fusion, t_optimization, t_regularization;
+		tt_mapping.tic();
+		if (isKeyframe_)
+		{
+			LOG(INFO) << "insert a keyframe: reset the DSI for the local map";
+			if (emvs_mapper_.accu_event_number_ <= EMVS_Keyframe_event_)
+				if (!dqvDepthPoints_.empty())
+					dqvDepthPoints_.pop_back();
+			dqvDepthPoints_.push_back(std::vector<DepthPoint>());
+			if (SAVE_RESULT_ && boost::filesystem::exists(resultPath_))
+				emvs_mapper_.dsi_.writeGridNpy(std::string(resultPath_ + "dsi.npy").c_str());
+			emvs_mapper_.reset();
+			emvs_mapper_.initializeDSI(TS_obs_.second.T_w_obs_);
+			meanDepth_ = 0.0;
+		}
+		else
+		{
+			// LOG(INFO) << "insert an non-keyframe: add events onto the DSI";
+		}
+
+		emvs_mapper_.storeEventsPose(mVirtualPoses_, vEdgeletCoordinates);
+		if (emvs_mapper_.storeEventNum() > EMVS_Init_event_) // not need to update the DSI at every time
+		{
+			emvs_mapper_.updateDSI();
+			emvs_mapper_.clearEvents();
+			LOG(INFO) << "Mean square = " << emvs_mapper_.dsi_.computeMeanSquare();
+
+			cv::Mat depth_map, confidence_map, semidense_mask;
+			emvs_mapper_.getDepthMapFromDSI(depth_map, confidence_map, semidense_mask, emvs_opts_depth_map_, meanDepth_);
+			t_solve = tt_mapping.toc();
+			LOG(INFO) << "Time to update DSI and count DSI: " << t_solve << "ms"; // 40ms
+
+			if (emvs_mapper_.accu_event_number_ >= EMVS_Keyframe_event_)
 			{
-				// LOG(INFO) << "insert an non-keyframe: add events onto the DSI";
+				std::vector<DepthPoint> &vdp = dqvDepthPoints_.back(); // depth points on the current observations
+				emvs_mapper_.getDepthPoint(depth_map, confidence_map, semidense_mask, vdp, stdVar_init_);
+				LOG(INFO) << "Depth point size: " << vdp.size()
+							<< ", Number of events processed: " << emvs_mapper_.accu_event_number_;
 			}
 
-			emvs_mapper_.storeEventsPose(mVirtualPoses_, vEdgeletCoordinates);
-			if (emvs_mapper_.storeEventNum() > EMVS_Init_event_) // not need to update the DSI at every time
-			{
-				emvs_mapper_.updateDSI();
-				emvs_mapper_.clearEvents();
-				LOG(INFO) << "Mean square = " << emvs_mapper_.dsi_.computeMeanSquare();
+			// visualization
+			std::thread tPublishDSIResult(&esvo_MonoMapping::publishDSIResults, this,
+										  t, semidense_mask, depth_map, confidence_map);
+			tPublishDSIResult.detach();
+		}
 
-				cv::Mat depth_map, confidence_map, semidense_mask;
-				emvs_mapper_.getDepthMapFromDSI(depth_map, confidence_map, semidense_mask, emvs_opts_depth_map_, meanDepth_);
-				t_solve = tt_mapping.toc();
-				LOG(INFO) << "Time to update DSI and count DSI: " << t_solve << "ms"; // 40ms
 
-				if (emvs_mapper_.accu_event_number_ >= EMVS_Keyframe_event_)
-				{
-					std::vector<DepthPoint> &vdp = dqvDepthPoints_.back(); // depth points on the current observations
-					emvs_mapper_.getDepthPoint(depth_map, confidence_map, semidense_mask, vdp, stdVar_init_);
-					LOG(INFO) << "Depth point size: " << vdp.size()
-							  << ", Number of events processed: " << emvs_mapper_.accu_event_number_;
-				}
-
-				// visualization
-				std::thread tPublishDSIResult(&esvo_MVSMono::publishDSIResults, this,
-											  t, semidense_mask, depth_map, confidence_map);
-				tPublishDSIResult.detach();
-			}
-
-			size_t numFusionPoints = 0;
-			for (size_t n = 0; n < dqvDepthPoints_.size(); n++)
-				numFusionPoints += dqvDepthPoints_[n].size();
-			if (numFusionPoints == 0)
-				return;
-
-			if (msm_ == PURE_EMVS)
-			{
-				if (FusionStrategy_ == "CONST_POINTS")
-				{
-					tt_mapping.tic();
-					while (numFusionPoints > 1.5 * maxNumFusionPoints_ && !dqvDepthPoints_.empty())
-					{
-						dqvDepthPoints_.pop_front();
-						numFusionPoints = 0;
-						for (size_t n = 0; n < dqvDepthPoints_.size(); n++)
-							numFusionPoints += dqvDepthPoints_[n].size();
-					}
-				}
-				else if (FusionStrategy_ == "CONST_FRAMES") // (strategy 2: const number of frames)
-				{
-					tt_mapping.tic();
-					while (dqvDepthPoints_.size() > maxNumFusionFrames_)
-						dqvDepthPoints_.pop_front();
-				}
-				else
-				{
-					LOG(INFO) << "Invalid FusionStrategy is assigned.";
-					exit(-1);
-				}
-
-				for (auto it = dqvDepthPoints_.rbegin(); it != dqvDepthPoints_.rend(); it++)
-					dFusor_.naive_propagation(*it, depthFramePtr_);
-
-				// regularization
-				if (bRegularization_) // to be fixed to modify the variance
-				{
-					tt_mapping.tic();
-					dRegularizor_.apply(depthFramePtr_->dMap_);
-					t_regularization = tt_mapping.toc();
-				}
-			}
-			/**************************************************************/
-			/*************  Nonlinear Optimization & Fusion ***************/
-			/**************************************************************/
-			else
-			{
-				if (FusionStrategy_ == "CONST_POINTS")
-				{
-					tt_mapping.tic();
-					while (numFusionPoints > 1.5 * maxNumFusionPoints_ && !dqvDepthPoints_.empty())
-					{
-						dqvDepthPoints_.pop_front();
-						numFusionPoints = 0;
-						for (size_t n = 0; n < dqvDepthPoints_.size(); n++)
-							numFusionPoints += dqvDepthPoints_[n].size();
-					}
-				}
-				else if (FusionStrategy_ == "CONST_FRAMES") // (strategy 2: const number of frames)
-				{
-					tt_mapping.tic();
-					while (dqvDepthPoints_.size() > maxNumFusionFrames_)
-						dqvDepthPoints_.pop_front();
-				}
-				else
-				{
-					LOG(INFO) << "Invalid FusionStrategy is assigned.";
-					exit(-1);
-				}
-
-				// apply fusion and count the total number of fusion.
-				size_t numFusionCount = 0;
-				for (auto it = dqvDepthPoints_.rbegin(); it != dqvDepthPoints_.rend(); it++)
-				{
-					numFusionCount += dFusor_.update(*it, depthFramePtr_, fusion_radius_);
-					//    LOG(INFO) << "numFusionCount: " << numFusionCount;
-				}
-
-				TotalNumFusion_ += numFusionCount;
-				depthFramePtr_->dMap_->clean(pow(stdVar_vis_threshold_, 2),
-											 age_vis_threshold_,
-											 invDepth_max_range_,
-											 invDepth_min_range_);
-				t_fusion = tt_mapping.toc();
-
-				// regularization
-				if (bRegularization_)
-				{
-					tt_mapping.tic();
-					dRegularizor_.apply(depthFramePtr_->dMap_);
-					t_regularization = tt_mapping.toc();
-				}
-				t_optimization = t_solve + t_fusion + t_regularization;
-				t_overall_count += t_optimization;
-			}
-
-			std::thread tPublishMappingResult(&esvo_MVSMono::publishMappingResults, this,
-											  depthFramePtr_->dMap_, depthFramePtr_->T_world_frame_.getTransformationMatrix(), t);
-			tPublishMappingResult.detach();
-
-			// To save the depth result, set it to true.
-			// if (SAVE_RESULT_)
-			// {
-			// 	// For quantitative comparison.
-			// 	std::string baseDir(resultPath_);
-			// 	std::string saveDir(baseDir);
-			// 	saveDepthMap(depthFramePtr_->dMap_, saveDir, t);
-			// }
+		/**************************************************************/
+		/*************  Nonlinear Optimization & Fusion ***************/
+		/**************************************************************/
+		size_t numFusionPoints = 0;
+		for (size_t n = 0; n < dqvDepthPoints_.size(); n++)
+			numFusionPoints += dqvDepthPoints_[n].size();
+		if (numFusionPoints == 0)
 			return;
+
+		if (FusionStrategy_ == "CONST_POINTS")
+		{
+			tt_mapping.tic();
+			while (numFusionPoints > 1.5 * maxNumFusionPoints_ && !dqvDepthPoints_.empty())
+			{
+				dqvDepthPoints_.pop_front();
+				numFusionPoints = 0;
+				for (size_t n = 0; n < dqvDepthPoints_.size(); n++)
+					numFusionPoints += dqvDepthPoints_[n].size();
+			}
+		}
+		else if (FusionStrategy_ == "CONST_FRAMES") // (strategy 2: const number of frames)
+		{
+			tt_mapping.tic();
+			while (dqvDepthPoints_.size() > maxNumFusionFrames_)
+				dqvDepthPoints_.pop_front();
+		}
+		else
+		{
+			LOG(INFO) << "Invalid FusionStrategy is assigned.";
+			exit(-1);
+		}
+
+		// apply fusion and count the total number of fusion.
+		size_t numFusionCount = 0;
+		for (auto it = dqvDepthPoints_.rbegin(); it != dqvDepthPoints_.rend(); it++)
+		{
+			numFusionCount += dFusor_.update(*it, depthFramePtr_, fusion_radius_);
+			//    LOG(INFO) << "numFusionCount: " << numFusionCount;
+		}
+
+		TotalNumFusion_ += numFusionCount;
+		depthFramePtr_->dMap_->clean(pow(stdVar_vis_threshold_, 2),
+										age_vis_threshold_,
+										invDepth_max_range_,
+										invDepth_min_range_);
+		t_fusion = tt_mapping.toc();
+
+		// regularization
+		if (bRegularization_)
+		{
+			tt_mapping.tic();
+			dRegularizor_.apply(depthFramePtr_->dMap_);
+			t_regularization = tt_mapping.toc();
+		}
+		t_optimization = t_solve + t_fusion + t_regularization;
+		t_overall_count += t_optimization;
+
+		std::thread tPublishMappingResult(&esvo_MonoMapping::publishMappingResults, this,
+											depthFramePtr_->dMap_, depthFramePtr_->T_world_frame_.getTransformationMatrix(), t);
+		tPublishMappingResult.detach();
+
+		// To save the depth result, set it to true.
+		if (SAVE_RESULT_)
+		{
+			// For quantitative comparison.
+			std::string baseDir(resultPath_);
+			std::string saveDir(baseDir);
+			saveDepthMap(depthFramePtr_->dMap_, saveDir, t);
 		}
 
 #ifdef ESVO_CORE_MONOMAPPING_LOG
@@ -605,6 +564,7 @@ namespace esvo_core
 				// 	it_end->second.setTransformation(tr);
 				// 	TS_obs_ = *it_end;
 				// }
+				Eigen::Matrix4d T_w_obs;
 				if (trajectory_.getPoseAt(mAllPoses_, it_end->first, T_w_obs)) // check if poses are ready
 				{
 					it_end->second.setTransformation(T_w_obs);
@@ -629,8 +589,9 @@ namespace esvo_core
 		if (ESVO_System_Status_ == "INITIALIZATION")
 		{
 			vALLEventsPtr_left_.clear();
+			double dt_events = 0.005; 
 			ros::Time t_end = TS_obs_.first;
-			ros::Time t_begin(std::max(0.0, t_end.toSec() - 2 * BM_half_slice_thickness_)); // 2ms
+			ros::Time t_begin(std::max(0.0, t_end.toSec() - dt_events)); // 2ms
 			auto ev_begin_it = tools::EventBuffer_upper_bound(events_left_, t_begin);
 			auto ev_end_it = tools::EventBuffer_lower_bound(events_left_, t_end);
 			const size_t MAX_NUM_Event_INVOLVED = 30000;
@@ -1001,17 +962,17 @@ namespace esvo_core
 		}
 	}
 
-	void esvo_MVSMono::publishPointCloud(DepthMap::Ptr &depthMapPtr,
-										 Eigen::Matrix4d &T,
-										 ros::Time &t)
+	void esvo_MonoMapping::publishPointCloud(DepthMap::Ptr &depthMapPtr,
+											 Eigen::Matrix4d &T,
+											 ros::Time &t)
 	{
 		sensor_msgs::PointCloud2::Ptr pc_to_publish(new sensor_msgs::PointCloud2);
-		Eigen::Matrix<double, 4, 4> T_world_result = tr.getTransformationMatrix();
+		Eigen::Matrix<double, 4, 4> T_world_result = T;
 
 		pc_->clear();
-		pc_->reserve(50000);
-		pc_near_->clear();
-		pc_near_->reserve(50000);
+		pc_->reserve(std::min(static_cast<size_t>(50000), depthMapPtr->size()));
+		pc_->clear();
+		pc_->reserve(std::min(static_cast<size_t>(50000), depthMapPtr->size()));
 
 		double FarthestDistance = 0.0;
 		Eigen::Vector3d FarthestPoint;

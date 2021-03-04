@@ -39,7 +39,7 @@
 #include <pcl_ros/point_cloud.h>
 
 const double VAR_RANDOM_INIT_INITIAL_ = 0.2;
-const double INIT_DP_NUM_Threshold_ = 500;
+const double INIT_DP_NUM_Threshold_ = 1000;
 
 namespace esvo_core
 {
@@ -114,7 +114,7 @@ namespace esvo_core
         // Subscribers
         ros::Subscriber events_left_sub_;
         ros::Subscriber stampedPose_sub_;
-        message_filters::Subscriber<sensor_msgs::Image> TS_left_sub_;
+        ros::Subscriber TS_left_sub_;
 
         // Publishers
         ros::Publisher pc_pub_, gpc_pub_;
@@ -171,6 +171,7 @@ namespace esvo_core
         size_t patch_area_;
         double residual_vis_threshold_;
         double stdVar_vis_threshold_;
+        double stdVar_init_;
         size_t age_max_range_;
         size_t age_vis_threshold_;
         int fusion_radius_;

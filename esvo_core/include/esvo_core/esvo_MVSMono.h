@@ -246,7 +246,8 @@ namespace esvo_core
 		std::vector<std::pair<ros::Time, Eigen::Matrix4d>> mVirtualPoses_;
 		EMVS::LinearTrajectory trajectory_;
 		bool isKeyframe_;
-		Eigen::Matrix4d T_w_keyframe_, T_w_frame_;
+		Eigen::Matrix4d T_w_keyframe_, T_w_frame_, T_world_map_;
+		double last_timestampe_;
 
 		double meanDepth_;
 		double KEYFRAME_LINEAR_DIS_, KEYFRAME_ORIENTATION_DIS_, KEYFRAME_MEANDEPTH_DIS_;
