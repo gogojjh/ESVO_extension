@@ -15,8 +15,6 @@
 #include <gsl/gsl_multimin.h>
 #include <gsl/gsl_blas.h>
 
-#include "esvo_core/container/CameraSystem.h"
-
 #define INI_MOT_EST_DEBUG
 
 const int INI_NUM_EVENTS_INVOLVE = 20000;
@@ -55,11 +53,10 @@ public:
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 
     MCAuxdata(double *ref_time_, std::vector<Eigen::Vector4d> *events_coor_,
-              Eigen::MatrixXd *TS_metric_, cv::Size img_size_, Eigen::Matrix3d K_,
+              cv::Size img_size_, Eigen::Matrix3d K_,
               int contrast_measure_, bool use_polarity_, double blur_sigma_)
         : ref_time(ref_time_),
           events_coor(events_coor_),
-          TS_metric(TS_metric_),
           img_size(img_size_),
           K(K_),
           contrast_measure(contrast_measure_),
@@ -70,7 +67,6 @@ public:
     MCAuxdata()
         : ref_time(nullptr),
           events_coor(nullptr),
-          TS_metric(nullptr),
           img_size(cv::Size(0, 0)),
           K(Eigen::Matrix3d::Zero()),
           contrast_measure(VARIANCE_CONTRAST),
@@ -80,7 +76,6 @@ public:
 
     double *ref_time;
     std::vector<Eigen::Vector4d> *events_coor;
-    Eigen::MatrixXd *TS_metric;
 
     cv::Size img_size;
     Eigen::Matrix3d K;
@@ -121,24 +116,24 @@ public:
     ~InitialMotionEstimator();
 
     bool setProblem(const double &curTime,
-                    const Eigen::MatrixXd &TS_metric,
-                    const std::vector<dvs_msgs::Event *> vALLEventsPtr,
-                    const esvo_core::container::PerspectiveCamera::Ptr &camPtr,
-                    bool bUndistortEvents);
+                    std::vector<Eigen::Vector4d> &vALLEvents,
+                    const size_t &width,
+                    const size_t &height,
+                    const Eigen::Matrix3d &K);
 
     /** problem solver **/
     CMSummary solve();
 
     /** result **/
-    Eigen::Matrix4d getMotion();
+    Eigen::Matrix4d getMotion(const double &startTime, const double &endTime);
     void concatHorizontal(const cv::Mat &A, const cv::Mat &B, cv::Mat *C);   
     cv::Mat drawMCImage();
 
     /** online data **/
     double *x_, *x_last_; // tx, ty, rz
     double curTime_, prevTime_;
-    Eigen::MatrixXd TS_metric_;
-    std::vector<Eigen::Vector4d> vEdgeletCoordinates_;
+    // Eigen::MatrixXd TS_metric_;
+    // std::vector<Eigen::Vector4d> vEdgeletCoordinates_;
     MCAuxdata MCAuxdata_;
 };
 

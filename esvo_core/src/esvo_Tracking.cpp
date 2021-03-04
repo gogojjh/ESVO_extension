@@ -153,7 +153,7 @@ namespace esvo_core
 						publishMCImage(cur_.t_);
 
 						vALLEventsPtr_left_.clear();
-						iniMotionEstimator_.vEdgeletCoordinates_.clear();;
+						iniMotionEstimator_.vEdgeletCoordinates_.clear();
 					}
 #endif
 					publishTimeSurface(cur_.t_);

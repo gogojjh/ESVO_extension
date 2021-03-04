@@ -105,6 +105,9 @@ namespace esvo_core
 		stdVarMap_pub_ = it_.advertise("Standard_Variance_Map", 1);
 		ageMap_pub_ = it_.advertise("Age_Map", 1);
 		costMap_pub_ = it_.advertise("Cost_Map", 1);
+		eventMap_pub_ = it_.advertise("eventMap", 1);
+		trackFrame_pub_ = it_.advertise("trackFrame", 1);
+		mcImage_pub_ = it_.advertise("mcImage", 1);
 		pc_pub_ = nh_.advertise<PointCloud>("/esvo_mvsmono/pointcloud_local", 1);
 		emvs_pc_pub_ = nh_.advertise<PointCloud>("/esvo_mvsmono/pointcloud_emvs", 1);
 		pose_pub_ = nh_.advertise<geometry_msgs::PoseStamped>("/esvo_mvsmono/pose_pub", 1);
@@ -158,6 +161,10 @@ namespace esvo_core
 		// server_.reset(new dynamic_reconfigure::Server<DVS_MappingStereoConfig>(nh_private));
 		// server_->setCallback(dynamic_reconfigure_callback_);
 
+		last_timestampe_ = 0.0;
+
+		T_world_cur_.setIdentity();
+
 		solverFlag_ = INITIAL;
 	}
 
@@ -181,7 +188,7 @@ namespace esvo_core
 		{
 			if (changed_frame_rate_)
 			{
-				ROS_INFO("Changing mapping framerate to %d Hz", mapping_rate_hz_);
+				printf("Changing mapping framerate to %lu Hz", mapping_rate_hz_);
 				r = ros::Rate(mapping_rate_hz_);
 				changed_frame_rate_ = false;
 			}
@@ -239,42 +246,88 @@ namespace esvo_core
 		}
 	}
 
-	void esvo_MVSMono::InitializationAtTime(const ros::Time &t)
+	// DSM initialization entrance: https://github.com/jzubizarreta/dsm/blob/master/dsm/src/FullSystem/FullSystem.cpp#L419
+	// DSM initialization: https://github.com/jzubizarreta/dsm/blob/f84ead96546bd16291b107dd513aedffbcb0bd05/dsm/src/Initializer/MonoInitializer.cpp#L102
+	// done at mapping_rate
+	bool esvo_MVSMono::InitializationAtTime(const ros::Time &t)
 	{
-		cv::Mat image;
-		cv::eigen2cv(TS_obs_.second.TS_left_, image);
-		Eigen::Matrix3d K = camSysPtr_->cam_left_ptr_->P_.topLeftCorner<3, 3>();
-		initializer_.trackImage(t.toSec(), image, K);
-
-		cv::imshow("trackImage", initializer_.getTrackImage());
-		cv::waitKey(10);
-
-		// initializer.addFeature();
-		// initializer.initialize();
-
+		// generate eventMap
+		static constexpr size_t INITIAL_PROCESS_EVENT_NUM_ = 5000;
+		vDenoisedEventsPtr_left_.clear();
+		vDenoisedEventsPtr_left_.reserve(INITIAL_PROCESS_EVENT_NUM_);
+		vDenoisedEventsPtr_left_.insert(vDenoisedEventsPtr_left_.end(), vCloseEventsPtr_left_.begin(),
+										vCloseEventsPtr_left_.begin() + min(vCloseEventsPtr_left_.size(), INITIAL_PROCESS_EVENT_NUM_));
 		// vDenoisedEventsPtr_left_.clear();
-		// vDenoisedEventsPtr_left_.reserve(PROCESS_EVENT_NUM_);
-		// vDenoisedEventsPtr_left_.insert(vDenoisedEventsPtr_left_.end(), vCloseEventsPtr_left_.begin(),
-		// 								vCloseEventsPtr_left_.begin() + min(vCloseEventsPtr_left_.size(), PROCESS_EVENT_NUM_));
+		// vDenoisedEventsPtr_left_.insert(vDenoisedEventsPtr_left_.end(), vCloseEventsPtr_left_.begin(), vCloseEventsPtr_left_.end());
 
-		// std::vector<Eigen::Vector4d> vEdgeletCoordinates;
-		// vEdgeletCoordinates.reserve(vDenoisedEventsPtr_left_.size());
-		// for (size_t i = 0; i < vDenoisedEventsPtr_left_.size(); i++)
+		std::vector<Eigen::Vector4d> vEdgeletCoordinates;
+		vEdgeletCoordinates.reserve(vDenoisedEventsPtr_left_.size());
+		int step = 1;
+		std::vector<Eigen::Vector4d> vEdgeletCoord_Sample;
+		vEdgeletCoord_Sample.reserve(vDenoisedEventsPtr_left_.size() / step);
+		for (size_t i = 0; i < vDenoisedEventsPtr_left_.size(); i++)
+		{
+			bool bDistorted = true;
+			Eigen::Vector2d coor;
+			if (bDistorted)
+				coor = camSysPtr_->cam_left_ptr_->getRectifiedUndistortedCoordinate(vDenoisedEventsPtr_left_[i]->x, vDenoisedEventsPtr_left_[i]->y);
+			else
+				coor = Eigen::Vector2d(vDenoisedEventsPtr_left_[i]->x, vDenoisedEventsPtr_left_[i]->y);
+			Eigen::Vector4d tmp_coor;
+			tmp_coor[0] = coor[0];
+			tmp_coor[1] = coor[1];
+			tmp_coor[2] = vDenoisedEventsPtr_left_[i]->ts.toSec();
+			tmp_coor[3] = double(vDenoisedEventsPtr_left_[i]->polarity);
+			vEdgeletCoordinates.push_back(tmp_coor);
+			if (i % step == 0)
+				vEdgeletCoord_Sample.push_back(tmp_coor);
+		}
+
+		// cv::Mat eventMap = cv::Mat(cv::Size(camSysPtr_->cam_left_ptr_->width_, camSysPtr_->cam_left_ptr_->height_), CV_8UC1, cv::Scalar(0));
+		// for (size_t i = 0; i < vEdgeletCoordinates.size(); i++)
 		// {
-		// 	bool bDistorted = true;
-		// 	Eigen::Vector2d coor;
-		// 	if (bDistorted)
-		// 		coor = camSysPtr_->cam_left_ptr_->getRectifiedUndistortedCoordinate(vDenoisedEventsPtr_left_[i]->x, vDenoisedEventsPtr_left_[i]->y);
-		// 	else
-		// 		coor = Eigen::Vector2d(vDenoisedEventsPtr_left_[i]->x, vDenoisedEventsPtr_left_[i]->y);
-		// 	Eigen::Vector4d tmp_coor;
-		// 	tmp_coor[0] = coor[0];
-		// 	tmp_coor[1] = coor[1];
-		// 	tmp_coor[2] = vDenoisedEventsPtr_left_[i]->ts.toSec();
-		// 	tmp_coor[3] = double(vDenoisedEventsPtr_left_[i]->polarity);
-		// 	vEdgeletCoordinates.push_back(tmp_coor);
+		// 	double y = vEdgeletCoordinates[i](1);
+		// 	double x = vEdgeletCoordinates[i](0);
+		// 	if (y < 0 || y >= camSysPtr_->cam_left_ptr_->height_ || x < 0 || x >= camSysPtr_->cam_left_ptr_->width_)
+		// 		continue;
+		// 	eventMap.at<uchar>(static_cast<int>(y), static_cast<int>(x)) = 255;
 		// }
 
+		// Eigen::Matrix3d K = camSysPtr_->cam_left_ptr_->P_.topLeftCorner<3, 3>();
+		// if (iniMotionEstimator_.setProblem(t.toSec(),
+		// 								   vEdgeletCoord_Sample,
+		// 								   camSysPtr_->cam_left_ptr_->width_,
+		// 								   camSysPtr_->cam_left_ptr_->height_,
+		// 								   K))
+		// {
+		// 	TicToc t_ini;
+		// 	CMSummary summary = iniMotionEstimator_.solve();
+		// 	double t_event_dis = 1000 * (vEdgeletCoord_Sample.front()[2] - vEdgeletCoord_Sample.back()[2]);
+		// 	LOG(INFO) << "Time to initialization: " << t_ini.toc() << "ms <=> " << "events last: " << t_event_dis << "ms";
+		// 	if (std::abs(last_timestampe_) < std::numeric_limits<double>::epsilon())
+		// 		last_timestampe_ = vEdgeletCoord_Sample.back()[2];
+		// 	Eigen::Matrix4d T_last_cur = iniMotionEstimator_.getMotion(last_timestampe_, t.toSec());
+		// 	T_world_cur_ = T_world_cur_ * T_last_cur;
+		// 	std::cout << T_world_cur_ << std::endl << std::endl;
+
+		// 	cv::Mat mcImage = iniMotionEstimator_.drawMCImage();
+		// 	mcImage.convertTo(mcImage, CV_8UC1);
+		// 	publishImage(mcImage, t, mcImage_pub_, "mono8");
+		// 	last_timestampe_ = t.toSec();
+		// }
+
+		// TicToc t_tracking;
+		// initializer_.trackImage(t.toSec(), eventMap, K);
+		// initializer_.addNewFrame(t.toSec());
+		// initializer_.solveRelativePose();
+		// publishImage(eventMap, t, eventMap_pub_, "mono8");
+		// publishImage(initializer_.getTrackImage(), t, trackFrame_pub_);
+		// LOG_EVERY_N(INFO, 20) << "Time to track new frame: " << t_tracking.toc() << "ms";
+
+		// add features
+
+		// add events on poses
+		// deAllEventsPtr_.push(std::make_shared<std::vector<Eigen::Vector4d>>(vEdgeletCoordinates));
 		// emvs_mapper_.storeEventsPose(mVirtualPoses_, vEdgeletCoordinates);
 		// if (emvs_mapper_.accu_event_number_ > EMVS_Keyframe_event_)
 		// {
@@ -284,7 +337,56 @@ namespace esvo_core
 		// 	emvs_mapper_.clearEvents();
 			// solverFlag_ = MAPPING;
 		// }
+		const double VAR_RANDOM_INIT_INITIAL_ = 0.2;
+		const size_t INIT_DP_NUM_Threshold_ = 500;
+		const double INIT_INV_DEPTH_ = 1.0;
+
+		// create a new depth frame
+		DepthFrame::Ptr depthFramePtr_new = std::make_shared<DepthFrame>(
+			camSysPtr_->cam_left_ptr_->height_, camSysPtr_->cam_left_ptr_->width_);
+		depthFramePtr_new->setId(TS_obs_.second.id_);
+		Transformation tr(TS_obs_.second.T_w_obs_);
+		depthFramePtr_new->setTransformation(tr);
+		depthFramePtr_ = depthFramePtr_new;
+
+		std::vector<DepthPoint> vdp;
+		vdp.reserve(vEdgeletCoordinates.size());
+		double var_SGM = VAR_RANDOM_INIT_INITIAL_;
+		for (size_t i = 0; i < vEdgeletCoordinates.size(); i++)
+		{		
+			double x = vEdgeletCoordinates[i](0);
+			double y = vEdgeletCoordinates[i](1);
+				if (y < 0 || y >= camSysPtr_->cam_left_ptr_->height_ || x < 0 || x >= camSysPtr_->cam_left_ptr_->width_)
+					continue;
+			DepthPoint dp(static_cast<int>(x), static_cast<int>(y));
+			Eigen::Vector2d p_img(x * 1.0, y * 1.0);
+			dp.update_x(p_img);
+			// double invDepth = 1.0 / (0.5 + 1.0 * ((rand() % 100001) / 1e5));
+			double invDepth = INIT_INV_DEPTH_;
+
+			Eigen::Vector3d p_cam;
+			camSysPtr_->cam_left_ptr_->cam2World(p_img, invDepth, p_cam);
+			dp.update_p_cam(p_cam);
+			dp.update(invDepth, var_SGM);
+			dp.residual() = 0.0;
+			dp.age() = age_vis_threshold_;
+			Eigen::Matrix<double, 4, 4> T_world_cam = TS_obs_.second.T_w_obs_;
+			dp.updatePose(T_world_cam);
+			vdp.push_back(dp);
 		}
+		LOG(INFO) << "********** Initialization returns " << vdp.size() << " points.";
+		if (vdp.size() < INIT_DP_NUM_Threshold_)
+			return false;
+
+		// push the "masked" SGM results to the depthFrame
+		// dqvDepthPoints_.push_back(vdp);
+		dFusor_.naive_propagation(vdp, depthFramePtr_);
+
+		// publish the invDepth map
+		std::thread tPublishMappingResult(&esvo_MVSMono::publishMappingResults, this,
+										  depthFramePtr_->dMap_, depthFramePtr_->T_world_frame_.getTransformationMatrix(), t);
+		tPublishMappingResult.detach();
+		return true;
 	}
 
 	void esvo_MVSMono::MappingAtTime(const ros::Time &t)
@@ -305,8 +407,6 @@ namespace esvo_core
 		/******************************************************************/
 		/*************** Event Multi-Stereo Mapping (EMVS) ****************/
 		/******************************************************************/
-		// DSM initialization entrance: https://github.com/jzubizarreta/dsm/blob/master/dsm/src/FullSystem/FullSystem.cpp#L419
-		// DSM initialization: https://github.com/jzubizarreta/dsm/blob/f84ead96546bd16291b107dd513aedffbcb0bd05/dsm/src/Initializer/MonoInitializer.cpp#L102
 		if (msm_ == PURE_EMVS || msm_ == PURE_EMVS_PLUS_ESTIMATION)
 		{
 			double t_denoising;
@@ -599,7 +699,11 @@ namespace esvo_core
 			ros::Time t_begin(std::max(0.0, t_end.toSec() - dt_events));
 			auto ev_begin_it = tools::EventBuffer_upper_bound(events_left_, t_begin); //events_left_.begin();
 			auto ev_end_it = tools::EventBuffer_lower_bound(events_left_, t_end) - 1;
-			const size_t MAX_NUM_Event_INVOLVED = 1e5;
+			size_t MAX_NUM_Event_INVOLVED;
+			if (solverFlag_ == INITIAL)
+				MAX_NUM_Event_INVOLVED = 1e6;
+			else
+				MAX_NUM_Event_INVOLVED = 1e5;
 			// const size_t MAX_NUM_Event_INVOLVED = static_cast<size_t>(ev_end_it - ev_begin_it);
 			vALLEventsPtr_left_.reserve(MAX_NUM_Event_INVOLVED);
 			vCloseEventsPtr_left_.reserve(MAX_NUM_Event_INVOLVED);
@@ -652,8 +756,8 @@ namespace esvo_core
 			const double dt = stamp_first_event.toSec() - tf_lastest_common_time_.toSec();
 			if (dt < 0 || std::fabs(dt) >= max_time_diff_before_reset_s)
 			{
-				ROS_INFO("Inconsistent event timestamps detected <stampedPoseCallback> (new: %f, old %f), resetting.",
-						 stamp_first_event.toSec(), tf_lastest_common_time_.toSec());
+				printf("Inconsistent event timestamps detected <stampedPoseCallback> (new: %f, old %f), resetting.",
+					   stamp_first_event.toSec(), tf_lastest_common_time_.toSec());
 				reset();
 			}
 		}
@@ -765,7 +869,7 @@ namespace esvo_core
 			const double dt = stamp_first_event.toSec() - EQ.back().ts.toSec();
 			if (dt < 0 || std::fabs(dt) >= max_time_diff_before_reset_s)
 			{
-				ROS_INFO("Inconsistent event timestamps detected <eventCallback> (new: %f, old %f), resetting.",
+				printf("Inconsistent event timestamps detected <eventCallback> (new: %f, old %f), resetting.",
 						 stamp_first_event.toSec(), events_left_.back().ts.toSec());
 				reset();
 			}
@@ -807,7 +911,7 @@ namespace esvo_core
 			const double dt = time_surface_left->header.stamp.toSec() - stamp_last_image.toSec();
 			if (dt < 0 || std::fabs(dt) >= max_time_diff_before_reset_s)
 			{
-				ROS_INFO("Inconsistent frame timestamp detected <timeSurfaceCallback> (new: %f, old %f), resetting.",
+				printf("Inconsistent frame timestamp detected <timeSurfaceCallback> (new: %f, old %f), resetting.",
 						 time_surface_left->header.stamp.toSec(), stamp_last_image.toSec());
 				reset();
 			}

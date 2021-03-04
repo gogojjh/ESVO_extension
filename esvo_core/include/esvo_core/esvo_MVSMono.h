@@ -26,7 +26,8 @@
 #include <emvs_core/MapperEMVS.hpp>
 #include <emvs_core/Trajectory.hpp>
 
-#include <initial/MonoInitializer.h>
+// #include <initial/MonoInitializer.h>
+#include <initial/InitialMotionEstimator.h>
 
 #include <opencv2/core/core.hpp>
 #include <opencv2/imgproc/imgproc.hpp>
@@ -78,7 +79,7 @@ namespace esvo_core
 
 		// functions regarding mapping
 		void MappingLoop(std::promise<void> prom_mapping, std::future<void> future_reset);
-		void InitializationAtTime(const ros::Time &t);
+		bool InitializationAtTime(const ros::Time &t);
 		void MappingAtTime(const ros::Time &t);
 		bool dataTransferring();
 
@@ -227,6 +228,7 @@ namespace esvo_core
 
 		ros::Publisher pose_pub_;
 		image_transport::Publisher invDepthMap_pub_, stdVarMap_pub_, ageMap_pub_, costMap_pub_;
+		image_transport::Publisher eventMap_pub_, trackFrame_pub_, mcImage_pub_;
 		// For counting the total number of fusion
 		size_t TotalNumFusion_;
 
@@ -258,9 +260,12 @@ namespace esvo_core
 		std::string strDataset_;
 
 		Eigen::Matrix4d T_world_map_;
+		Eigen::Matrix4d T_world_cur_;
 
 		// MonoInitializer
-		MonoInitializer initializer_;
+		// MonoInitializer initializer_;
+		InitialMotionEstimator iniMotionEstimator_;
+		double last_timestampe_;
 
 		SolverFlag solverFlag_;
 	};

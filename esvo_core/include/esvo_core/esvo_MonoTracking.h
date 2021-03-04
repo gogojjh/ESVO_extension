@@ -15,11 +15,11 @@
 #include <std_msgs/Int16.h>
 
 #include <esvo_core/container/CameraSystem.h>
-#include <esvo_core/core/InitialMotionEstimator.h>
 #include <esvo_core/core/RegProblemLM.h>
 #include <esvo_core/core/RegProblemSolverLM.h>
 #include <esvo_core/tools/utils.h>
 #include <esvo_core/tools/Visualization.h>
+#include <initial/InitialMotionEstimator.h>
 
 #include <opencv2/core/core.hpp>
 #include <opencv2/imgproc/imgproc.hpp>

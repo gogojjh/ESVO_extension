@@ -1,4 +1,4 @@
-#include "esvo_core/core/InitialMotionEstimator.h"
+#include <initial/InitialMotionEstimator.h>
 
 // ****************************************************************
 // GSL-related functions
@@ -42,7 +42,7 @@ void computeImageOfWarpedEvents(const double *v,
                                 cv::Mat *image_warped,
                                 double &cost)
 {
-    CHECK_GT(*(poAux_data->ref_time), poAux_data->events_coor->back()[2]);
+    CHECK_GT(*(poAux_data->ref_time), poAux_data->events_coor->front()[2]);
 
     const int width = poAux_data->img_size.width;
     const int height = poAux_data->img_size.height;
@@ -50,26 +50,40 @@ void computeImageOfWarpedEvents(const double *v,
 
     const Eigen::Matrix3d K = poAux_data->K;
     std::vector<std::pair<double, Eigen::Matrix3d>> st_Hinv;
-    double t_begin = poAux_data->events_coor->front()[2];
+    double t_begin = poAux_data->events_coor->back()[2];
     double t_end = *(poAux_data->ref_time);
-    double t_cur = t_begin;
+    double t_tmp = t_end;
     // the last as the reference time
-    while (t_cur < t_end + INI_TIME_INTERVAL)
+    while (t_tmp >= t_begin - INI_TIME_INTERVAL)
     {
-        double dt = t_end - t_cur;
-        double tx = -1 / INI_DEPTH * v[0] * dt;
-        double ty = -1 / INI_DEPTH * v[1] * dt;
-        double theta = v[2] * dt;
-        Eigen::Matrix3d H_inv;
-        // H_inv << cos(theta), -sin(theta), tx,
-        //          sin(theta), cos(theta), ty,
-        //          0, 0, 1;
-        H_inv << cos(0.0), -sin(0.0), tx,
-            sin(0.0), cos(0.0), ty,
-            0, 0, 1;
-        H_inv = K * H_inv * K.inverse();
-        st_Hinv.emplace_back(t_cur, H_inv);
-        t_cur += INI_TIME_INTERVAL;
+        double dt = t_end - t_tmp;
+
+        // planar homography estimation
+        // H(t) = R(t) - 1/d t(t) n^{T}
+        double wx = v[0] * dt;
+        double wy = v[1] * dt;
+        double wz = v[2] * dt;
+        double tx = v[3] * dt;
+        double ty = v[4] * dt;
+        double tz = v[5] * dt;
+
+        // Eigen::Vector3d w(wx, wy, wz);
+        // double theta = w.norm();
+        // Eigen::Vector3d a = w / theta;
+        // a.normalize();
+        // Eigen::Matrix3d R;
+        // R = Eigen::AngleAxisd(theta, a);
+        Eigen::Matrix3d R;
+        // R = Eigen::AngleAxisd(wz, Eigen::Vector3d::UnitZ()) * Eigen::AngleAxisd(wy, Eigen::Vector3d::UnitY()) * Eigen::AngleAxisd(wx, Eigen::Vector3d::UnitX());
+        R = Eigen::AngleAxisd(wz, Eigen::Vector3d::UnitZ());
+        Eigen::Vector3d t(tx, ty, tz);
+        // Eigen::Vector3d t(tx, ty, 0.0);
+        Eigen::Vector3d n(0.0, 0.0, -1.0);
+        Eigen::Matrix3d H = R - 1 / INI_DEPTH * t * n.transpose();
+        // std::cout << std::endl << R << std::endl << std::endl << t.transpose() << std::endl;
+        Eigen::Matrix3d H_inv = H.inverse();
+        st_Hinv.emplace_back(t_tmp, H_inv);
+        t_tmp -= INI_TIME_INTERVAL;
     }
     // LOG(INFO) << "H_inv size: " << st_Hinv.size(); // 60
 
@@ -77,7 +91,7 @@ void computeImageOfWarpedEvents(const double *v,
     for (size_t i = 0; i < poAux_data->events_coor->size(); i++)
     {
         const Eigen::Vector4d &ev = (*poAux_data->events_coor)[i];
-        while ((ev[2] > st_Hinv[j].first) && (j < st_Hinv.size() - 1))
+        while ((ev[2] < st_Hinv[j].first) && (j < st_Hinv.size() - 1))
             j++;
 
         Eigen::Vector3d p(ev[0], ev[1], 1);
@@ -85,7 +99,7 @@ void computeImageOfWarpedEvents(const double *v,
         warp_p /= warp_p(2);
 
         const float polarity = (poAux_data->use_polarity) ? 2.f * static_cast<float>(ev[3]) - 1.f : 1.f;
-        const int xx = warp_p.x(), yy = warp_p.y();
+        const int xx = static_cast<int>(warp_p.x()), yy = static_cast<int>(warp_p.y());
         if (1 <= xx && xx < width - 2 && 1 <= yy && yy < height - 2)
         {
             // Accumulate warped events on the IWE
@@ -96,22 +110,6 @@ void computeImageOfWarpedEvents(const double *v,
             image_warped->at<double>(yy, xx + 1) += polarity * dx * (1 - dy);
             image_warped->at<double>(yy + 1, xx + 1) += polarity * dx * dy;
         }
-
-        // compute cost using time surface
-        // if (1 <= xx && xx < width - 2 && 1 <= yy && yy < height - 2)
-        // {
-        //     // Accumulate warped events on the IWE
-        //     double dx = warp_p.x() - xx;
-        //     double dy = warp_p.y() - yy;
-        //     double r1 = (1 - dx) * (1 - dy);
-        //     double r2 = (1 - dx) * dy;
-        //     double r3 = dx * (1 - dy);
-        //     double r4 = dx * dy;
-        //     cost += (*poAux_data->TS_metric)(yy, xx) * r1 +
-        //             (*poAux_data->TS_metric)(yy + 1, xx) * r2 +
-        //             (*poAux_data->TS_metric)(yy, xx + 1) * r3 +
-        //             (*poAux_data->TS_metric)(yy + 1, xx + 1) * r4;
-        // }
     }
 
     if (poAux_data->blur_sigma > 0)
@@ -129,7 +127,14 @@ double contrast_f_numerical(const gsl_vector *v, void *adata)
 {
     // Extract auxiliary data of cost function
     MCAuxdata *poAux_data = (MCAuxdata *)adata;
-    double x[3] = {gsl_vector_get(v, 0), gsl_vector_get(v, 1), gsl_vector_get(v, 2)};
+    // double x[3] = {gsl_vector_get(v, 0), gsl_vector_get(v, 1), gsl_vector_get(v, 2)};
+    double x[6] = {
+        gsl_vector_get(v, 0),
+        gsl_vector_get(v, 1),
+        gsl_vector_get(v, 2),
+        gsl_vector_get(v, 3),
+        gsl_vector_get(v, 4),
+        gsl_vector_get(v, 5)};
     cv::Mat image_warped;
     double cost = 0;
     computeImageOfWarpedEvents(x, poAux_data, &image_warped, cost);
@@ -212,11 +217,10 @@ double vs_gsl_Gradient_Analytic(
 // ****************************************************************
 InitialMotionEstimator::InitialMotionEstimator() 
 {
-    x_ = new double[3];
-    x_last_ = new double[3];
-    x_[0] = x_[1] = x_[2] = 0.0;
-    x_last_[0] = x_last_[1] = x_last_[2] = 0.0;
-    
+    x_ = new double[6];
+    x_last_ = new double[6];
+    x_[0] = x_[1] = x_[2] = x_[3] = x_[4] = x_[5] = 0.0;
+    x_last_[0] = x_last_[1] = x_last_[2] = x_last_[3] = x_last_[4] = x_last_[5] = 0.0;
     prevTime_ = curTime_ = 0.0;
 }
 
@@ -227,46 +231,21 @@ InitialMotionEstimator::~InitialMotionEstimator()
 }
 
 bool InitialMotionEstimator::setProblem(const double &curTime,
-                                        const Eigen::MatrixXd &TS_metric,
-                                        const std::vector<dvs_msgs::Event *> vALLEventsPtr,
-                                        const esvo_core::container::PerspectiveCamera::Ptr &camPtr,
-                                        bool bUndistortEvents)
+                                        std::vector<Eigen::Vector4d> &vALLEvents,
+                                        const size_t &width,
+                                        const size_t &height,
+                                        const Eigen::Matrix3d &K)
 {
-    size_t step = size_t(1.0 / INI_DOWNSAMPLE_RATE);
-    size_t row = camPtr->height_;
-    size_t col = camPtr->width_;
-    for (size_t i = 0; i < vALLEventsPtr.size(); i += step)
-    {
-        // undistortion + rectification
-        Eigen::Matrix<double, 2, 1> coor;
-        if (bUndistortEvents)
-            coor = camPtr->getRectifiedUndistortedCoordinate(vALLEventsPtr[i]->x, vALLEventsPtr[i]->y);
-        else
-            coor = Eigen::Matrix<double, 2, 1>(vALLEventsPtr[i]->x, vALLEventsPtr[i]->y);
-        Eigen::Vector4d tmp_coor;
-        tmp_coor[0] = coor(0);
-        tmp_coor[1] = coor(1);
-        tmp_coor[2] = vALLEventsPtr[i]->ts.toSec();
-        tmp_coor[3] = double(vALLEventsPtr[i]->polarity);
-        vEdgeletCoordinates_.push_back(tmp_coor);
-    }
-
-    if (vEdgeletCoordinates_.size() / INI_DOWNSAMPLE_RATE < INI_NUM_EVENTS_INVOLVE)
-    {
-        // LOG(INFO) << "Not enough events for motion initialization: "
-        //           << vEdgeletCoordinates_.size() << " < " << INI_NUM_EVENTS_INVOLVE;
-        return false;
-    }
-
     x_last_[0] = x_[0];
     x_last_[1] = x_[1];
     x_last_[2] = x_[2];
-    prevTime_ = curTime_;
+    x_last_[3] = x_[3];
+    x_last_[4] = x_[4];
+    x_last_[5] = x_[5];
+    // prevTime_ = curTime_;
 
     curTime_ = curTime;
-    TS_metric_ = TS_metric;
-    MCAuxdata_ = MCAuxdata(&curTime_, &vEdgeletCoordinates_, &TS_metric_,
-                           cv::Size(col, row), camPtr->P_.topLeftCorner<3, 3>(),
+    MCAuxdata_ = MCAuxdata(&curTime_, &vALLEvents, cv::Size(width, height), K,
                            VARIANCE_CONTRAST, false, 1.0);
     return true;
 }
@@ -278,7 +257,7 @@ CMSummary InitialMotionEstimator::solve()
 
     gsl_multimin_function_fdf solver_info;
 
-    const int num_params = 3;  // Size of global flow
+    const int num_params = 6;  // Size of global flow
     solver_info.n = num_params;               // Size of the parameter vector
     solver_info.f = contrast_f_numerical;     // Cost function
     solver_info.df = contrast_df_numerical;   // Gradient of cost function
@@ -286,9 +265,12 @@ CMSummary InitialMotionEstimator::solve()
     solver_info.params = &MCAuxdata_;         // Auxiliary data
 
     gsl_vector *vx = gsl_vector_alloc(num_params);
-    gsl_vector_set(vx, 0, x_[0]); // x1
-    gsl_vector_set(vx, 1, x_[1]); // y1
-    gsl_vector_set(vx, 2, x_[2]); // x2
+    gsl_vector_set(vx, 0, x_[0]); 
+    gsl_vector_set(vx, 1, x_[1]); 
+    gsl_vector_set(vx, 2, x_[2]);
+    gsl_vector_set(vx, 3, x_[3]); 
+    gsl_vector_set(vx, 4, x_[4]);
+    gsl_vector_set(vx, 5, x_[5]);
 
     gsl_multimin_fdfminimizer *solver = gsl_multimin_fdfminimizer_alloc(solver_type, num_params);
     const double initial_step_size = 10;
@@ -298,8 +280,9 @@ CMSummary InitialMotionEstimator::solve()
     const double initial_cost = solver->f;
 
 #ifdef INI_MOT_EST_DEBUG
-    LOG(INFO) << "--- Initial cost = " << std::setprecision(8) << initial_cost
-              << "; ini: " << x_[0] << "m/s " << x_[1] << "m/s " << x_[2] / M_PI * 180 << "deg/s";
+    std::cout << "--- Initial cost = " << std::setprecision(8) << initial_cost
+              << "; w (deg/s): " << x_[0] / M_PI * 180 << ", " << x_[1] / M_PI * 180 << ", " << x_[2] / M_PI * 180
+              << ", v (m/s): " << x_[3] << ", " << x_[4] << ", " << x_[5] << std::endl;
 #endif
 
     const int num_max_line_searches = INI_MAX_ITERATION;
@@ -349,9 +332,13 @@ CMSummary InitialMotionEstimator::solve()
         x_[0] = gsl_vector_get(final_x, 0);
         x_[1] = gsl_vector_get(final_x, 1);
         x_[2] = gsl_vector_get(final_x, 2);
+        x_[3] = gsl_vector_get(final_x, 3);
+        x_[4] = gsl_vector_get(final_x, 4);
+        x_[5] = gsl_vector_get(final_x, 5);
 #ifdef INI_MOT_EST_DEBUG
-        LOG(INFO) << "--- Final cost   = " << std::setprecision(8) << final_cost 
-                  << "; opt: " << x_[0] << "m/s " << x_[1] << "m/s " << x_[2] / M_PI * 180 << "deg/s";
+        std::cout << "--- Final cost = " << std::setprecision(8) << final_cost
+                  << "; w (deg/s):" << x_[0] / M_PI * 180 << ", " << x_[1] / M_PI * 180 << ", " << x_[2] / M_PI * 180
+                  << ", v (m/s):" << x_[3] << ", " << x_[4] << ", " << x_[5] << std::endl;
 #endif
     }
     else
@@ -370,22 +357,28 @@ CMSummary InitialMotionEstimator::solve()
     return summary;
 }
 
-Eigen::Matrix4d InitialMotionEstimator::getMotion()
+Eigen::Matrix4d InitialMotionEstimator::getMotion(const double &startTime, const double &endTime)
 {
-    double dt;
-    if (prevTime_ == 0)
-        dt = curTime_ - vEdgeletCoordinates_.front()[2];
-    else
-        dt = curTime_ - prevTime_;
+    double dt = endTime - startTime;
     Eigen::Matrix4d T = Eigen::Matrix4d::Identity();
-    double tx = -1 / INI_DEPTH * x_[0] * dt;
-    double ty = -1 / INI_DEPTH * x_[1] * dt;
-    double theta = x_[2] * dt;
+
+    double wx = x_[0] * dt;
+    double wy = x_[1] * dt;
+    double wz = x_[2] * dt;
+    double tx = x_[3] * dt;
+    double ty = x_[4] * dt;
+    double tz = x_[5] * dt;
+
+    // Eigen::Vector3d w(wx, wy, wz);
+    // double theta = w.norm();
+    // Eigen::Vector3d a = w / theta;
+    // a.normalize();
+    // Eigen::Matrix3d R; 
+    // R = Eigen::AngleAxisd(theta, a);
     Eigen::Matrix3d R;
-    R << cos(theta), -sin(theta), 0,
-         sin(theta), cos(theta), 0,
-         0, 0, 1;
-    Eigen::Vector3d t(tx, ty, 0);
+    // R = Eigen::AngleAxisd(wz, Eigen::Vector3d::UnitZ()) * Eigen::AngleAxisd(wy, Eigen::Vector3d::UnitY()) * Eigen::AngleAxisd(wx, Eigen::Vector3d::UnitX());
+    R = Eigen::AngleAxisd(wz, Eigen::Vector3d::UnitZ());
+    Eigen::Vector3d t(tx, ty, tz);
     T.topLeftCorner<3, 3>() = R;
     T.topRightCorner<3, 1>() = t;
     return T;
@@ -406,22 +399,25 @@ void InitialMotionEstimator::concatHorizontal(const cv::Mat &A, const cv::Mat &B
 cv::Mat InitialMotionEstimator::drawMCImage()
 {
     cv::Mat image_original, image_warped, image_stacked;
-    double x_ini[4] = {0., 0., 0., 0.};
+    double x_ini[6] = {0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
     double cost = 0;
     computeImageOfWarpedEvents(x_ini, &MCAuxdata_, &image_original, cost);
     computeImageOfWarpedEvents(x_, &MCAuxdata_, &image_warped, cost);
-    concatHorizontal(image_original, image_warped, &image_stacked);
     if (MCAuxdata_.use_polarity)
     {
         // Visualize the image of warped events with the zero always at the mean grayscale level
         const float bmax = 5.f;
-        image_stacked = (255.0f / (2.0f * bmax)) * (image_stacked + bmax);
+        image_original = (255.0f / (2.0f * bmax)) * (image_original + bmax);
+        image_warped = (255.0f / (2.0f * bmax)) * (image_warped + bmax);
     }
     else
     {
         // Scale the image to full range [0,255]
-        cv::normalize(image_stacked, image_stacked, 0.f, 255.0f, cv::NORM_MINMAX, CV_32FC1);
-        image_stacked = 255.0f - image_stacked; // invert "color": dark events over white background
+        cv::normalize(image_original, image_original, 0.f, 255.0f, cv::NORM_MINMAX, CV_32FC1);
+        image_original = 255.0f - image_original; // invert "color": dark events over white background
+        cv::normalize(image_warped, image_warped, 0.f, 255.0f, cv::NORM_MINMAX, CV_32FC1);
+        image_warped = 255.0f - image_warped; // invert "color": dark events over white background
     }
+    concatHorizontal(image_original, image_warped, &image_stacked);
     return image_stacked;
 }
