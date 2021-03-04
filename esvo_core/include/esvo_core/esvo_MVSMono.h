@@ -26,9 +26,6 @@
 #include <emvs_core/MapperEMVS.hpp>
 #include <emvs_core/Trajectory.hpp>
 
-// #include <initial/MonoInitializer.h>
-#include <initial/InitialMotionEstimator.h>
-
 #include <opencv2/core/core.hpp>
 #include <opencv2/imgproc/imgproc.hpp>
 #include <opencv2/calib3d/calib3d.hpp>
@@ -258,14 +255,6 @@ namespace esvo_core
 
 		bool SAVE_RESULT_;
 		std::string strDataset_;
-
-		Eigen::Matrix4d T_world_map_;
-		Eigen::Matrix4d T_world_cur_;
-
-		// MonoInitializer
-		// MonoInitializer initializer_;
-		InitialMotionEstimator iniMotionEstimator_;
-		double last_timestampe_;
 
 		SolverFlag solverFlag_;
 	};
