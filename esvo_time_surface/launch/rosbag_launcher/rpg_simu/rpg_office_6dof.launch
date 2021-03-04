@@ -1,0 +1,7 @@
+<launch>
+  <!-- ROS BAG -->
+  <rosparam param="/use_sim_time">true</rosparam>
+  <node pkg="rosbag" type="play" name="play" output="screen" required="true"
+    args="/Monster/dataset/event_camera/simu_rpg_dataset/office_6dof_edited.bag -r 0.7 --clock --pause">
+  </node>
+</launch>

@@ -4,10 +4,13 @@ Panels:
     Name: Displays
     Property Tree Widget:
       Expanded:
-        - /TF1/Status1
+        - /Global Options1
         - /TF1/Frames1
-      Splitter Ratio: 0.5
-    Tree Height: 986
+        - /TF1/Tree1
+        - /Axes1
+        - /LocalMap1
+      Splitter Ratio: 0.5185185074806213
+    Tree Height: 967
   - Class: rviz/Selection
     Name: Selection
   - Class: rviz/Tool Properties
@@ -26,7 +29,7 @@ Panels:
     Experimental: false
     Name: Time
     SyncMode: 0
-    SyncSource: LocalMap_mvs
+    SyncSource: LocalMap
 Preferences:
   PromptSaveOnExit: true
 Toolbars:
@@ -38,7 +41,7 @@ Visualization Manager:
       Cell Size: 1
       Class: rviz/Grid
       Color: 160; 160; 164
-      Enabled: true
+      Enabled: false
       Line Style:
         Line Width: 0.029999999329447746
         Value: Lines
@@ -46,32 +49,47 @@ Visualization Manager:
       Normal Cell Count: 0
       Offset:
         X: 0
-        Y: 0.5
+        Y: 0
         Z: 0
-      Plane: XZ
+      Plane: XY
       Plane Cell Count: 10
       Reference Frame: <Fixed Frame>
-      Value: true
+      Value: false
     - Class: rviz/TF
       Enabled: true
       Frame Timeout: 999
       Frames:
         All Enabled: false
         body:
-          Value: false
+          Value: true
         cam0:
           Value: true
         map:
           Value: true
-      Marker Scale: 0.5
+      Marker Scale: 1
       Name: TF
-      Show Arrows: true
+      Show Arrows: false
       Show Axes: true
       Show Names: true
       Tree:
         map:
           {}
       Update Interval: 0
+      Value: true
+    - Alpha: 1
+      Axes Length: 0.15000000596046448
+      Axes Radius: 0.019999999552965164
+      Class: rviz/Pose
+      Color: 255; 25; 0
+      Enabled: true
+      Head Length: 0.30000001192092896
+      Head Radius: 0.10000000149011612
+      Name: Pose
+      Shaft Length: 1
+      Shaft Radius: 0.05000000074505806
+      Shape: Axes
+      Topic: /esvo_core/pose_pub
+      Unreliable: false
       Value: true
     - Alpha: 1
       Axes Length: 0.15000000596046448
@@ -85,24 +103,9 @@ Visualization Manager:
       Shaft Length: 1
       Shaft Radius: 0.05000000074505806
       Shape: Axes
-      Topic: /optitrack/davis_stereo
+      Topic: /cam0/pose
       Unreliable: false
       Value: false
-    - Alpha: 1
-      Axes Length: 0.10000000149011612
-      Axes Radius: 0.009999999776482582
-      Class: rviz/Pose
-      Color: 255; 25; 0
-      Enabled: true
-      Head Length: 0.30000001192092896
-      Head Radius: 0.10000000149011612
-      Name: TrackingPose
-      Shaft Length: 1
-      Shaft Radius: 0.05000000074505806
-      Shape: Axes
-      Topic: /esvo_mvsmono/pose_pub
-      Unreliable: false
-      Value: true
     - Class: rviz/Axes
       Enabled: true
       Length: 0.10000000149011612
@@ -111,16 +114,76 @@ Visualization Manager:
       Reference Frame: <Fixed Frame>
       Value: true
     - Alpha: 1
+      Autocompute Intensity Bounds: true
+      Autocompute Value Bounds:
+        Max Value: 0.5975000262260437
+        Min Value: -0.5975000262260437
+        Value: true
+      Axis: X
+      Channel Name: z
+      Class: rviz/PointCloud2
+      Color: 255; 255; 255
+      Color Transformer: Intensity
+      Decay Time: 0
+      Enabled: true
+      Invert Rainbow: false
+      Max Color: 255; 255; 255
+      Max Intensity: 1
+      Min Color: 0; 0; 0
+      Min Intensity: 1
+      Name: LocalMap
+      Position Transformer: XYZ
+      Queue Size: 10
+      Selectable: true
+      Size (Pixels): 3
+      Size (m): 0.05000000074505806
+      Style: Points
+      Topic: /esvo_monomapping/pointcloud_local
+      Unreliable: false
+      Use Fixed Frame: true
+      Use rainbow: true
+      Value: true
+    - Alpha: 1
+      Autocompute Intensity Bounds: true
+      Autocompute Value Bounds:
+        Max Value: 10
+        Min Value: -10
+        Value: true
+      Axis: Z
+      Channel Name: z
+      Class: rviz/PointCloud2
+      Color: 255; 255; 255
+      Color Transformer: FlatColor
+      Decay Time: 0
+      Enabled: true
+      Invert Rainbow: false
+      Max Color: 255; 255; 255
+      Max Intensity: 5.0419745445251465
+      Min Color: 0; 0; 0
+      Min Intensity: 0.5162822008132935
+      Name: GlobalMap
+      Position Transformer: XYZ
+      Queue Size: 10
+      Selectable: true
+      Size (Pixels): 2
+      Size (m): 0.009999999776482582
+      Style: Points
+      Topic: /esvo_monomapping/pointcloud_global
+      Unreliable: false
+      Use Fixed Frame: true
+      Use rainbow: true
+      Value: true
+    - Alpha: 1
       Buffer Length: 1
       Class: rviz/Path
-      Color: 25; 255; 0
+      Color: 10; 205; 25
       Enabled: true
       Head Diameter: 0.30000001192092896
       Head Length: 0.20000000298023224
       Length: 0.30000001192092896
       Line Style: Billboards
       Line Width: 0.009999999776482582
-      Name: Path
+      Name: TrackingPath
       Offset:
         X: 0
         Y: 0
@@ -130,98 +193,31 @@ Visualization Manager:
       Radius: 0.029999999329447746
       Shaft Diameter: 0.10000000149011612
       Shaft Length: 0.10000000149011612
-      Topic: /esvo_MonoTracking/trajectory
+      Topic: /esvo_tracking/trajectory
       Unreliable: false
       Value: true
     - Alpha: 1
-      Autocompute Intensity Bounds: true
-      Autocompute Value Bounds:
-        Max Value: 0.7280563712120056
-        Min Value: 0.5041643977165222
-        Value: true
-      Axis: Z
-      Channel Name: z
-      Class: rviz/PointCloud2
-      Color: 255; 255; 255
-      Color Transformer: Intensity
-      Decay Time: 0
+      Buffer Length: 1
+      Class: rviz/Path
+      Color: 10; 205; 25
       Enabled: false
-      Invert Rainbow: true
-      Max Color: 255; 255; 255
-      Max Intensity: 1.3629014492034912
-      Min Color: 0; 0; 0
-      Min Intensity: 0.15485002100467682
-      Name: LocalMap_mvs
-      Position Transformer: XYZ
-      Queue Size: 10
-      Selectable: true
-      Size (Pixels): 3
-      Size (m): 0.05000000074505806
-      Style: Points
-      Topic: /esvo_mvsmono/pointcloud_local
+      Head Diameter: 0.30000001192092896
+      Head Length: 0.20000000298023224
+      Length: 0.30000001192092896
+      Line Style: Billboards
+      Line Width: 0.009999999776482582
+      Name: GTPath
+      Offset:
+        X: 0
+        Y: 0
+        Z: 0
+      Pose Color: 255; 85; 255
+      Pose Style: None
+      Radius: 0.029999999329447746
+      Shaft Diameter: 0.10000000149011612
+      Shaft Length: 0.10000000149011612
+      Topic: /gt/trajectory
       Unreliable: false
-      Use Fixed Frame: true
-      Use rainbow: true
-      Value: false
-    - Alpha: 1
-      Autocompute Intensity Bounds: true
-      Autocompute Value Bounds:
-        Max Value: 0.7280563712120056
-        Min Value: 0.5041643977165222
-        Value: true
-      Axis: Z
-      Channel Name: z
-      Class: rviz/PointCloud2
-      Color: 255; 255; 255
-      Color Transformer: Intensity
-      Decay Time: 0
-      Enabled: true
-      Invert Rainbow: true
-      Max Color: 255; 255; 255
-      Max Intensity: 1.3629014492034912
-      Min Color: 0; 0; 0
-      Min Intensity: 0.15485002100467682
-      Name: LocalMap_emvs
-      Position Transformer: XYZ
-      Queue Size: 10
-      Selectable: true
-      Size (Pixels): 3
-      Size (m): 0.05000000074505806
-      Style: Points
-      Topic: /esvo_mvsmono/pointcloud_emvs
-      Unreliable: false
-      Use Fixed Frame: true
-      Use rainbow: true
-      Value: true
-    - Alpha: 1
-      Autocompute Intensity Bounds: true
-      Autocompute Value Bounds:
-        Max Value: 1.5475772619247437
-        Min Value: 0.6243277788162231
-        Value: true
-      Axis: Z
-      Channel Name: z
-      Class: rviz/PointCloud2
-      Color: 255; 255; 255
-      Color Transformer: FlatColor
-      Decay Time: 0
-      Enabled: false
-      Invert Rainbow: true
-      Max Color: 255; 255; 255
-      Max Intensity: 1.1719756126403809
-      Min Color: 0; 0; 0
-      Min Intensity: 0.4876337945461273
-      Name: GlobalMap_mvs
-      Position Transformer: XYZ
-      Queue Size: 10
-      Selectable: true
-      Size (Pixels): 2
-      Size (m): 0.05000000074505806
-      Style: Points
-      Topic: /esvo_mvsmono/pointcloud_global
-      Unreliable: false
-      Use Fixed Frame: true
-      Use rainbow: true
       Value: false
   Enabled: true
   Global Options:
@@ -251,33 +247,33 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz/Orbit
-      Distance: 2.5762336254119873
+      Distance: 4.203818321228027
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.05999999865889549
         Stereo Focal Distance: 1
         Swap Stereo Eyes: false
         Value: false
       Focal Point:
-        X: 0.23182274401187897
-        Y: 0.00707939313724637
-        Z: 0.7356922626495361
+        X: 0.4748985767364502
+        Y: 0.5251641273498535
+        Z: 1.2090603113174438
       Focal Shape Fixed Size: true
       Focal Shape Size: 0.05000000074505806
       Invert Z Axis: false
       Name: Current View
       Near Clip Distance: 0.009999999776482582
-      Pitch: -1.5447970628738403
+      Pitch: -1.1197967529296875
       Target Frame: <Fixed Frame>
       Value: Orbit (rviz)
-      Yaw: 4.673654079437256
+      Yaw: 4.667224407196045
     Saved: ~
 Window Geometry:
   Displays:
     collapsed: true
-  Height: 1123
+  Height: 1104
   Hide Left Dock: true
   Hide Right Dock: true
-  QMainWindow State: 000000ff00000000fd0000000400000000000001b60000041cfc0200000008fb0000001200530065006c0065006300740069006f006e00000001e10000009b0000005e00fffffffb0000001e0054006f006f006c002000500072006f007000650072007400690065007302000001ed000001df00000185000000a3fb000000120056006900650077007300200054006f006f02000001df000002110000018500000122fb000000200054006f006f006c002000500072006f0070006500720074006900650073003203000002880000011d000002210000017afb000000100044006900730070006c00610079007300000000270000041c000000ce00fffffffb0000002000730065006c0065006300740069006f006e00200062007500660066006500720200000138000000aa0000023a00000294fb00000014005700690064006500530074006500720065006f02000000e6000000d2000003ee0000030bfb0000000c004b0069006e0065006300740200000186000001060000030c0000026100000001000001100000041cfc0200000003fb0000001e0054006f006f006c002000500072006f00700065007200740069006500730100000041000000780000000000000000fb0000000a0056006900650077007300000000270000041c000000ac00fffffffb0000001200530065006c0065006300740069006f006e010000025a000000b200000000000000000000000200000490000000a9fc0100000001fb0000000a00560069006500770073030000004e00000080000002e10000019700000003000004ae00000044fc0100000002fb0000000800540069006d00650000000000000004ae000002b800fffffffb0000000800540069006d00650100000000000004500000000000000000000004ae0000041c00000004000000040000000800000008fc0000000100000002000000010000000a0054006f006f006c00730100000000ffffffff0000000000000000
+  QMainWindow State: 000000ff00000000fd0000000400000000000001b200000409fc0200000008fb0000001200530065006c0065006300740069006f006e00000001e10000009b0000005e00fffffffb0000001e0054006f006f006c002000500072006f007000650072007400690065007302000001ed000001df00000185000000a3fb000000120056006900650077007300200054006f006f02000001df000002110000018500000122fb000000200054006f006f006c002000500072006f0070006500720074006900650073003203000002880000011d000002210000017afb000000100044006900730070006c006100790073000000002700000409000000ce00fffffffb0000002000730065006c0065006300740069006f006e00200062007500660066006500720200000138000000aa0000023a00000294fb00000014005700690064006500530074006500720065006f02000000e6000000d2000003ee0000030bfb0000000c004b0069006e0065006300740200000186000001060000030c00000261000000010000010f00000255fc0200000003fb0000001e0054006f006f006c002000500072006f00700065007200740069006500730100000041000000780000000000000000fb0000000a00560069006500770073000000003d00000255000000ac00fffffffb0000001200530065006c0065006300740069006f006e010000025a000000b200000000000000000000000200000490000000a9fc0100000001fb0000000a00560069006500770073030000004e00000080000002e10000019700000003000004ae0000003efc0100000002fb0000000800540069006d00650000000000000004ae000002b800fffffffb0000000800540069006d00650100000000000004500000000000000000000004b70000040900000004000000040000000800000008fc0000000100000002000000010000000a0054006f006f006c00730100000000ffffffff0000000000000000
   Selection:
     collapsed: false
   Time:
@@ -286,6 +282,6 @@ Window Geometry:
     collapsed: false
   Views:
     collapsed: true
-  Width: 1198
-  X: 0
-  Y: 772
+  Width: 1207
+  X: 1
+  Y: 791
