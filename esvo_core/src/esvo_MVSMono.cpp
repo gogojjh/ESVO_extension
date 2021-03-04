@@ -257,14 +257,9 @@ namespace esvo_core
 		vDenoisedEventsPtr_left_.reserve(INITIAL_PROCESS_EVENT_NUM_);
 		vDenoisedEventsPtr_left_.insert(vDenoisedEventsPtr_left_.end(), vCloseEventsPtr_left_.begin(),
 										vCloseEventsPtr_left_.begin() + min(vCloseEventsPtr_left_.size(), INITIAL_PROCESS_EVENT_NUM_));
-		// vDenoisedEventsPtr_left_.clear();
-		// vDenoisedEventsPtr_left_.insert(vDenoisedEventsPtr_left_.end(), vCloseEventsPtr_left_.begin(), vCloseEventsPtr_left_.end());
 
 		std::vector<Eigen::Vector4d> vEdgeletCoordinates;
 		vEdgeletCoordinates.reserve(vDenoisedEventsPtr_left_.size());
-		int step = 1;
-		std::vector<Eigen::Vector4d> vEdgeletCoord_Sample;
-		vEdgeletCoord_Sample.reserve(vDenoisedEventsPtr_left_.size() / step);
 		for (size_t i = 0; i < vDenoisedEventsPtr_left_.size(); i++)
 		{
 			bool bDistorted = true;
@@ -279,64 +274,8 @@ namespace esvo_core
 			tmp_coor[2] = vDenoisedEventsPtr_left_[i]->ts.toSec();
 			tmp_coor[3] = double(vDenoisedEventsPtr_left_[i]->polarity);
 			vEdgeletCoordinates.push_back(tmp_coor);
-			if (i % step == 0)
-				vEdgeletCoord_Sample.push_back(tmp_coor);
 		}
 
-		// cv::Mat eventMap = cv::Mat(cv::Size(camSysPtr_->cam_left_ptr_->width_, camSysPtr_->cam_left_ptr_->height_), CV_8UC1, cv::Scalar(0));
-		// for (size_t i = 0; i < vEdgeletCoordinates.size(); i++)
-		// {
-		// 	double y = vEdgeletCoordinates[i](1);
-		// 	double x = vEdgeletCoordinates[i](0);
-		// 	if (y < 0 || y >= camSysPtr_->cam_left_ptr_->height_ || x < 0 || x >= camSysPtr_->cam_left_ptr_->width_)
-		// 		continue;
-		// 	eventMap.at<uchar>(static_cast<int>(y), static_cast<int>(x)) = 255;
-		// }
-
-		// Eigen::Matrix3d K = camSysPtr_->cam_left_ptr_->P_.topLeftCorner<3, 3>();
-		// if (iniMotionEstimator_.setProblem(t.toSec(),
-		// 								   vEdgeletCoord_Sample,
-		// 								   camSysPtr_->cam_left_ptr_->width_,
-		// 								   camSysPtr_->cam_left_ptr_->height_,
-		// 								   K))
-		// {
-		// 	TicToc t_ini;
-		// 	CMSummary summary = iniMotionEstimator_.solve();
-		// 	double t_event_dis = 1000 * (vEdgeletCoord_Sample.front()[2] - vEdgeletCoord_Sample.back()[2]);
-		// 	LOG(INFO) << "Time to initialization: " << t_ini.toc() << "ms <=> " << "events last: " << t_event_dis << "ms";
-		// 	if (std::abs(last_timestampe_) < std::numeric_limits<double>::epsilon())
-		// 		last_timestampe_ = vEdgeletCoord_Sample.back()[2];
-		// 	Eigen::Matrix4d T_last_cur = iniMotionEstimator_.getMotion(last_timestampe_, t.toSec());
-		// 	T_world_cur_ = T_world_cur_ * T_last_cur;
-		// 	std::cout << T_world_cur_ << std::endl << std::endl;
-
-		// 	cv::Mat mcImage = iniMotionEstimator_.drawMCImage();
-		// 	mcImage.convertTo(mcImage, CV_8UC1);
-		// 	publishImage(mcImage, t, mcImage_pub_, "mono8");
-		// 	last_timestampe_ = t.toSec();
-		// }
-
-		// TicToc t_tracking;
-		// initializer_.trackImage(t.toSec(), eventMap, K);
-		// initializer_.addNewFrame(t.toSec());
-		// initializer_.solveRelativePose();
-		// publishImage(eventMap, t, eventMap_pub_, "mono8");
-		// publishImage(initializer_.getTrackImage(), t, trackFrame_pub_);
-		// LOG_EVERY_N(INFO, 20) << "Time to track new frame: " << t_tracking.toc() << "ms";
-
-		// add features
-
-		// add events on poses
-		// deAllEventsPtr_.push(std::make_shared<std::vector<Eigen::Vector4d>>(vEdgeletCoordinates));
-		// emvs_mapper_.storeEventsPose(mVirtualPoses_, vEdgeletCoordinates);
-		// if (emvs_mapper_.accu_event_number_ > EMVS_Keyframe_event_)
-		// {
-		// 	emvs_mapper_.reset();
-		// 	emvs_mapper_.initializeDSI(Eigen::Matrix4d::Identity());
-		// 	emvs_mapper_.updateDSI();
-		// 	emvs_mapper_.clearEvents();
-			// solverFlag_ = MAPPING;
-		// }
 		const double VAR_RANDOM_INIT_INITIAL_ = 0.2;
 		const size_t INIT_DP_NUM_Threshold_ = 500;
 		const double INIT_INV_DEPTH_ = 1.0;
@@ -351,7 +290,7 @@ namespace esvo_core
 
 		std::vector<DepthPoint> vdp;
 		vdp.reserve(vEdgeletCoordinates.size());
-		double var_SGM = VAR_RANDOM_INIT_INITIAL_;
+		double var_Ini = VAR_RANDOM_INIT_INITIAL_;
 		for (size_t i = 0; i < vEdgeletCoordinates.size(); i++)
 		{		
 			double x = vEdgeletCoordinates[i](0);
@@ -367,19 +306,17 @@ namespace esvo_core
 			Eigen::Vector3d p_cam;
 			camSysPtr_->cam_left_ptr_->cam2World(p_img, invDepth, p_cam);
 			dp.update_p_cam(p_cam);
-			dp.update(invDepth, var_SGM);
+			dp.update(invDepth, var_Ini);
 			dp.residual() = 0.0;
 			dp.age() = age_vis_threshold_;
-			Eigen::Matrix<double, 4, 4> T_world_cam = TS_obs_.second.T_w_obs_;
-			dp.updatePose(T_world_cam);
+			dp.updatePose(TS_obs_.second.T_w_obs_);
 			vdp.push_back(dp);
 		}
 		LOG(INFO) << "********** Initialization returns " << vdp.size() << " points.";
 		if (vdp.size() < INIT_DP_NUM_Threshold_)
 			return false;
 
-		// push the "masked" SGM results to the depthFrame
-		// dqvDepthPoints_.push_back(vdp);
+		dqvDepthPoints_.push_back(vdp);
 		dFusor_.naive_propagation(vdp, depthFramePtr_);
 
 		// publish the invDepth map
