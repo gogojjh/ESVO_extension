@@ -130,7 +130,7 @@ namespace esvo_core
 
 				if (refPCMap_buf_.empty()) // Tracking and Mapping are still in initialization
 				{
-					publishTimeSurface(cur_.t_);
+					// publishTimeSurface(cur_.t_);
 					publishPose(cur_.t_, cur_.tr_); // publish identity pose
 					if (bVisualizeTrajectory_)
 						publishPath(cur_.t_, cur_.tr_);
@@ -173,7 +173,7 @@ namespace esvo_core
 						lPose_.push_back(cur_.tr_.getTransformationMatrix());
 					}
 					m_buf_.lock();
-					publishTimeSurface(cur_.t_);
+					// publishTimeSurface(cur_.t_);
 					m_buf_.unlock();
 				}
 				else
@@ -182,7 +182,7 @@ namespace esvo_core
 					ets_ = IDLE;
 					LOG(INFO) << "Tracking thread is IDLE";
 					m_buf_.lock();
-					publishTimeSurface(cur_.t_);
+					// publishTimeSurface(cur_.t_);
 					m_buf_.unlock();
 				}
 
