@@ -250,7 +250,7 @@ namespace esvo_core
 					}
 					else
 					{
-						LOG(INFO) << "Mapping.";
+						// LOG(INFO) << "Mapping.";
 						insertKeyframe();
 					}
 				}
@@ -345,8 +345,6 @@ namespace esvo_core
 		/**************************************************/
 		if (!nonPlanarDepthMap_Init_) // initialize a nonplanar depth map using tracking poses and all events
 		{
-			LOG(INFO) << mVirtualPoses_.front().first << ", " << vEdgeletCoordinates.front()[2] << ", "
-					  << vEdgeletCoordinates.back()[2] << ", " << mVirtualPoses_.back().first;
 			emvs_mapper_.storeEventsPose(mVirtualPoses_, vEdgeletCoordinates);
 			if (emvs_mapper_.storeEventNum() > EMVS_Init_event_) // not need to update the DSI at every time
 			{
@@ -359,11 +357,12 @@ namespace esvo_core
 											  t, semidense_mask, depth_map, confidence_map);
 				tPublishDSIResult.detach();
 
-				LOG(INFO) << emvs_mapper_.accu_event_number_;
+				LOG_EVERY_N(INFO, 50) << "Accumulate events: " << emvs_mapper_.accu_event_number_;
 				if (emvs_mapper_.accu_event_number_ >= EMVS_Keyframe_event_)
 				{
 					std::vector<DepthPoint> vdp; // depth points on the current observations
 					emvs_mapper_.getDepthPoint(depth_map, confidence_map, semidense_mask, vdp, stdVar_init_);
+					dqvDepthPoints_.pop_front(); // pop the initial planar depth map
 					dqvDepthPoints_.push_back(vdp);
 					dFusor_.naive_propagation(vdp, depthFramePtr_);
 					LOG(INFO) << "Depth point size: " << vdp.size() << ", process events: " << emvs_mapper_.accu_event_number_;
@@ -371,7 +370,10 @@ namespace esvo_core
 					nonPlanarDepthMap_Init_ = true;
 				}
 				else
-					return;
+				{
+					std::vector<DepthPoint> &vdp = dqvDepthPoints_.back(); 
+					dFusor_.naive_propagation(vdp, depthFramePtr_);
+				}
 			}
 		}
 		else // normal mapping
@@ -555,6 +557,7 @@ namespace esvo_core
 		LOG(INFO) << "********** Initialization (planar depth map) returns " << vdp.size() << " points.";
 		if (vdp.size() < INIT_DP_NUM_Threshold_)
 			return false;
+		dqvDepthPoints_.push_back(vdp);
 		dFusor_.naive_propagation(vdp, depthFramePtr_);
 
 		planarDepthMap_Init_ = true;
@@ -671,7 +674,7 @@ namespace esvo_core
 			ros::Time t_end = TS_obs_.first;
 			ros::Time t_begin(std::max(0.0, t_end.toSec() - dt_events));
 			auto ev_begin_it = tools::EventBuffer_upper_bound(events_left_, t_begin);
-			auto ev_end_it = tools::EventBuffer_lower_bound(events_left_, t_end);
+			auto ev_end_it = tools::EventBuffer_lower_bound(events_left_, t_end) - 1;
 			const size_t MAX_NUM_Event_INVOLVED = 30000;
 			vALLEventsPtr_left_.reserve(MAX_NUM_Event_INVOLVED);
 			while (ev_end_it != ev_begin_it && vALLEventsPtr_left_.size() < MAX_NUM_Event_INVOLVED)
@@ -709,9 +712,9 @@ namespace esvo_core
 			}
 
 			// please check the timestamp
-			LOG(INFO) << "pose front, event front, event back, pose back";
-			LOG(INFO) << mVirtualPoses_.front().first << " >= " << vALLEventsPtr_left_.front()->ts << " >= "
-					  << vALLEventsPtr_left_.back()->ts << " >= " << mVirtualPoses_.back().first;
+			// LOG(INFO) << "pose front, event front, event back, pose back";
+			// LOG(INFO) << mVirtualPoses_.front().first << " >= " << vALLEventsPtr_left_.front()->ts << " >= "
+			// 		  << vALLEventsPtr_left_.back()->ts << " >= " << mVirtualPoses_.back().first;
 		}
 		return true;
 	}
@@ -900,6 +903,9 @@ namespace esvo_core
 		meanDepth_ = -1.0;
 		mAllPoses_.clear();
 
+		emvs_mapper_.reset();
+		emvs_mapper_.initializeDSI(Eigen::Matrix4d::Identity());
+
 		// restart the mapping thread
 		reset_promise_ = std::promise<void>();
 		mapping_thread_promise_ = std::promise<void>();
@@ -1074,34 +1080,35 @@ namespace esvo_core
 			// outlier_rm.filter(*cloud_filtered);
 			// pc_->swap(*cloud_filtered);
 
+			// std::cout << pc_->height << " " << pc_->width << std::endl;
 			pcl::toROSMsg(*pc_, *pc_to_publish);
 			pc_to_publish->header.stamp = t;
 			pc_pub_.publish(pc_to_publish);
-		}
 
-		// publish global pointcloud
-		if (bVisualizeGlobalPC_)
-		{
-			if (t.toSec() - t_last_pub_pc_ > visualizeGPC_interval_)
+			// publish global pointcloud
+			if (bVisualizeGlobalPC_)
 			{
-				PointCloud::Ptr pc_filtered(new PointCloud());
-				pcl::VoxelGrid<pcl::PointXYZ> sor;
-				sor.setInputCloud(pc_near_);
-				sor.setLeafSize(0.03, 0.03, 0.03);
-				sor.filter(*pc_filtered);
+				if (t.toSec() - t_last_pub_pc_ > visualizeGPC_interval_)
+				{
+					PointCloud::Ptr pc_filtered(new PointCloud());
+					pcl::VoxelGrid<pcl::PointXYZ> sor;
+					sor.setInputCloud(pc_near_);
+					sor.setLeafSize(0.03, 0.03, 0.03);
+					sor.filter(*pc_filtered);
 
-				// copy the most current pc tp pc_global
-				size_t pc_length = pc_filtered->size();
-				if (pc_length == 0)
-					return;
-				size_t numAddedPC = min(pc_length, numAddedPC_threshold_) - 1;
-				pc_global_->insert(pc_global_->end(), pc_filtered->end() - numAddedPC, pc_filtered->end());
+					// copy the most current pc tp pc_global
+					size_t pc_length = pc_filtered->size();
+					if (pc_length == 0)
+						return;
+					size_t numAddedPC = min(pc_length, numAddedPC_threshold_) - 1;
+					pc_global_->insert(pc_global_->end(), pc_filtered->end() - numAddedPC, pc_filtered->end());
 
-				// publish point cloud
-				pcl::toROSMsg(*pc_global_, *pc_to_publish);
-				pc_to_publish->header.stamp = t;
-				gpc_pub_.publish(pc_to_publish);
-				t_last_pub_pc_ = t.toSec();
+					// publish point cloud
+					pcl::toROSMsg(*pc_global_, *pc_to_publish);
+					pc_to_publish->header.stamp = t;
+					gpc_pub_.publish(pc_to_publish);
+					t_last_pub_pc_ = t.toSec();
+				}
 			}
 		}
 	}

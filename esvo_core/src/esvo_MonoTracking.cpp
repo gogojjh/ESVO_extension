@@ -141,7 +141,7 @@ namespace esvo_core
 				else if (ref_.t_.toSec() < refPCMap_buf_.back().first.toSec()) // new reference map arrived
 				{
 					refDataTransferring(); // set reference data
-					LOG(INFO) << "receive map from Mapping";
+					// LOG(INFO) << "receive map from Mapping";
 				}	
 				m_buf_.unlock();
 			
