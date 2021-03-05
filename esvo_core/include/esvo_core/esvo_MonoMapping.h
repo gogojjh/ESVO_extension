@@ -192,6 +192,8 @@ namespace esvo_core
         double visualizeGPC_interval_;
         double visualize_range_;
         size_t numAddedPC_threshold_;
+        // initialization parameters
+        bool planarDepthMap_Init_, nonPlanarDepthMap_Init_;
 
         /**********************************************************/
         /******************** For test & debug ********************/

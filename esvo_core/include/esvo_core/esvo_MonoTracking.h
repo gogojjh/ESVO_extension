@@ -59,7 +59,7 @@ namespace esvo_core
 
     // topic callback functions
     void refMapCallback(const sensor_msgs::PointCloud2::ConstPtr &msg);
-    void timeSurfaceCallback(const sensor_msgs::ImageConstPtr &time_surface_left, const sensor_msgs::ImageConstPtr &time_surface_right);
+    void timeSurfaceCallback(const sensor_msgs::ImageConstPtr &time_surface_left);
     void eventsCallback(const dvs_msgs::EventArray::ConstPtr &msg);
 
     // results
@@ -85,7 +85,7 @@ namespace esvo_core
     // subscribers and publishers
     ros::Subscriber events_left_sub_;
     ros::Subscriber map_sub_;
-    message_filters::Subscriber<sensor_msgs::Image> TS_left_sub_, TS_right_sub_;
+    ros::Subscriber TS_left_sub_;
     ros::Subscriber gtPose_sub_, stampedPose_sub_;
     image_transport::Publisher reprojMap_pub_left_;
     image_transport::Publisher time_surface_left_pub_, time_surface_right_pub_;
@@ -93,19 +93,15 @@ namespace esvo_core
 
     // publishers
     ros::Publisher pose_pub_, path_pub_, pose_gt_pub_, path_gt_pub_;
-    ros::Publisher keyFrame_pub_;
 
     // results
     nav_msgs::Path path_, path_gt_;
     std::list<Eigen::Matrix<double, 4, 4>, Eigen::aligned_allocator<Eigen::Matrix<double, 4, 4>>> lPose_;
     std::list<std::string> lTimestamp_;
+    double last_gt_timestamp_;
 
     Eigen::Quaterniond q_gt_s_;
     Eigen::Vector3d t_gt_s_;
-
-    // Time Surface sync policy
-    typedef message_filters::sync_policies::ExactTime<sensor_msgs::Image, sensor_msgs::Image> ExactSyncPolicy;
-    message_filters::Synchronizer<ExactSyncPolicy> TS_sync_;
 
     // offline data
     std::string dvs_frame_id_;
@@ -136,9 +132,10 @@ namespace esvo_core
     bool bSaveTrajectory_;
     bool bVisualizeTrajectory_;
     std::string resultPath_;
+    std::string strDataset_;
 
-    Eigen::Matrix<double, 4, 4> T_world_ref_;
     Eigen::Matrix<double, 4, 4> T_world_cur_;
+    Eigen::Matrix<double, 4, 4> T_world_map_;
 
     /*** system objects ***/
     RegProblemType rpType_;
@@ -147,9 +144,6 @@ namespace esvo_core
     RegProblemConfig::Ptr rpConfigPtr_;
     RegProblemSolverLM rpSolver_;
 
-    InitialMotionEstimator iniMotionEstimator_;
-    std::vector<dvs_msgs::Event *> vALLEventsPtr_left_;
-    cv::Mat MCImage_;
   };
 } // namespace esvo_core
 

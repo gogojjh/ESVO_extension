@@ -16,3 +16,4 @@ RegProblemType: 1 #( 0 numerical; 1 analytical)
 SAVE_TRAJECTORY: False
 PATH_TO_SAVE_TRAJECTORY: "/home/jjiao/ESVO_result/rpg_simu/" # CHANGE THIS PATH
 VISUALIZE_TRAJECTORY: True
+DATASET_NAME: "rpg_simu"

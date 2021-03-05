@@ -15,9 +15,6 @@ namespace esvo_core
 		const ros::NodeHandle &nh_private) : nh_(nh),
 											 pnh_(nh_private),
 											 it_(nh),
-											 TS_left_sub_(nh_, "time_surface_left", 10),
-											 TS_right_sub_(nh_, "time_surface_right", 10),
-											 TS_sync_(ExactSyncPolicy(10), TS_left_sub_, TS_right_sub_),
 											 calibInfoDir_(tools::param(pnh_, "calibInfoDir", std::string(""))),
 											 camSysPtr_(new CameraSystem(calibInfoDir_, false)),
 											 rpConfigPtr_(new RegProblemConfig(
@@ -42,40 +39,41 @@ namespace esvo_core
 		world_frame_id_ = tools::param(pnh_, "world_frame_id", std::string("world"));
 
 		/**** online parameters ***/
+		nh_.setParam("/ESVO_SYSTEM_STATUS", ESVO_System_Status_);
 		tracking_rate_hz_ = tools::param(pnh_, "tracking_rate_hz", 100);
 		TS_HISTORY_LENGTH_ = tools::param(pnh_, "TS_HISTORY_LENGTH", 100);
 		REF_HISTORY_LENGTH_ = tools::param(pnh_, "REF_HISTORY_LENGTH", 5);
 		bSaveTrajectory_ = tools::param(pnh_, "SAVE_TRAJECTORY", false);
 		bVisualizeTrajectory_ = tools::param(pnh_, "VISUALIZE_TRAJECTORY", true);
 		resultPath_ = tools::param(pnh_, "PATH_TO_SAVE_TRAJECTORY", std::string());
-		nh_.setParam("/ESVO_SYSTEM_STATUS", ESVO_System_Status_);
+		strDataset_ = tools::param(pnh_, "DATASET_NAME", std::string("rpg"));
 
 		// online data callbacks
-		events_left_sub_ = nh_.subscribe<dvs_msgs::EventArray>(
-			"events_left", 0, &esvo_MonoTracking::eventsCallback, this);
-		TS_sync_.registerCallback(boost::bind(&esvo_MonoTracking::timeSurfaceCallback, this, _1, _2));
-		tf_ = std::make_shared<tf::Transformer>(true, ros::Duration(100.0));
+		events_left_sub_ = nh_.subscribe<dvs_msgs::EventArray>("events_left", 0, &esvo_MonoTracking::eventsCallback, this);
+		TS_left_sub_ = nh_.subscribe("time_surface_left", 10, &esvo_MonoTracking::timeSurfaceCallback, this);
 		map_sub_ = nh_.subscribe("pointcloud", 0, &esvo_MonoTracking::refMapCallback, this);				// local map in the ref view.
 		stampedPose_sub_ = nh_.subscribe("stamped_pose", 0, &esvo_MonoTracking::stampedPoseCallback, this); // for accessing the pose of the ref view.
 		gtPose_sub_ = nh_.subscribe("gt_pose", 0, &esvo_MonoTracking::gtPoseCallback, this); // for accessing the pose of the ref view.
+		// TF
+		tf_ = std::make_shared<tf::Transformer>(true, ros::Duration(100.0));
 
 		pose_pub_ = nh_.advertise<geometry_msgs::PoseStamped>("/esvo_MonoTracking/pose_pub", 1);
 		path_pub_ = nh_.advertise<nav_msgs::Path>("/esvo_MonoTracking/trajectory", 1);
 		pose_gt_pub_ = nh_.advertise<geometry_msgs::PoseStamped>("/gt/pose_pub", 1);
 		path_gt_pub_ = nh_.advertise<nav_msgs::Path>("/gt/trajectory", 1);
+		time_surface_left_pub_ = it_.advertise("/esvo_MonoTracking/TS_left", 1);
 
 		/*** For Visualization and Test ***/
 		reprojMap_pub_left_ = it_.advertise("Reproj_Map_Left", 1);
 		rpSolver_.setRegPublisher(&reprojMap_pub_left_);
 
 		/*** Tracker ***/
-		T_world_cur_ = Eigen::Matrix<double, 4, 4>::Identity();
+		T_world_cur_.setIdentity();
+		T_world_map_.setIdentity();
 		std::thread TrackingThread(&esvo_MonoTracking::TrackingLoop, this);
 		TrackingThread.detach();
 
-		time_surface_left_pub_ = it_.advertise("/esvo_MonoTracking/TS_left", 1);
-		time_surface_right_pub_ = it_.advertise("/esvo_MonoTracking/TS_right", 1);
-		mcimage_pub_ = it_.advertise("/esvo_MonoTracking/MC_Image", 1);
+		last_gt_timestamp_ = 0.0;
 	}
 
 	esvo_MonoTracking::~esvo_MonoTracking()
@@ -130,32 +128,8 @@ namespace esvo_core
 					continue;
 				}
 
-				if (refPCMap_buf_.empty()) // Tracnking and Mapping are still in initialization
+				if (refPCMap_buf_.empty()) // Tracking and Mapping are still in initialization
 				{
-
-#ifdef esvo_MonoTracking_MC
-					if (iniMotionEstimator_.setProblem(cur_.t_.toSec(),
-													   cur_.pTsObs_->TS_left_,
-													   vALLEventsPtr_left_,
-													   camSysPtr_->cam_left_ptr_,
-													   true))
-					{
-						TicToc t_ini;
-						CMSummary summary = iniMotionEstimator_.solve();
-						double t_event_dis = 1000 * (vALLEventsPtr_left_.back()->ts.toSec() - vALLEventsPtr_left_.front()->ts.toSec());
-						LOG(INFO) << "initialization costs: " << t_ini.toc() << "ms <=> "
-								  << "all events last: " << t_event_dis << "ms";
-
-						Eigen::Matrix4d T_last_cur = iniMotionEstimator_.getMotion();
-						T_world_cur_ = T_world_cur_ * T_last_cur;
-						cur_.tr_ = Transformation(T_world_cur_);
-						MCImage_ = iniMotionEstimator_.drawMCImage();
-						publishMCImage(cur_.t_);
-
-						vALLEventsPtr_left_.clear();
-						iniMotionEstimator_.vEdgeletCoordinates_.clear();;
-					}
-#endif
 					publishTimeSurface(cur_.t_);
 					publishPose(cur_.t_, cur_.tr_); // publish identity pose
 					if (bVisualizeTrajectory_)
@@ -167,6 +141,7 @@ namespace esvo_core
 				else if (ref_.t_.toSec() < refPCMap_buf_.back().first.toSec()) // new reference map arrived
 				{
 					refDataTransferring(); // set reference data
+					LOG(INFO) << "receive map from Mapping";
 				}	
 				m_buf_.unlock();
 			
@@ -235,7 +210,7 @@ namespace esvo_core
 						LOG(INFO) << "The directory has been created!!!";
 					}
 					LOG(INFO) << "pose size: " << lPose_.size();
-					LOG(INFO) << "refPCMap_.size(): " << refPCMap_.size() << ", TS_history_.size(): " << TS_history_.size();
+					LOG(INFO) << "refPCMap_.size(): " << refPCMap_.size() << ", TS_buf_.size(): " << TS_buf_.size();
 					saveTrajectory(resultPath_ + "result.txt");
 				}
 			}
@@ -288,16 +263,6 @@ namespace esvo_core
 		auto ev_end_it = EventBuffer_lower_bound(events_left_, cur_.t_);
 		cur_.numEventsSinceLastObs_ = std::distance(ev_begin_it, ev_end_it) + 1; // Count the number of events occuring since the last observation.
 		// LOG(INFO) << "event number in 10ms: " << cur_.numEventsSinceLastObs_; // 2000-1400
-
-		// restore events for solving the initial motion estimation problem (time in ascending order)
-		if (ets_ == IDLE)
-		{
-			while (ev_begin_it != ev_end_it)
-			{
-				vALLEventsPtr_left_.push_back(ev_begin_it._M_cur); // all events within the time interval
-				ev_begin_it++;
-			}
-		}
 		return true;
 	}
 
@@ -307,12 +272,10 @@ namespace esvo_core
 		// clear all maintained data
 		ets_ = IDLE;
 		TS_id_ = 0;
-		TS_history_.clear();
 		TS_buf_.clear();
 		refPCMap_.clear();
 		refPCMap_buf_.clear();
 		events_left_.clear();
-		vALLEventsPtr_left_.clear();
 
 		path_.poses.clear();
 		path_gt_.poses.clear();
@@ -323,11 +286,9 @@ namespace esvo_core
 	void esvo_MonoTracking::refMapCallback(const sensor_msgs::PointCloud2::ConstPtr &msg)
 	{
 		m_buf_.lock();
-		pcl::PCLPointCloud2 pcl_pc;
-		pcl_conversions::toPCL(*msg, pcl_pc);
 		PointCloud::Ptr PC_ptr(new PointCloud());
-		pcl::fromPCLPointCloud2(pcl_pc, *PC_ptr);
-		refPCMap_buf_.push_back(std::make_pair(msg->header.stamp, PC_ptr));
+		pcl::fromROSMsg(*msg, *PC_ptr);
+		refPCMap_buf_.emplace_back(msg->header.stamp, PC_ptr);
 		while (refPCMap_buf_.size() > REF_HISTORY_LENGTH_) // 10
 			refPCMap_buf_.pop_front();
 		m_buf_.unlock();
@@ -367,15 +328,14 @@ namespace esvo_core
 		}
 	}
 
-	void esvo_MonoTracking::timeSurfaceCallback(const sensor_msgs::ImageConstPtr &time_surface_left,
-											const sensor_msgs::ImageConstPtr &time_surface_right)
+	void esvo_MonoTracking::timeSurfaceCallback(const sensor_msgs::ImageConstPtr &time_surface_left)
 	{
 		// std::lock_guard<std::mutex> lock(data_mutex_);
 		cv_bridge::CvImagePtr cv_ptr_left, cv_ptr_right;
 		try
 		{
 			cv_ptr_left = cv_bridge::toCvCopy(time_surface_left, sensor_msgs::image_encodings::MONO8);
-			cv_ptr_right = cv_bridge::toCvCopy(time_surface_right, sensor_msgs::image_encodings::MONO8);
+			cv_ptr_right = cv_bridge::toCvCopy(time_surface_left, sensor_msgs::image_encodings::MONO8);
 		}
 		catch (cv_bridge::Exception &e)
 		{
@@ -392,36 +352,40 @@ namespace esvo_core
 		m_buf_.unlock();
 	}
 
-	void esvo_MonoTracking::publishTimeSurface(const ros::Time &t)
-	{
-		// if (TS_buf_.empty())
-		// 	return;
-		// sensor_msgs::ImagePtr aux_left = TS_buf_.back().second.cvImagePtr_left_->toImageMsg();
-		// aux_left->header.stamp = t;
-		// time_surface_left_pub_.publish(aux_left);
-		// sensor_msgs::ImagePtr aux_right = TS_buf_.back().second.cvImagePtr_right_->toImageMsg();
-		// aux_right->header.stamp = t;
-		// time_surface_right_pub_.publish(aux_right);
-	}
-
-	void esvo_MonoTracking::publishMCImage(const ros::Time &t)
-	{
-		if (MCImage_.empty())
-			return;
-		cv_bridge::CvImage cv_image;
-		cv_image.encoding = "mono8";
-		MCImage_.convertTo(cv_image.image, CV_8UC1);
-		sensor_msgs::ImagePtr aux = cv_image.toImageMsg();
-		aux->header.stamp = t;
-		mcimage_pub_.publish(aux);
-	}
-
 	void esvo_MonoTracking::stampedPoseCallback(const geometry_msgs::PoseStampedConstPtr &ps_msg)
 	{
 		m_buf_.lock();
+		// add pose to tf
+		tf::Transform tf(
+			tf::Quaternion(
+				ps_msg->pose.orientation.x,
+				ps_msg->pose.orientation.y,
+				ps_msg->pose.orientation.z,
+				ps_msg->pose.orientation.w),
+			tf::Vector3(
+				ps_msg->pose.position.x,
+				ps_msg->pose.position.y,
+				ps_msg->pose.position.z));
+		tf::StampedTransform st(tf, ps_msg->header.stamp, ps_msg->header.frame_id, dvs_frame_id_.c_str());
+		tf_->setTransform(st);
+		
+		// broadcast the tf such that the nav_path messages can find the valid fixed frame "map".
+		static tf::TransformBroadcaster br;
+		br.sendTransform(st);
+		m_buf_.unlock();
+	}
 
-		// For esvo_MVStereo
-		// obtain T_world_cam
+	void esvo_MonoTracking::gtPoseCallback(const geometry_msgs::PoseStampedConstPtr &ps_msg)
+	{
+		// m_buf_.lock();
+		if (ps_msg->header.stamp.toSec() - last_gt_timestamp_ > 0.01)
+		{
+			last_gt_timestamp_ = ps_msg->header.stamp.toSec();
+		}
+		else
+		{
+			return;
+		}
 		Eigen::Matrix4d T_world_marker = Eigen::Matrix4d::Identity();
 		T_world_marker.topLeftCorner<3, 3>() = Eigen::Quaterniond(ps_msg->pose.orientation.w,
 																  ps_msg->pose.orientation.x,
@@ -434,21 +398,54 @@ namespace esvo_core
 
 		// HARDCODED: The GT pose of rpg dataset is the pose of stereo rig, namely that of the marker.
 		Eigen::Matrix4d T_marker_cam;
-		T_marker_cam << 5.363262328777285e-01, -1.748374625145743e-02, -8.438296573030597e-01, -7.009849865398374e-02,
-			8.433577587813513e-01, -2.821937531845164e-02, 5.366109927684415e-01, 1.881333563905305e-02,
-			-3.319431623758162e-02, -9.994488408486204e-01, -3.897382049768972e-04, -6.966829200678797e-02,
-			0, 0, 0, 1;
+		if (!strDataset_.compare("rpg_mono"))
+		{
+			T_marker_cam.setIdentity();
+		}
+		else if (!strDataset_.compare("rpg_stereo"))
+		{
+			T_marker_cam << 5.363262328777285e-01, -1.748374625145743e-02, -8.438296573030597e-01, -7.009849865398374e-02,
+				8.433577587813513e-01, -2.821937531845164e-02, 5.366109927684415e-01, 1.881333563905305e-02,
+				-3.319431623758162e-02, -9.994488408486204e-01, -3.897382049768972e-04, -6.966829200678797e-02,
+				0, 0, 0, 1;
+		}
+		else if (!strDataset_.compare("rpg_slider"))
+		{
+			T_marker_cam.setIdentity();
+		}
+		else if (!strDataset_.compare("rpg_simu"))
+		{
+			// T_marker_cam << 1.0, 0.0, 0.0, 0.0,
+			// 				0.0, -1.0, 0.0, 0.0,
+			// 				0.0, 0.0, -1.0, 0.0,
+			// 				0.0, 0.0, 0.0, 1.0;
+			T_marker_cam.setIdentity();
+		}
+		else if (!strDataset_.compare("upenn"))
+		{
+			T_marker_cam.setIdentity();
+		}
+		else if (!strDataset_.compare("ust_mono"))
+		{
+			T_marker_cam.setIdentity();
+		}
+		else if (!strDataset_.compare("ust_stereo"))
+		{
+			T_marker_cam.setIdentity();
+		}
+		else
+		{
+			T_marker_cam.setIdentity();
+		}
+
 		Eigen::Matrix4d T_world_cam = T_world_marker * T_marker_cam;
-		static Eigen::Matrix4d T_world_map_ = Eigen::Matrix4d::Identity();
 		if (T_world_map_ == Eigen::Matrix4d::Identity())
 			T_world_map_ = T_world_cam;
-
 		Eigen::Matrix4d T_map_cam = T_world_map_.inverse() * T_world_cam;
 		Eigen::Matrix3d R_map_cam = T_map_cam.topLeftCorner<3, 3>();
 		Eigen::Quaterniond q_map_cam(R_map_cam);
 		Eigen::Vector3d t_map_cam = T_map_cam.topRightCorner<3, 1>();
 
-		// add pose to tf
 		tf::Transform tf(
 			tf::Quaternion(
 				q_map_cam.x(),
@@ -459,31 +456,35 @@ namespace esvo_core
 				t_map_cam.x(),
 				t_map_cam.y(),
 				t_map_cam.z()));
-		tf::StampedTransform st(tf, ps_msg->header.stamp, ps_msg->header.frame_id, dvs_frame_id_.c_str());
+		tf::StampedTransform st(tf, ps_msg->header.stamp, world_frame_id_, std::string(dvs_frame_id_ + "_gt").c_str());
 		tf_->setTransform(st);
 
-		// add pose to tf
-		// tf::Transform tf(
-		// 	tf::Quaternion(
-		// 		ps_msg->pose.orientation.x,
-		// 		ps_msg->pose.orientation.y,
-		// 		ps_msg->pose.orientation.z,
-		// 		ps_msg->pose.orientation.w),
-		// 	tf::Vector3(
-		// 		ps_msg->pose.position.x,
-		// 		ps_msg->pose.position.y,
-		// 		ps_msg->pose.position.z));
-		// tf::StampedTransform st(tf, ps_msg->header.stamp, ps_msg->header.frame_id, dvs_frame_id_.c_str());
-		// tf_->setTransform(st);
-		
 		// broadcast the tf such that the nav_path messages can find the valid fixed frame "map".
 		static tf::TransformBroadcaster br;
 		br.sendTransform(st);
-		m_buf_.unlock();
+
+		// set published gt pose
+		geometry_msgs::PoseStampedPtr ps_ptr(new geometry_msgs::PoseStamped());
+		ps_ptr->header.stamp = ps_msg->header.stamp;
+		ps_ptr->header.frame_id = world_frame_id_;
+		ps_ptr->pose.orientation.x = q_map_cam.x();
+		ps_ptr->pose.orientation.y = q_map_cam.y();
+		ps_ptr->pose.orientation.z = q_map_cam.z();
+		ps_ptr->pose.orientation.w = q_map_cam.w();
+		ps_ptr->pose.position.x = t_map_cam.x();
+		ps_ptr->pose.position.y = t_map_cam.y();
+		ps_ptr->pose.position.z = t_map_cam.z();
+		pose_gt_pub_.publish(ps_ptr);
+
+		path_gt_.header.stamp = ps_msg->header.stamp;
+		path_gt_.header.frame_id = world_frame_id_;
+		path_gt_.poses.push_back(*ps_ptr);
+		path_gt_pub_.publish(path_gt_);
+		// m_buf_.unlock();
 	}
 
 	bool esvo_MonoTracking::getPoseAt(const ros::Time &t, esvo_core::Transformation &Tr,
-			  					  const std::string &source_frame)
+									  const std::string &source_frame)
 	{
 		std::string *err_msg = new std::string();
 		if (!tf_->canTransform(world_frame_id_, source_frame, t, err_msg))
@@ -501,65 +502,14 @@ namespace esvo_core
 		}
 	}
 
-	/************ publish results *******************/	
-	void esvo_MonoTracking::gtPoseCallback(const geometry_msgs::PoseStampedConstPtr &msg)
-	{	
-		// m_buf_.lock();
-		// publish gt pose and path
-		Eigen::Quaterniond q_gt_cur(msg->pose.orientation.w,
-									msg->pose.orientation.x,
-									msg->pose.orientation.y,
-									msg->pose.orientation.z);
-		Eigen::Vector3d t_gt_cur(msg->pose.position.x,
-								 msg->pose.position.y,
-								 msg->pose.position.z);
-		if (path_gt_.poses.empty())
-		{
-			q_gt_s_ = Eigen::Quaterniond(msg->pose.orientation.w,
-										 msg->pose.orientation.x,
-										 msg->pose.orientation.y,
-										 msg->pose.orientation.z);
-			t_gt_s_ = Eigen::Vector3d(msg->pose.position.x,
-									  msg->pose.position.y,
-									  msg->pose.position.z);
-		}
-		Eigen::Quaterniond q_w_gt = q_gt_s_.inverse() * q_gt_cur;
-		Eigen::Vector3d t_w_gt = q_gt_s_.inverse() * (t_gt_cur - t_gt_s_);
-
-		geometry_msgs::PoseStampedPtr ps_ptr(new geometry_msgs::PoseStamped());
-		ps_ptr->header.stamp = msg->header.stamp;
-		ps_ptr->header.frame_id = world_frame_id_;
-		ps_ptr->pose.orientation.x = q_w_gt.x();
-		ps_ptr->pose.orientation.y = q_w_gt.y();
-		ps_ptr->pose.orientation.z = q_w_gt.z();
-		ps_ptr->pose.orientation.w = q_w_gt.w();
-		ps_ptr->pose.position.x = t_w_gt.x();
-		ps_ptr->pose.position.y = t_w_gt.y();
-		ps_ptr->pose.position.z = t_w_gt.z();
-		pose_gt_pub_.publish(ps_ptr);
-
-		path_gt_.header.stamp = msg->header.stamp;
-		path_gt_.header.frame_id = world_frame_id_;
-		path_gt_.poses.push_back(*ps_ptr);
-		path_gt_pub_.publish(path_gt_);
-
-		tf::Transform tf(
-			tf::Quaternion(
-				q_w_gt.x(),
-				q_w_gt.y(),
-				q_w_gt.z(),
-				q_w_gt.w()),
-			tf::Vector3(
-				t_w_gt.x(),
-				t_w_gt.y(),
-				t_w_gt.z()));
-		tf::StampedTransform st(tf, msg->header.stamp, world_frame_id_, "gt");
-		tf_->setTransform(st);
-		// broadcast the tf such that the nav_path messages can find the valid fixed frame "map".
-		static tf::TransformBroadcaster br;
-		br.sendTransform(st);
-
-		// m_buf_.unlock();
+	/************ publish results *******************/
+	void esvo_MonoTracking::publishTimeSurface(const ros::Time &t)
+	{
+		if (TS_buf_.empty())
+			return;
+		sensor_msgs::ImagePtr aux_left = TS_buf_.back().second.cvImagePtr_left_->toImageMsg();
+		aux_left->header.stamp = t;
+		time_surface_left_pub_.publish(aux_left);
 	}
 
 	void esvo_MonoTracking::publishPose(const ros::Time &t, Transformation &tr)
