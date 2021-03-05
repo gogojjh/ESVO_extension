@@ -147,6 +147,7 @@ namespace EMVS
 	{
 		CHECK_GT(vpVirtualPoses.size(), 1);
 		CHECK_GE(vpVirtualPoses.front().first.toSec(), vEvent.front()[2]);
+		CHECK_GE(vEvent.back()[2], vpVirtualPoses.back().first.toSec());
 
 		auto it_ev_begin = vEvent.begin();
 		for (auto it_vp = vpVirtualPoses.begin(); it_vp != vpVirtualPoses.end(); it_vp++)
