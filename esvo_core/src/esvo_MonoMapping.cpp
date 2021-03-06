@@ -147,7 +147,7 @@ namespace esvo_core
 		EMVS_Init_event_ = tools::param(pnh_, "EMVS_Init_event", 4e6);
 		EMVS_Keyframe_event_ = tools::param(pnh_, "EMVS_Keyframe_event", 2e6); 
 		SAVE_RESULT_ = tools::param(pnh_, "SAVE_RESULT", false);
-		invDepth_INIT_ = 1.0;
+		invDepth_INIT_ = tools::param(pnh_, "invDepth_init", 1.0);
 
 		// multi-thread management
 		mapping_thread_future_ = mapping_thread_promise_.get_future();
@@ -612,11 +612,6 @@ namespace esvo_core
 			}
 			else if (ESVO_System_Status_ == "WORKING")
 			{
-				// if (getPoseAt(it_end->first, tr, dvs_frame_id_))
-				// {
-				// 	it_end->second.setTransformation(tr);
-				// 	TS_obs_ = *it_end;
-				// }
 				Eigen::Matrix4d T_w_obs;
 				if (trajectory_.getPoseAt(mAllPoses_, it_end->first, T_w_obs)) // check if poses are ready
 				{
@@ -648,7 +643,7 @@ namespace esvo_core
 			ros::Time t_begin(std::max(0.0, t_end.toSec() - dt_events)); 
 			auto ev_begin_it = tools::EventBuffer_upper_bound(events_left_, t_begin);
 			auto ev_end_it = tools::EventBuffer_lower_bound(events_left_, t_end);
-			const size_t MAX_NUM_Event_INVOLVED = 30000;
+			const size_t MAX_NUM_Event_INVOLVED = 10000;
 			vALLEventsPtr_left_.reserve(MAX_NUM_Event_INVOLVED);
 			while (ev_end_it != ev_begin_it && vALLEventsPtr_left_.size() <= MAX_NUM_Event_INVOLVED)
 			{
@@ -1067,13 +1062,13 @@ namespace esvo_core
 #ifdef ESVO_CORE_MAPPING_DEBUG
 			LOG(INFO) << "<<<<<<<<<(pointcloud)<<<<<<<<" << pc_->size() << " points are published";
 #endif
-			// pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_filtered(new pcl::PointCloud<pcl::PointXYZ>);
-			// pcl::RadiusOutlierRemoval<pcl::PointXYZ> outlier_rm;
-			// outlier_rm.setInputCloud(pc_);
-			// outlier_rm.setRadiusSearch(emvs_opts_pc_.radius_search_);
-			// outlier_rm.setMinNeighborsInRadius(emvs_opts_pc_.min_num_neighbors_);
-			// outlier_rm.filter(*cloud_filtered);
-			// pc_->swap(*cloud_filtered);
+			pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_filtered(new pcl::PointCloud<pcl::PointXYZ>);
+			pcl::RadiusOutlierRemoval<pcl::PointXYZ> outlier_rm;
+			outlier_rm.setInputCloud(pc_);
+			outlier_rm.setRadiusSearch(emvs_opts_pc_.radius_search_);
+			outlier_rm.setMinNeighborsInRadius(emvs_opts_pc_.min_num_neighbors_);
+			outlier_rm.filter(*cloud_filtered);
+			pc_->swap(*cloud_filtered);
 
 			// std::cout << pc_->height << " " << pc_->width << std::endl;
 			pcl::toROSMsg(*pc_, *pc_to_publish);

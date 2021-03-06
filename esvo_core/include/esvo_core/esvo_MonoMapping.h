@@ -37,9 +37,11 @@
 #include <cv_bridge/cv_bridge.h>
 #include <pcl/point_types.h>
 #include <pcl_ros/point_cloud.h>
+#include <pcl/filters/voxel_grid.h>
+#include <pcl/filters/radius_outlier_removal.h>
 
 const double VAR_RANDOM_INIT_INITIAL_ = 0.2;
-const double INIT_DP_NUM_Threshold_ = 1000;
+const double INIT_DP_NUM_Threshold_ = 500;
 
 namespace esvo_core
 {

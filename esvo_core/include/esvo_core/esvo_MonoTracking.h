@@ -34,7 +34,8 @@
 #include <pcl/point_types.h>
 #include <pcl_ros/point_cloud.h>
 
-// #define esvo_MonoTracking_MC
+// #define ESVO_CORE_MONO_TRACKING_DEBUG
+// #define ESVO_CORE_MONO_TRACKING_LOG
 
 namespace esvo_core
 {
@@ -65,7 +66,10 @@ namespace esvo_core
     // results
     void publishPose(const ros::Time &t, Transformation &tr);
     void publishPath(const ros::Time &t, Transformation &tr);
-    void saveTrajectory(const std::string &resultDir);
+    // void saveTrajectory(const std::string &resultDir);
+    void saveTrajectory(const std::string &resultDir,
+                        const std::list<std::string> &lTimestamp_,
+                        const std::list<Eigen::Matrix<double, 4, 4>, Eigen::aligned_allocator<Eigen::Matrix<double, 4, 4>>> &lPose_);
     void publishTimeSurface(const ros::Time &t);
     void publishMCImage(const ros::Time &t);
 
@@ -98,7 +102,9 @@ namespace esvo_core
     nav_msgs::Path path_, path_gt_;
     std::list<Eigen::Matrix<double, 4, 4>, Eigen::aligned_allocator<Eigen::Matrix<double, 4, 4>>> lPose_;
     std::list<std::string> lTimestamp_;
-    double last_gt_timestamp_;
+    std::list<Eigen::Matrix<double, 4, 4>, Eigen::aligned_allocator<Eigen::Matrix<double, 4, 4>>> lPose_GT_;
+    std::list<std::string> lTimestamp_GT_;
+    double last_gt_timestamp_, last_save_trajectory_timestamp_;
 
     Eigen::Quaterniond q_gt_s_;
     Eigen::Vector3d t_gt_s_;
@@ -115,15 +121,13 @@ namespace esvo_core
 
     // online data
     EventQueue events_left_;
-    TimeSurfaceHistory TS_history_;
     size_t TS_id_;
     std::shared_ptr<tf::Transformer> tf_;
-    RefPointCloudMap refPCMap_;
     RefFrame ref_;
     CurFrame cur_;
 
-    std::deque<std::pair<ros::Time, TimeSurfaceObservation>> TS_buf_;
     std::deque<std::pair<ros::Time, PointCloud::Ptr>> refPCMap_buf_;
+    std::deque<std::pair<ros::Time, TimeSurfaceObservation>> TS_buf_;
 
     /**** offline parameters ***/
     size_t tracking_rate_hz_;
@@ -132,7 +136,7 @@ namespace esvo_core
     bool bSaveTrajectory_;
     bool bVisualizeTrajectory_;
     std::string resultPath_;
-    std::string strDataset_;
+    std::string strDataset_, strSequence_;
 
     Eigen::Matrix<double, 4, 4> T_world_cur_;
     Eigen::Matrix<double, 4, 4> T_world_map_;

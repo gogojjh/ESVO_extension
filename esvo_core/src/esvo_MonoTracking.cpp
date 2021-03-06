@@ -5,9 +5,6 @@
 #include <tf/transform_broadcaster.h>
 #include <sys/stat.h>
 
-//#define ESVO_CORE_TRACKING_DEBUG
-//#define ESVO_CORE_TRACKING_DEBUG
-
 namespace esvo_core
 {
 	esvo_MonoTracking::esvo_MonoTracking(
@@ -47,6 +44,7 @@ namespace esvo_core
 		bVisualizeTrajectory_ = tools::param(pnh_, "VISUALIZE_TRAJECTORY", true);
 		resultPath_ = tools::param(pnh_, "PATH_TO_SAVE_TRAJECTORY", std::string());
 		strDataset_ = tools::param(pnh_, "DATASET_NAME", std::string("rpg"));
+		strSequence_ = tools::param(pnh_, "SEQUENCE_NAME", std::string("shapes_poster"));
 
 		// online data callbacks
 		events_left_sub_ = nh_.subscribe<dvs_msgs::EventArray>("events_left", 0, &esvo_MonoTracking::eventsCallback, this);
@@ -74,6 +72,7 @@ namespace esvo_core
 		TrackingThread.detach();
 
 		last_gt_timestamp_ = 0.0;
+		last_save_trajectory_timestamp_ = 0.0;
 	}
 
 	esvo_MonoTracking::~esvo_MonoTracking()
@@ -186,7 +185,7 @@ namespace esvo_core
 					m_buf_.unlock();
 				}
 
-#ifdef ESVO_CORE_TRACKING_LOG
+#ifdef ESVO_CORE_MONO_TRACKING_LOG
 				double t_overall_count = 0;
 				t_overall_count = t_resetRegProblem + t_solve + t_pub_result;
 				LOG(INFO) << "\n";
@@ -200,8 +199,9 @@ namespace esvo_core
 				LOG(INFO) << "------------------------------------------------------------";
 				LOG(INFO) << "------------------------------------------------------------";
 #endif
-				if (bSaveTrajectory_)
+				if (bSaveTrajectory_ && (cur_.t_.toSec() - last_save_trajectory_timestamp_ > 1.0))
 				{
+					last_save_trajectory_timestamp_ = cur_.t_.toSec();
 					struct stat st;
 					if (stat(resultPath_.c_str(), &st) == -1) // there is no such dir, create one
 					{
@@ -209,9 +209,11 @@ namespace esvo_core
 						_mkdir(resultPath_.c_str());
 						LOG(INFO) << "The directory has been created!!!";
 					}
-					LOG(INFO) << "pose size: " << lPose_.size();
-					LOG(INFO) << "refPCMap_.size(): " << refPCMap_.size() << ", TS_buf_.size(): " << TS_buf_.size();
-					saveTrajectory(resultPath_ + "result.txt");
+#ifdef ESVO_CORE_MONO_TRACKING_LOG
+					LOG(INFO) << "pose size: " << lPose_.size() << ", refPCMap_buf size(): " << refPCMap_buf_.size() << ", TS_buf.size(): " << TS_buf_.size();
+#endif
+					saveTrajectory(resultPath_ + strDataset_ + "/" + strSequence_ + "_result.txt", lTimestamp_, lPose_);
+					saveTrajectory(resultPath_ + strDataset_ + "/" + strSequence_ + "_result_gt.txt", lTimestamp_GT_, lPose_GT_);
 				}
 			}
 			r.sleep();
@@ -273,7 +275,6 @@ namespace esvo_core
 		ets_ = IDLE;
 		TS_id_ = 0;
 		TS_buf_.clear();
-		refPCMap_.clear();
 		refPCMap_buf_.clear();
 		events_left_.clear();
 
@@ -480,6 +481,13 @@ namespace esvo_core
 		path_gt_.header.frame_id = world_frame_id_;
 		path_gt_.poses.push_back(*ps_ptr);
 		path_gt_pub_.publish(path_gt_);
+
+		// save gt pose
+		if (bSaveTrajectory_)
+		{
+			lPose_GT_.push_back(T_map_cam);
+			lTimestamp_GT_.push_back(std::to_string(ps_msg->header.stamp.toSec()));
+		}
 		// m_buf_.unlock();
 	}
 
@@ -546,11 +554,14 @@ namespace esvo_core
 		path_pub_.publish(path_);
 	}
 
-	void
-	esvo_MonoTracking::saveTrajectory(const std::string &resultDir)
-	{
-		LOG(INFO) << "Saving trajectory to " << resultDir << " ......";
+	void esvo_MonoTracking::saveTrajectory(const std::string &resultDir,
+										   const std::list<std::string> &lTimestamp,
+										   const std::list<Eigen::Matrix<double, 4, 4>, Eigen::aligned_allocator<Eigen::Matrix<double, 4, 4>>> &lPose)
 
+	{
+#ifdef ESVO_CORE_MONO_TRACKING_DEBUG
+		LOG(INFO) << "Saving trajectory to " << resultDir << " ......";
+#endif
 		std::ofstream f;
 		f.open(resultDir.c_str(), std::ofstream::out);
 		if (!f.is_open())
@@ -561,10 +572,10 @@ namespace esvo_core
 		f << std::fixed;
 
 		std::list<Eigen::Matrix<double, 4, 4>,
-				  Eigen::aligned_allocator<Eigen::Matrix<double, 4, 4>>>::iterator result_it_begin = lPose_.begin();
+				  Eigen::aligned_allocator<Eigen::Matrix<double, 4, 4>>>::const_iterator result_it_begin = lPose.begin();
 		std::list<Eigen::Matrix<double, 4, 4>,
-				  Eigen::aligned_allocator<Eigen::Matrix<double, 4, 4>>>::iterator result_it_end = lPose_.end();
-		std::list<std::string>::iterator ts_it_begin = lTimestamp_.begin();
+				  Eigen::aligned_allocator<Eigen::Matrix<double, 4, 4>>>::const_iterator result_it_end = lPose.end();
+		std::list<std::string>::const_iterator ts_it_begin = lTimestamp.begin();
 
 		for (; result_it_begin != result_it_end; result_it_begin++, ts_it_begin++)
 		{
@@ -573,11 +584,14 @@ namespace esvo_core
 			Rwc_result = (*result_it_begin).block<3, 3>(0, 0);
 			twc_result = (*result_it_begin).block<3, 1>(0, 3);
 			Eigen::Quaterniond q(Rwc_result);
-			f << *ts_it_begin << " " << std::setprecision(9) << twc_result.transpose() << " "
+			f << *ts_it_begin << " " << std::setprecision(9)
+			  << twc_result.x() << " " << twc_result.y() << " " << twc_result.z() << " "
 			  << q.x() << " " << q.y() << " " << q.z() << " " << q.w() << std::endl;
 		}
 		f.close();
+#ifdef ESVO_CORE_MONO_TRACKING_DEBUG
 		LOG(INFO) << "Saving trajectory to " << resultDir << ". Done !!!!!!.";
+#endif
 	}
 
 } // namespace esvo_core
