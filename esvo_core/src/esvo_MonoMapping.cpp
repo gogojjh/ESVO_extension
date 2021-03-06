@@ -360,17 +360,15 @@ namespace esvo_core
 			{
 				std::vector<DepthPoint> vdp; // depth points on the current observations
 				emvs_mapper_.getDepthPoint(depth_map, confidence_map, semidense_mask, vdp, stdVar_init_);
-				dqvDepthPoints_.push_back(vdp); // size should be 2
-				dFusor_.naive_propagation(vdp, depthFramePtr_);
-				LOG_EVERY_N(INFO, 20) << "Depth point size: " << vdp.size() << ", process events: " << emvs_mapper_.accu_event_number_;
+				propagatePoints(vdp, emvs_mapper_.T_w_rv_, pc_);
 				isKeyframe_ = true; // enforce a keyframe
 				nonPlanarDepthMap_Init_ = true;
+				LOG(INFO) << "Depth point size: " << vdp.size() << ", process events: " << emvs_mapper_.accu_event_number_;
 				LOG(INFO) << "******** Finish initialization!";
 			}
 			else
 			{
-				std::vector<DepthPoint> &vdp = dqvDepthPoints_.back(); // propagate the planar depth map
-				dFusor_.naive_propagation(vdp, depthFramePtr_);
+				// 
 			}
 		}
 		else // normal mapping
@@ -380,10 +378,10 @@ namespace esvo_core
 			if (isKeyframe_)
 			{
 				LOG(INFO) << "insert a keyframe: reset the DSI for the local map";
-				if (emvs_mapper_.accu_event_number_ < EMVS_Keyframe_event_) // should be EMVS_Init_event_ > EMVS_Keyframe_event_
-					if (!dqvDepthPoints_.empty())
-						dqvDepthPoints_.pop_back();
-				dqvDepthPoints_.push_back(std::vector<DepthPoint>());
+				// if (emvs_mapper_.accu_event_number_ < EMVS_Keyframe_event_) // should be EMVS_Init_event_ > EMVS_Keyframe_event_
+				// 	if (!dqvPointClouds_.empty())
+				// 		dqvPointClouds_.pop_back();
+				// dqvPointClouds_.push_back(std::make_shared<PointCloud>);
 				if (SAVE_RESULT_ && boost::filesystem::exists(resultPath_))
 					emvs_mapper_.dsi_.writeGridNpy(std::string(resultPath_ + "dsi.npy").c_str());
 				emvs_mapper_.reset();
@@ -404,76 +402,77 @@ namespace esvo_core
 			LOG_EVERY_N(INFO, 50) << "Mean square = " << emvs_mapper_.dsi_.computeMeanSquare();
 			// visualization
 			std::thread tPublishDSIResult(&esvo_MonoMapping::publishDSIResults, this,
-										t, semidense_mask, depth_map, confidence_map);
+										  t, semidense_mask, depth_map, confidence_map);
 			tPublishDSIResult.detach();
 			LOG_EVERY_N(INFO, 50) << "Accumulate events: " << emvs_mapper_.accu_event_number_;
 			if (emvs_mapper_.accu_event_number_ >= EMVS_Keyframe_event_)
 			{
-				std::vector<DepthPoint> &vdp = dqvDepthPoints_.back(); // depth points on the current observations
+				std::vector<DepthPoint> vdp;
 				emvs_mapper_.getDepthPoint(depth_map, confidence_map, semidense_mask, vdp, stdVar_init_);
+				propagatePoints(vdp, emvs_mapper_.T_w_rv_, pc_);
 				LOG_EVERY_N(INFO, 20) << "Depth point size: " << vdp.size() << ", process events: " << emvs_mapper_.accu_event_number_;
 			}
 
 			/**************************************************************/
 			/*************  Nonlinear Optimization & Fusion ***************/
 			/**************************************************************/
-			size_t numFusionPoints = 0;
-			for (size_t n = 0; n < dqvDepthPoints_.size(); n++)
-				numFusionPoints += dqvDepthPoints_[n].size();
-			if (numFusionPoints == 0)
-				return;
+			// size_t numFusionPoints = 0;
+			// for (size_t n = 0; n < dqvPointClouds_.size(); n++)
+			// 	numFusionPoints += dqvPointClouds_[n]->size();
+			// if (numFusionPoints == 0)
+			// 	return;
 
-			if (FusionStrategy_ == "CONST_POINTS")
-			{
-				tt_mapping.tic();
-				while (numFusionPoints > 1.5 * maxNumFusionPoints_ && !dqvDepthPoints_.empty())
-				{
-					dqvDepthPoints_.pop_front();
-					numFusionPoints = 0;
-					for (size_t n = 0; n < dqvDepthPoints_.size(); n++)
-						numFusionPoints += dqvDepthPoints_[n].size();
-				}
-			}
-			else if (FusionStrategy_ == "CONST_FRAMES") // (strategy 2: const number of frames)
-			{
-				tt_mapping.tic();
-				while (dqvDepthPoints_.size() > maxNumFusionFrames_)
-					dqvDepthPoints_.pop_front();
-			}
-			else
-			{
-				LOG(INFO) << "Invalid FusionStrategy is assigned.";
-				exit(-1);
-			}
+			// if (FusionStrategy_ == "CONST_POINTS")
+			// {
+			// 	tt_mapping.tic();
+			// 	while (numFusionPoints > 1.5 * maxNumFusionPoints_ && !dqvPointClouds_.empty())
+			// 	{
+			// 		dqvPointClouds_.pop_front();
+			// 		numFusionPoints = 0;
+			// 		for (size_t n = 0; n < dqvPointClouds_.size(); n++)
+			// 			numFusionPoints += dqvPointClouds_[n]->size();
+			// 	}
+			// }
+			// else if (FusionStrategy_ == "CONST_FRAMES") // (strategy 2: const number of frames)
+			// {
+			// 	tt_mapping.tic();
+			// 	while (dqvPointClouds_.size() > maxNumFusionFrames_)
+			// 		dqvPointClouds_.pop_front();
+			// }
+			// else
+			// {
+			// 	LOG(INFO) << "Invalid FusionStrategy is assigned.";
+			// 	exit(-1);
+			// }
 
 			// apply fusion and count the total number of fusion.
-			size_t numFusionCount = 0;
-			for (auto it = dqvDepthPoints_.rbegin(); it != dqvDepthPoints_.rend(); it++)
-			{
-				numFusionCount += dFusor_.update(*it, depthFramePtr_, fusion_radius_);
-				//    LOG(INFO) << "numFusionCount: " << numFusionCount;
-			}
+			// size_t numFusionCount = 0;
+			// for (auto it = dqvDepthPoints_.rbegin(); it != dqvDepthPoints_.rend(); it++)
+			// {
+			// 	numFusionCount += dFusor_.update(*it, depthFramePtr_, fusion_radius_);
+			// 	//    LOG(INFO) << "numFusionCount: " << numFusionCount;
+			// }
 
-			TotalNumFusion_ += numFusionCount;
-			depthFramePtr_->dMap_->clean(pow(stdVar_vis_threshold_, 2),
-											age_vis_threshold_,
-											invDepth_max_range_,
-											invDepth_min_range_);
-			t_fusion = tt_mapping.toc();
+			// TotalNumFusion_ += numFusionCount;
+			// depthFramePtr_->dMap_->clean(pow(stdVar_vis_threshold_, 2),
+			// 								age_vis_threshold_,
+			// 								invDepth_max_range_,
+			// 								invDepth_min_range_);
+			// t_fusion = tt_mapping.toc();
 
-			// regularization
-			if (bRegularization_)
-			{
-				tt_mapping.tic();
-				dRegularizor_.apply(depthFramePtr_->dMap_);
-				t_regularization = tt_mapping.toc();
-			}
-			t_optimization = t_solve + t_fusion + t_regularization;
-			t_overall_count += t_optimization;
+			// // regularization
+			// if (bRegularization_)
+			// {
+			// 	tt_mapping.tic();
+			// 	dRegularizor_.apply(depthFramePtr_->dMap_);
+			// 	t_regularization = tt_mapping.toc();
+			// }
+
+			// t_optimization = t_solve + t_fusion + t_regularization;
+			// t_overall_count += t_optimization;
 		}
 
-		std::thread tPublishMappingResult(&esvo_MonoMapping::publishMappingResults, this,
-										  depthFramePtr_->dMap_, depthFramePtr_->T_world_frame_.getTransformationMatrix(), t);
+		std::thread tPublishMappingResult(&esvo_MonoMapping::publishEMVSPointCloud, this, t);
 		tPublishMappingResult.detach();
 
 		// To save the depth result, set it to true.
@@ -552,16 +551,14 @@ namespace esvo_core
 		LOG(INFO) << "********** Initialization (planar depth map) returns " << vdp.size() << " points.";
 		if (vdp.size() < INIT_DP_NUM_Threshold_)
 			return false;
-		dqvDepthPoints_.push_back(vdp);
-		dFusor_.naive_propagation(vdp, depthFramePtr_);
-
+	
+		propagatePoints(vdp, Eigen::Matrix4d::Identity(), pc_);
 		planarDepthMap_Init_ = true;
 		emvs_mapper_.reset();
 		emvs_mapper_.initializeDSI(TS_obs_.second.T_w_obs_); // Identity pose
 
 		// publish the invDepth map
-		std::thread tPublishMappingResult(&esvo_MonoMapping::publishMappingResults, this,
-										  depthFramePtr_->dMap_, depthFramePtr_->T_world_frame_.getTransformationMatrix(), t);
+		std::thread tPublishMappingResult(&esvo_MonoMapping::publishEMVSPointCloud, this, t);
 		tPublishMappingResult.detach();
 		return true;
 	}
@@ -587,6 +584,24 @@ namespace esvo_core
 		else
 		{
 			isKeyframe_ = false;
+		}
+	}
+
+	void esvo_MonoMapping::propagatePoints(const std::vector<DepthPoint> &vdp,
+										   const Eigen::Matrix4d &T_world_frame,
+										   PointCloud::Ptr &pc_ptr)
+	{
+		pc_ptr->clear();
+		pc_ptr->reserve(vdp.size());
+		for (size_t i = 0; i < vdp.size(); i++)
+		{
+			Eigen::Vector3d p_prop = T_world_frame.topLeftCorner<3, 3>() * vdp[i].p_cam() 
+								   + T_world_frame.topRightCorner<3, 1>();
+			pcl::PointXYZ point;
+			point.x = p_prop.x();
+			point.y = p_prop.y();
+			point.z = p_prop.z();
+			pc_ptr->push_back(point);
 		}
 	}
 
@@ -643,7 +658,7 @@ namespace esvo_core
 			ros::Time t_begin(std::max(0.0, t_end.toSec() - dt_events)); 
 			auto ev_begin_it = tools::EventBuffer_upper_bound(events_left_, t_begin);
 			auto ev_end_it = tools::EventBuffer_lower_bound(events_left_, t_end);
-			const size_t MAX_NUM_Event_INVOLVED = 10000;
+			const size_t MAX_NUM_Event_INVOLVED = 30000;
 			vALLEventsPtr_left_.reserve(MAX_NUM_Event_INVOLVED);
 			while (ev_end_it != ev_begin_it && vALLEventsPtr_left_.size() <= MAX_NUM_Event_INVOLVED)
 			{
@@ -879,6 +894,7 @@ namespace esvo_core
 		TS_id_ = 0;
 		depthFramePtr_->clear();
 		dqvDepthPoints_.clear();
+		dqvPointClouds_.clear();
 
 		LOG(INFO) << "****************************************************";
 		LOG(INFO) << "****************** RESET THE SYSTEM *********************";
@@ -1011,16 +1027,16 @@ namespace esvo_core
 		{
 			if (FusionStrategy_ == "CONST_FRAMES")
 			{
-				// if (dqvDepthPoints_.size() == maxNumFusionFrames_)
-				publishPointCloud(depthMapPtr, T, t);
+				if (dqvDepthPoints_.size() == maxNumFusionFrames_)
+					publishPointCloud(depthMapPtr, T, t);
 			}
 			if (FusionStrategy_ == "CONST_POINTS")
 			{
-				// size_t numFusionPoints = 0;
-				// for (size_t n = 0; n < dqvDepthPoints_.size(); n++)
-				// 	numFusionPoints += dqvDepthPoints_[n].size();
-				// if (numFusionPoints > 0.5 * maxNumFusionPoints_)
-				publishPointCloud(depthMapPtr, T, t);
+				size_t numFusionPoints = 0;
+				for (size_t n = 0; n < dqvDepthPoints_.size(); n++)
+					numFusionPoints += dqvDepthPoints_[n].size();
+				if (numFusionPoints > 0.5 * maxNumFusionPoints_)
+					publishPointCloud(depthMapPtr, T, t);
 			}
 		}
 	}
@@ -1100,6 +1116,51 @@ namespace esvo_core
 					t_last_pub_pc_ = t.toSec();
 				}
 			}
+		}
+	}
+
+	void esvo_MonoMapping::publishEMVSPointCloud(const ros::Time &t)
+	{
+		sensor_msgs::PointCloud2::Ptr pc_to_publish(new sensor_msgs::PointCloud2);
+		if (!pc_->empty())
+		{
+			pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_filtered(new pcl::PointCloud<pcl::PointXYZ>);
+			pcl::RadiusOutlierRemoval<pcl::PointXYZ> outlier_rm;
+			outlier_rm.setInputCloud(pc_);
+			outlier_rm.setRadiusSearch(emvs_opts_pc_.radius_search_);
+			outlier_rm.setMinNeighborsInRadius(emvs_opts_pc_.min_num_neighbors_);
+			outlier_rm.filter(*cloud_filtered);
+			pc_->swap(*cloud_filtered);
+
+			pcl::toROSMsg(*pc_, *pc_to_publish);
+			pc_to_publish->header.stamp = t;
+			pc_pub_.publish(pc_to_publish);
+
+			// // publish global pointcloud
+			// if (bVisualizeGlobalPC_)
+			// {
+			// 	if (t.toSec() - t_last_pub_pc_ > visualizeGPC_interval_)
+			// 	{
+			// 		PointCloud::Ptr pc_filtered(new PointCloud());
+			// 		pcl::VoxelGrid<pcl::PointXYZ> sor;
+			// 		sor.setInputCloud(pc_near_);
+			// 		sor.setLeafSize(0.03, 0.03, 0.03);
+			// 		sor.filter(*pc_filtered);
+
+			// 		// copy the most current pc tp pc_global
+			// 		size_t pc_length = pc_filtered->size();
+			// 		if (pc_length == 0)
+			// 			return;
+			// 		size_t numAddedPC = min(pc_length, numAddedPC_threshold_) - 1;
+			// 		pc_global_->insert(pc_global_->end(), pc_filtered->end() - numAddedPC, pc_filtered->end());
+
+			// 		// publish point cloud
+			// 		pcl::toROSMsg(*pc_global_, *pc_to_publish);
+			// 		pc_to_publish->header.stamp = t;
+			// 		gpc_pub_.publish(pc_to_publish);
+			// 		t_last_pub_pc_ = t.toSec();
+			// 	}
+			// }
 		}
 	}
 
