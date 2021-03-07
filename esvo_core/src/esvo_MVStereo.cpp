@@ -44,7 +44,7 @@ namespace esvo_core
         em_(camSysPtr_, NUM_THREAD_MAPPING),
         ebm_(camSysPtr_, NUM_THREAD_MAPPING, tools::param(pnh_, "SmoothTimeSurface", false)),
         pc_(new PointCloud()),
-        depthFramePtr_(new DepthFrame(camSysPtr_->cam_left_ptr_->height_, camSysPtr_->cam_left_ptr_->width_)),
+        depthFramePtr_(new DepthFrame(camSysPtr_->cam_left_ptr_->height_, camSysPtr_->cam_left_ptr_->width_))
   {
     // frame id
     dvs_frame_id_ = tools::param(pnh_, "dvs_frame_id", std::string("dvs"));
@@ -164,6 +164,8 @@ namespace esvo_core
     server_->setCallback(dynamic_reconfigure_callback_);
 
     resultPath_ = tools::param(pnh_, "PATH_TO_SAVE_RESULT", std::string());
+    SAVE_RESULT_ = tools::param(pnh_, "SAVE_RESULT", false);
+    T_world_map_.setIdentity();
   }
 
   esvo_MVStereo::~esvo_MVStereo()
@@ -551,30 +553,6 @@ void esvo_MVStereo::MappingAtTime(const ros::Time& t)
   LOG(INFO) << "------------------------------------------------------------";
   LOG(INFO) << "\n";
 #endif
-}
-
-/**
- * @brief: This function defines xx criterias to indicate if insert new keyframe in Mapping
- */
-void esvo_MVStereo::insertKeyframe()
-{
-  // criterion in LSD-SLAM or EVO
-  // This is done based on two weights, the relative distance to the current key-frame and
-  // the angle to the current key-frame. Is the weighted sum of these two larger than a certain threshold,
-  // a new key-frame is taken.
-  T_w_frame_ = TS_obs_.second.tr_.getTransformationMatrix();
-  double dis = (T_w_frame_.topRightCorner<3, 1>() - T_w_keyframe_.topRightCorner<3, 1>()).norm();
-  // if (dis > KEYFRAME_LINEAR_DIS_)
-  if (meanDepth_ < 0 || (meanDepth_ != 0 && dis > KEYFRAME_MEANDEPTH_DIS_ * meanDepth_)) // 1e5: system just starts; > 0.15: move at a long distance
-  {
-    isKeyframe_ = true;
-    T_w_keyframe_ = T_w_frame_;
-    // LOG(INFO) << "mean depth: " << meanDepth_ << "m";
-  }
-  else
-  {
-    isKeyframe_ = false;
-  }
 }
 
 bool esvo_MVStereo::dataTransferring()

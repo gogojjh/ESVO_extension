@@ -264,16 +264,6 @@ namespace esvo_core
 		auto ev_end_it = EventBuffer_lower_bound(events_left_, cur_.t_);
 		cur_.numEventsSinceLastObs_ = std::distance(ev_begin_it, ev_end_it) + 1; // Count the number of events occuring since the last observation.
 		// LOG(INFO) << "event number in 10ms: " << cur_.numEventsSinceLastObs_; // 2000-1400
-
-		// restore events for solving the initial motion estimation problem (time in ascending order)
-		if (ets_ == IDLE)
-		{
-			while (ev_begin_it != ev_end_it)
-			{
-				vALLEventsPtr_left_.push_back(ev_begin_it._M_cur); // all events within the time interval
-				ev_begin_it++;
-			}
-		}
 		return true;
 	}
 
@@ -288,7 +278,6 @@ namespace esvo_core
 		refPCMap_.clear();
 		refPCMap_buf_.clear();
 		events_left_.clear();
-		vALLEventsPtr_left_.clear();
 
 		path_.poses.clear();
 		path_gt_.poses.clear();

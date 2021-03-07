@@ -1,9 +1,11 @@
 #include <iostream>
 
 #include <pcl/point_types.h>
+#include <pcl/io/pcd_io.h>
 #include <pcl_ros/point_cloud.h>
 
 #include <ros/ros.h>
+#include <sensor_msgs/PointCloud2.h>
 #include <dvs_msgs/Event.h>
 
 size_t N_accumEvents;
@@ -42,7 +44,7 @@ int main(int argc, char **argv)
     mapping_rate_hz = param(nh_private, "mapping_rate_hz", 20);
     world_frame_id = param(nh_private, "world_frame_id", std::string("world"));
 
-    ros::Publisher pc_pub = nh_.advertise("esvo_MonoMapping/point_cloud_local", 1);
+    ros::Publisher pc_pub = nh.advertise<sensor_msgs::PointCloud2>("esvo_MonoMapping/point_cloud_local", 1);
 
     std::string pcdName = resultPath + "/" + strDataset + "/" + strSequence + ".pcd";
     PC_ptr.reset(new pcl::PointCloud<pcl::PointXYZ>());
@@ -50,7 +52,7 @@ int main(int argc, char **argv)
     PC_ptr->header.frame_id = world_frame_id;
     std::cout << "Loading point cloud: " << PC_ptr->size() << std::endl;
 
-    ros::Rate r(mapping_rate_hz_);
+    ros::Rate r(mapping_rate_hz);
     while (ros::ok())
     {
         sensor_msgs::PointCloud2::Ptr pc_to_publish(new sensor_msgs::PointCloud2);

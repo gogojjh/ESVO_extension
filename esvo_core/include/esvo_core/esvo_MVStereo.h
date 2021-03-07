@@ -245,6 +245,8 @@ class esvo_MVStereo
   size_t TotalNumFusion_;
 
   std::string resultPath_;
+  bool SAVE_RESULT_;
+  Eigen::Matrix<double, 4, 4> T_world_map_;
 };
 
 }

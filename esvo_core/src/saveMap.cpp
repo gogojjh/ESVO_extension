@@ -1,10 +1,13 @@
 #include <iostream>
 
 #include <pcl/point_types.h>
+#include <pcl/io/pcd_io.h>
 #include <pcl_ros/point_cloud.h>
 
 #include <ros/ros.h>
+#include <sensor_msgs/PointCloud2.h>
 #include <dvs_msgs/Event.h>
+#include <dvs_msgs/EventArray.h>
 
 size_t N_accumEvents;
 size_t accumulateEvent;
@@ -38,8 +41,8 @@ void refMapCallback(const sensor_msgs::PointCloud2::ConstPtr &msg)
     pcl::fromROSMsg(*msg, *PC_ptr);
     if (accumulateEvent > N_accumEvents)
     {
-        std::string pcdName = resultPath_ + strDataset_ + "/" + strSequence_ + ".pcd";
-        pcl::io::writePCD(pcdName, *PC_ptr);
+        std::string pcdName = resultPath + strDataset + "/" + strSequence + ".pcd";
+        pcl::io::savePCDFileASCII(pcdName, *PC_ptr);
         std::cout << "Saving point cloud: " << PC_ptr->size() << std::endl;
         ros::shutdown();
     }
@@ -56,8 +59,8 @@ int main(int argc, char **argv)
     strDataset = param(nh_private, "DATASET_NAME", std::string("rpg"));
     strSequence = param(nh_private, "SEQUENCE_NAME", std::string("shapes_poster"));
 
-    ros::Subscriber events_left_sub = nh_.subscribe<dvs_msgs::EventArray>("events_left", 0, eventsCallback);
-    ros::Subscriber map_sub = nh_.subscribe("pointcloud", 0, refMapCallback);
+    ros::Subscriber events_left_sub = nh.subscribe<dvs_msgs::EventArray>("events_left", 0, eventsCallback);
+    ros::Subscriber map_sub = nh.subscribe("pointcloud", 0, refMapCallback);
     PC_ptr.reset(new pcl::PointCloud<pcl::PointXYZ>());
     accumulateEvent = 0;
 
