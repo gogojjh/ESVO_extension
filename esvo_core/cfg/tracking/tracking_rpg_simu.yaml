@@ -1,5 +1,5 @@
-invDepth_min_range: 0.5
-invDepth_max_range: 5
+invDepth_min_range: 0.66
+invDepth_max_range: 2.0
 TS_HISTORY_LENGTH: 100
 REF_HISTORY_LENGTH: 10
 tracking_rate_hz: 100
@@ -11,9 +11,10 @@ BATCH_SIZE: 300
 MAX_ITERATION: 10
 LSnorm: Huber #l2, Huber
 huber_threshold: 50
-MIN_NUM_EVENTS: 1000
+MIN_NUM_EVENTS: 500
 RegProblemType: 1 #( 0 numerical; 1 analytical)
 SAVE_TRAJECTORY: False
-PATH_TO_SAVE_TRAJECTORY: "/home/jjiao/ESVO_result/rpg_simu/" # CHANGE THIS PATH
+PATH_TO_SAVE_TRAJECTORY: "/home/jjiao/ESVO_result/" # CHANGE THIS PATH
 VISUALIZE_TRAJECTORY: True
 DATASET_NAME: "rpg_simu"
+SEQUENCE_NAME: "shapes_poster_planar"
