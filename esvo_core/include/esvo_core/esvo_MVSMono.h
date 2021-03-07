@@ -256,7 +256,6 @@ namespace esvo_core
 
 		bool SAVE_RESULT_;
 		std::string strDataset_;
-
 		SolverFlag solverFlag_;
 	};
 

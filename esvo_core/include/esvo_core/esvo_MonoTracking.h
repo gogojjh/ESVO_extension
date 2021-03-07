@@ -136,7 +136,7 @@ namespace esvo_core
     bool bSaveTrajectory_;
     bool bVisualizeTrajectory_;
     std::string resultPath_;
-    std::string strDataset_, strSequence_;
+    std::string strDataset_, strSequence_, strRep_;
 
     Eigen::Matrix<double, 4, 4> T_world_cur_;
     Eigen::Matrix<double, 4, 4> T_world_map_;

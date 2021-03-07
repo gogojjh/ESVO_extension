@@ -25,9 +25,6 @@
 #include <esvo_core/DVS_MappingStereoConfig.h>
 #include <dynamic_reconfigure/server.h>
 
-#include <emvs_core/MapperEMVS.hpp>
-#include <emvs_core/Trajectory.hpp>
-
 #include <opencv2/core/core.hpp>
 #include <opencv2/imgproc/imgproc.hpp>
 #include <opencv2/calib3d/calib3d.hpp>
@@ -54,8 +51,6 @@ enum eMVStereoMode
   EM_PLUS_ESTIMATION,        //2 (GTS [26] + nonliear opt.)
   BM_PLUS_ESTIMATION,        //3 (this one is ESVO's mapping method, namely BM + nonliear opt.)
   PURE_SEMI_GLOBAL_MATCHING, //4 (this one implements SGM [45])
-  PURE_EMVS,                 //5 (this one implements EMVS [33])
-  PURE_EMVS_PLUS_ESTIMATION  //6 (this one implements EMVS [33] + nonliear opt.)
 };
 
 class esvo_MVStereo
@@ -250,34 +245,6 @@ class esvo_MVStereo
   size_t TotalNumFusion_;
 
   std::string resultPath_;
-
-  // EMVS_Mapping
-  void insertKeyframe();
-  void publishDSIResults(const ros::Time &t, const cv::Mat &semiDenseMask,
-                         const cv::Mat &depthMap, const cv::Mat &confidenceMap,
-                         const cv::Mat &varianceMap);
-
-  double MIN_PARALLEX_;
-  EMVS::ShapeDSI emvs_dsi_shape_;
-  EMVS::OptionsDepthMap emvs_opts_depth_map_;
-  EMVS::OptionsPointCloud emvs_opts_pc_;
-  EMVS::MapperEMVS emvs_mapper_;
-
-  std::map<ros::Time, Eigen::Matrix4d> mAllPoses_; // save the historical poses for mapping
-  std::vector<std::pair<ros::Time, Eigen::Matrix4d>> mVirtualPoses_;
-  EMVS::LinearTrajectory trajectory_;
-  bool isKeyframe_;
-  Eigen::Matrix4d T_w_keyframe_, T_w_frame_;
-  // pcl::PointCloud<pcl::PointXYZI>::Ptr emvs_pc_, pc_map_;
-
-  double meanDepth_;
-  double KEYFRAME_LINEAR_DIS_, KEYFRAME_ORIENTATION_DIS_, KEYFRAME_MEANDEPTH_DIS_;
-  image_transport::Publisher depthMap_pub_, confidenceMap_pub_, semiDenseMask_pub_, varianceMap_pub_;
-  int EMVS_Keyframe_event_;
-
-  bool SAVE_RESULT_;
-
-  Eigen::Matrix4d T_world_map_;
 };
 
 }

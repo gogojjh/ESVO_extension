@@ -45,6 +45,7 @@ namespace esvo_core
 		resultPath_ = tools::param(pnh_, "PATH_TO_SAVE_TRAJECTORY", std::string());
 		strDataset_ = tools::param(pnh_, "DATASET_NAME", std::string("rpg"));
 		strSequence_ = tools::param(pnh_, "SEQUENCE_NAME", std::string("shapes_poster"));
+		strRep_ = tools::param(pnh_, "REPRESENTATION_NAME", std::string("TS"));
 
 		// online data callbacks
 		events_left_sub_ = nh_.subscribe<dvs_msgs::EventArray>("events_left", 0, &esvo_MonoTracking::eventsCallback, this);
@@ -199,7 +200,7 @@ namespace esvo_core
 				LOG(INFO) << "------------------------------------------------------------";
 				LOG(INFO) << "------------------------------------------------------------";
 #endif
-				if (bSaveTrajectory_ && (cur_.t_.toSec() - last_save_trajectory_timestamp_ > 1.0))
+				if (bSaveTrajectory_ && (cur_.t_.toSec() - last_save_trajectory_timestamp_ > 0.5))
 				{
 					last_save_trajectory_timestamp_ = cur_.t_.toSec();
 					struct stat st;
@@ -212,8 +213,8 @@ namespace esvo_core
 #ifdef ESVO_CORE_MONO_TRACKING_LOG
 					LOG(INFO) << "pose size: " << lPose_.size() << ", refPCMap_buf size(): " << refPCMap_buf_.size() << ", TS_buf.size(): " << TS_buf_.size();
 #endif
-					saveTrajectory(resultPath_ + strDataset_ + "/" + strSequence_ + "_result.txt", lTimestamp_, lPose_);
-					saveTrajectory(resultPath_ + strDataset_ + "/" + strSequence_ + "_result_gt.txt", lTimestamp_GT_, lPose_GT_);
+					saveTrajectory(resultPath_ + strDataset_ + "/" + strSequence_ + "_" + strRep_ + "_traj_estimate.txt", lTimestamp_, lPose_);
+					saveTrajectory(resultPath_ + strDataset_ + "/" + strSequence_ + "_" + strRep_ + "_traj_gt.txt", lTimestamp_GT_, lPose_GT_);
 				}
 			}
 			r.sleep();

@@ -19,7 +19,6 @@
 #include <esvo_core/core/RegProblemSolverLM.h>
 #include <esvo_core/tools/utils.h>
 #include <esvo_core/tools/Visualization.h>
-#include <initial/InitialMotionEstimator.h>
 
 #include <opencv2/core/core.hpp>
 #include <opencv2/imgproc/imgproc.hpp>
@@ -33,8 +32,6 @@
 
 #include <pcl/point_types.h>
 #include <pcl_ros/point_cloud.h>
-
-// #define ESVO_TRACKING_MC
 
 namespace esvo_core
 {
@@ -66,8 +63,7 @@ namespace esvo_core
     void publishPose(const ros::Time &t, Transformation &tr);
     void publishPath(const ros::Time &t, Transformation &tr);
     void saveTrajectory(const std::string &resultDir);
-    void publishTimeSurface(const ros::Time &t);
-    void publishMCImage(const ros::Time &t);
+    // void publishTimeSurface(const ros::Time &t);
 
     // utils
     void reset();
@@ -146,10 +142,6 @@ namespace esvo_core
     std::string ESVO_System_Status_;
     RegProblemConfig::Ptr rpConfigPtr_;
     RegProblemSolverLM rpSolver_;
-
-    InitialMotionEstimator iniMotionEstimator_;
-    std::vector<dvs_msgs::Event *> vALLEventsPtr_left_;
-    cv::Mat MCImage_;
   };
 } // namespace esvo_core
 

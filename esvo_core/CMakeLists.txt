@@ -12,7 +12,7 @@ catkin_simple(ALL_DEPS_REQUIRED)
 find_package(OpenCV REQUIRED)
 find_package(yaml-cpp REQUIRED)
 find_package(PkgConfig REQUIRED)
-pkg_check_modules(gsl REQUIRED gsl)
+# pkg_check_modules(gsl REQUIRED gsl)
 
 ###########
 ## Build ##
@@ -22,7 +22,7 @@ pkg_check_modules(gsl REQUIRED gsl)
 ## Your package locations should be listed before other locations
 include_directories(include)
 
-#set(HEADERS
+# set(HEADERS
 #  include/esvo_core/core/DepthFusion.h
 #  include/esvo_core/core/DepthRegularization.h
 #  include/esvo_core/core/DepthProblem.h
@@ -45,7 +45,7 @@ include_directories(include)
 #  include/esvo_core/tools/cayley.h
 #  include/esvo_core/tools/params_helper.h)
 
-#set(SOURCES
+# set(SOURCES
 #  src/core/DepthFusion.cpp
 #  src/core/DepthRegularization.cpp
 #  src/core/DepthProblem.cpp
@@ -60,7 +60,7 @@ include_directories(include)
 #  src/tools/sobel.cpp
 #  src/tools/cayley.cpp)
 
-#cs_add_library(${PROJECT_NAME}_LIB ${SOURCES} ${HEADERS})
+# cs_add_library(${PROJECT_NAME}_LIB ${SOURCES} ${HEADERS})
 
 # Node esvo_Mapping
 #cs_add_executable(esvo_Mapping src/esvo_MappingNode.cpp
@@ -74,75 +74,15 @@ include_directories(include)
 #target_link_libraries(esvo_Tracking ${PROJECT_NAME}_LIB
 #    ${catkin_LIBRARIES} ${OpenCV_LIBRARIES} yaml-cpp)
 
-###############
-## Estimator ##
-###############
-
-############################################
-# set(HEADERS
-#   include/esvo_core/core/DepthFusion.h
-#   include/esvo_core/core/DepthRegularization.h
-#   include/esvo_core/core/DepthProblem.h
-#   include/esvo_core/core/DepthProblemSolver.h
-#   include/esvo_core/core/EventBM.h
-#   include/esvo_core/core/RegProblemLM.h
-#   include/esvo_core/core/RegProblemSolverLM.h
-#   include/esvo_core/core/EventMatcher.h
-#   include/esvo_core/optimization/OptimizationFunctor.h
-#   include/esvo_core/container/CameraSystem.h
-#   include/esvo_core/container/DepthPoint.h
-#   include/esvo_core/container/EventMatchPair.h
-#   include/esvo_core/container/SmartGrid.h
-#   include/esvo_core/container/DepthMap.h
-#   include/esvo_core/container/ResidualItem.h
-#   include/esvo_core/container/TimeSurfaceObservation.h
-#   include/esvo_core/tools/Visualization.h
-#   include/esvo_core/tools/utils.h
-#   include/esvo_core/tools/TicToc.h
-#   include/esvo_core/tools/sobel.h
-#   include/esvo_core/tools/cayley.h
-#   include/esvo_core/tools/params_helper.h)
-
-# set(SOURCES
-#   src/core/DepthFusion.cpp
-#   src/core/DepthRegularization.cpp
-#   src/core/DepthProblem.cpp
-#   src/core/DepthProblemSolver.cpp
-#   src/core/EventBM.cpp
-#   src/core/RegProblemLM.cpp
-#   src/core/RegProblemSolverLM.cpp
-#   src/core/EventMatcher.cpp
-#   src/container/CameraSystem.cpp
-#   src/container/DepthPoint.cpp
-#   src/container/ResidualItem.cpp
-#   src/tools/Visualization.cpp
-#   src/tools/sobel.cpp
-#   src/tools/cayley.cpp)
-
-# cs_add_library(${PROJECT_NAME}_LIB ${SOURCES} ${HEADERS})
-
-# Node esvo_Mapping
-#cs_add_executable(estimator src/estimator_node.cpp
-#    src/estimator.cpp include/esvo_core/estimator.h)
-#target_link_libraries(estimator ${PROJECT_NAME}_LIB emvs_lib
-#    ${catkin_LIBRARIES} ${OpenCV_LIBRARIES} yaml-cpp)
-
-# Node esvo_Tracking
-#cs_add_executable(esvo_Tracking src/esvo_TrackingNode.cpp
-#    src/esvo_Tracking.cpp include/esvo_core/esvo_Tracking.h)
-#target_link_libraries(esvo_Tracking ${PROJECT_NAME}_LIB
-#    ${catkin_LIBRARIES} ${OpenCV_LIBRARIES} yaml-cpp)
-
 # Node esvo_MVS (newly added in branch "mvs")
-# cs_add_executable(esvo_MVStereo
-#     src/esvo_MVStereoNode.cpp
-#     src/esvo_MVStereo.cpp
-#     include/esvo_core/esvo_MVStereo.h)
-# target_link_libraries(esvo_MVStereo ${PROJECT_NAME}_LIB emvs_lib
+# cs_add_executable(esvo_MVStereo src/esvo_MVStereoNode.cpp
+#     src/esvo_MVStereo.cpp include/esvo_core/esvo_MVStereo.h)
+# target_link_libraries(esvo_MVStereo ${PROJECT_NAME}_LIB 
 #     ${catkin_LIBRARIES} ${OpenCV_LIBRARIES} yaml-cpp)
 
-
-############################################
+###############
+### Develop ###
+###############
 set(HEADERS
   include/esvo_core/core/DepthMonoFusion.h
   include/esvo_core/core/DepthMonoRegularization.h
@@ -182,25 +122,31 @@ cs_add_library(${PROJECT_NAME}_mono_LIB ${SOURCES} ${HEADERS})
 #    add_definitions(-DUSE_INVERSE_DEPTH)
 #endif(DEFINE_USE_INVERSE_DEPTH)
 
-cs_add_library(mc_lib src/initial/InitialMotionEstimator.cpp)
+# cs_add_library(mc_lib src/initial/InitialMotionEstimator.cpp)
 cs_add_library(emvs_lib src/emvs_core/MapperEMVS.cpp src/emvs_core/MedianFilter.cpp)
-# cs_add_library(initial_lib src/initial/MonoInitializer.cpp src/initial/ModelSelector.cpp src/initial/InitialMotionEstimator.cpp)
-# cs_add_library(initial_lib src/initial/InitialMotionEstimator.cpp)
 
 # Node esvo_MonoTracking
 cs_add_executable(esvo_MonoTracking src/esvo_MonoTrackingNode.cpp
     src/esvo_MonoTracking.cpp include/esvo_core/esvo_MonoTracking.h)
-target_link_libraries(esvo_MonoTracking ${PROJECT_NAME}_mono_LIB mc_lib
-    ${catkin_LIBRARIES} ${OpenCV_LIBRARIES} ${gsl_LIBRARIES} yaml-cpp)
+target_link_libraries(esvo_MonoTracking ${PROJECT_NAME}_mono_LIB 
+    ${catkin_LIBRARIES} ${OpenCV_LIBRARIES} yaml-cpp)
 
 cs_add_executable(esvo_MonoMapping src/esvo_MonoMappingNode.cpp
     src/esvo_MonoMapping.cpp include/esvo_core/esvo_MonoMapping.h)
-target_link_libraries(esvo_MonoMapping ${PROJECT_NAME}_mono_LIB emvs_lib mc_lib
-    ${catkin_LIBRARIES} ${OpenCV_LIBRARIES} ${gsl_LIBRARIES} yaml-cpp)
+target_link_libraries(esvo_MonoMapping ${PROJECT_NAME}_mono_LIB emvs_lib 
+    ${catkin_LIBRARIES} ${OpenCV_LIBRARIES} yaml-cpp)
 
 # Node esvo_MVSMono (newly added in branch "mvs")
 cs_add_executable(esvo_MVSMono src/esvo_MVSMonoNode.cpp 
   src/esvo_MVSMono.cpp include/esvo_core/esvo_MVSMono.h)
-target_link_libraries(esvo_MVSMono ${PROJECT_NAME}_mono_LIB emvs_lib mc_lib
-    ${catkin_LIBRARIES} ${OpenCV_LIBRARIES} ${gsl_LIBRARIES} yaml-cpp)
+target_link_libraries(esvo_MVSMono ${PROJECT_NAME}_mono_LIB emvs_lib 
+    ${catkin_LIBRARIES} ${OpenCV_LIBRARIES} yaml-cpp)
 
+#####################
+### Tool programs ###
+#####################
+cs_add_executable(saveMap src/saveMap.cpp)
+target_link_libraries(saveMap ${catkin_LIBARIES})
+
+cs_add_executable(publishMap src/publishMap.cpp)
+target_link_libraries(publishMap ${catkin_LIBARIES})
