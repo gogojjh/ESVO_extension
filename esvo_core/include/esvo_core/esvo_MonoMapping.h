@@ -59,7 +59,6 @@ namespace esvo_core
         void MappingAtTime(const ros::Time &t);
         bool InitializationAtTime(const ros::Time &t);
         bool dataTransferring();
-
         void propagatePoints(const std::vector<DepthPoint> &vdp,
                              const Eigen::Matrix4d &T_world_frame,
                              PointCloud::Ptr &pc_ptr);

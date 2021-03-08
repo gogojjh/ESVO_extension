@@ -79,6 +79,9 @@ namespace esvo_core
 		bool InitializationAtTime(const ros::Time &t);
 		void MappingAtTime(const ros::Time &t);
 		bool dataTransferring();
+		void propagatePoints(const std::vector<DepthPoint> &vdp,
+							 const Eigen::Matrix4d &T_world_frame,
+							 PointCloud::Ptr &pc_ptr);
 
 		// callback functions
 		void stampedPoseCallback(const geometry_msgs::PoseStampedConstPtr &ps_msg);
@@ -100,6 +103,8 @@ namespace esvo_core
 			DepthMap::Ptr &depthMapPtr,
 			Eigen::Matrix4d &T,
 			ros::Time &t);
+		void publishEMVSPointCloud(
+			const ros::Time &t);
 		void publishImage(
 			const cv::Mat &image,
 			const ros::Time &t,

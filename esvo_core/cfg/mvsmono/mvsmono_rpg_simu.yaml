@@ -13,7 +13,7 @@ SmoothTimeSurface: False
 Regularization: True
 PROCESS_EVENT_NUM: 20000
 TS_HISTORY_LENGTH: 100
-mapping_rate_hz: 10
+mapping_rate_hz: 20
 # DepthProblemConfig
 patch_size_X: 15
 patch_size_Y: 7
@@ -52,8 +52,10 @@ MVSMonoMode: 5
 #  PURE_EMVS_PLUS_ESTIMATION     //6 [33] + nonlinear opt.
 
 SAVE_RESULT: False
-PATH_TO_SAVE_RESULT: "/home/jjiao/ESVO_result/rpg_simu/" # CHANGE THIS PATH
+PATH_TO_SAVE_RESULT: "/home/jjiao/ESVO_result/" # CHANGE THIS PATH
 Dataset_Name: "rpg_simu"
+Sequence_Name: "checkboard_planar"
+EVENTS_SAVE_MAP: 5000000
 
 # EMVS Mapping
 opts_dim_x: 0
@@ -69,9 +71,7 @@ opts_mapper_parallex: 5.0
 opts_mapper_PatchSize_X: 3
 opts_mapper_PatchSize_Y: 3
 opts_mapper_TS_score: 1.0
-KEYFRAME_LINEAR_DIS: 0.15 # m
-KEYFRAME_ORIENTATION_DIS: 5 # degree
 KEYFRAME_MEANDEPTH_DIS: 1.0 # percentage
 EMVS_Init_event: 100000 #200000
-EMVS_Keyframe_event: 200000 #200000
+EMVS_Keyframe_event: 4000000 #200000
 stdVar_init: 0.01

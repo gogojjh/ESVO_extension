@@ -12,7 +12,7 @@
   </node>
 
   <!-- synchronize both renderings using the rosbag timer -->
-  <node name="global_timer" pkg="rostopic" type="rostopic" args="pub -s -r 100 /sync std_msgs/Time 'now' ">
+  <node name="global_timer" pkg="rostopic" type="rostopic" args="pub -s -r 50 /sync std_msgs/Time 'now' ">
   </node>
 
   <!-- Calibration folder -->
@@ -32,21 +32,12 @@
     <rosparam command="load" file="$(find esvo_core)/cfg/mvsmono/mvsmono_rpg_simu.yaml" />
   </node>
 
-  <!-- Tracking node -->
-  <!-- <node name="esvo_MonoTracking" pkg="esvo_core" type="esvo_MonoTracking" output="screen" required="true">
-    <remap from="time_surface_left" to="/TS_left" />
-    <remap from="time_surface_right" to="/TS_right" />
-    <remap from="stamped_pose" to="/cam0/pose" />
-    <remap from="events_left" to="/cam0/events" />
+  <node name="saveMap" pkg="esvo_core" type="saveMap" output="screen" required="true" >
+    <remap from="events" to="/cam0/events" />  
     <remap from="pointcloud" to="/esvo_mvsmono/pointcloud_local" />
-
-    <rosparam param="dvs_frame_id">"cam0"</rosparam>
-    <rosparam param="world_frame_id">"map"</rosparam>
-    <rosparam param="calibInfoDir" subst_value="true">$(arg calibInfoDirStr)</rosparam>
-
-    <rosparam command="load" file="$(find esvo_core)/cfg/tracking/tracking_rpg_simu.yaml" />
-  </node> -->
-
+    <rosparam command="load" file="$(find esvo_core)/cfg/mvsmono/mvsmono_rpg_simu.yaml" />    
+  </node>
+  
   <!-- Visualization -->
   <!-- <node pkg="rqt_gui" type="rqt_gui" name="rqt_gui"
         args="-perspective-file $(find esvo_core)/esvo_mvsmono.perspective" />

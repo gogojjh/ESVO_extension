@@ -34,6 +34,7 @@ namespace EMVS
 		std::cout << "K_virtual_: " << std::endl
 				  << K_virtual_ << std::endl;
 		min_Parallax_ = opts_mapper.min_parallex_;
+		accu_event_number_ = 0;
 	}
 
 	void MapperEMVS::initializeDSI(const Eigen::Matrix4d &T_w_rv)

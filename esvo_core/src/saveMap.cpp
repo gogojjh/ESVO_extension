@@ -42,8 +42,8 @@ void refMapCallback(const sensor_msgs::PointCloud2::ConstPtr &msg)
     if (accumulateEvent > N_accumEvents)
     {
         std::string pcdName = resultPath + strDataset + "/" + strSequence + ".pcd";
+        std::cout << "Saving point cloud: " << PC_ptr->size() << " to " << pcdName << std::endl;
         pcl::io::savePCDFileASCII(pcdName, *PC_ptr);
-        std::cout << "Saving point cloud: " << PC_ptr->size() << std::endl;
         ros::shutdown();
     }
 }
@@ -54,12 +54,12 @@ int main(int argc, char **argv)
     ros::NodeHandle nh;
     ros::NodeHandle nh_private("~");
 
-    N_accumEvents = param(nh_private, "accumulate_events", 4e5);
-    resultPath = param(nh_private, "PATH_TO_SAVE_TRAJECTORY", std::string("~/ESVO_result"));
-    strDataset = param(nh_private, "DATASET_NAME", std::string("rpg"));
-    strSequence = param(nh_private, "SEQUENCE_NAME", std::string("shapes_poster"));
+    N_accumEvents = param(nh_private, "EVENTS_SAVE_MAP", 5e6);
+    resultPath = param(nh_private, "PATH_TO_SAVE_RESULT", std::string("/tmp/"));
+    strDataset = param(nh_private, "Dataset_Name", std::string("rpg"));
+    strSequence = param(nh_private, "Sequence_Name", std::string("shapes_poster"));
 
-    ros::Subscriber events_left_sub = nh.subscribe<dvs_msgs::EventArray>("events_left", 0, eventsCallback);
+    ros::Subscriber events_sub = nh.subscribe<dvs_msgs::EventArray>("events", 0, eventsCallback);
     ros::Subscriber map_sub = nh.subscribe("pointcloud", 0, refMapCallback);
     PC_ptr.reset(new pcl::PointCloud<pcl::PointXYZ>());
     accumulateEvent = 0;
