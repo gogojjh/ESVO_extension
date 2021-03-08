@@ -73,7 +73,10 @@ Visualization Manager:
       Show Names: true
       Tree:
         map:
-          {}
+          body:
+            {}
+          cam0:
+            {}
       Update Interval: 0
       Value: true
     - Alpha: 1
@@ -151,9 +154,9 @@ Visualization Manager:
       Enabled: true
       Invert Rainbow: true
       Max Color: 255; 255; 255
-      Max Intensity: 1.1049723625183105
+      Max Intensity: 0.9896268248558044
       Min Color: 0; 0; 0
-      Min Intensity: 0.5830903649330139
+      Min Intensity: 0.20888903737068176
       Name: LocalMap_mvs
       Position Transformer: XYZ
       Queue Size: 10
@@ -224,25 +227,25 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz/Orbit
-      Distance: 2.418714761734009
+      Distance: 2.2205851078033447
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.05999999865889549
         Stereo Focal Distance: 1
         Swap Stereo Eyes: false
         Value: false
       Focal Point:
-        X: 0.004997830837965012
-        Y: 0.1407829225063324
-        Z: 0.6855533123016357
+        X: 0.13636231422424316
+        Y: 0.3218800723552704
+        Z: 0.5826444625854492
       Focal Shape Fixed Size: true
       Focal Shape Size: 0.05000000074505806
       Invert Z Axis: false
       Name: Current View
       Near Clip Distance: 0.009999999776482582
-      Pitch: -1.2897968292236328
+      Pitch: -1.0197945833206177
       Target Frame: <Fixed Frame>
       Value: Orbit (rviz)
-      Yaw: 4.683656692504883
+      Yaw: 4.628654956817627
     Saved: ~
 Window Geometry:
   Displays:

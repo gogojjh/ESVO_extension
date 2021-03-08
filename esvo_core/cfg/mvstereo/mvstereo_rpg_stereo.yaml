@@ -8,7 +8,7 @@ fusion_radius: 0
 FUSION_STRATEGY: "CONST_FRAMES" #"CONST_FRAMES" or "CONST_POINTS"
 maxNumFusionFrames: 40
 maxNumFusionPoints: 5000
-Denoising: False
+Denoising: True
 SmoothTimeSurface: False
 Regularization: True
 PROCESS_EVENT_NUM: 10000
@@ -37,7 +37,7 @@ BM_step: 1
 BM_ZNCC_Threshold: 0.1
 BM_bUpDownConfiguration: False
 # MVStereo Mode
-MVStereoMode: 5
+MVStereoMode: 3
 #  PURE_EVENT_MATCHING           //0 EM [26]
 #  PURE_BLOCK_MATCHING           //1 BM
 #  EM_PLUS_ESTIMATION            //2 EM [26] + nonlinear opt.
@@ -45,4 +45,7 @@ MVStereoMode: 5
 #  SEMI_GLOBAL_MATCHING          //4 [45]
 
 SAVE_RESULT: false
-PATH_TO_SAVE_RESULT: "/home/jjiao/ESVO_result/rpg/" # CHANGE THIS PATH
+PATH_TO_SAVE_RESULT: "/home/jjiao/ESVO_result/" # CHANGE THIS PATH
+Dataset_Name: "rpg_stereo" # rpg_desk, rpg_boxes, rpg_bin
+Sequence_Name: "rpg_boxes"
+EVENTS_SAVE_MAP: 5000000

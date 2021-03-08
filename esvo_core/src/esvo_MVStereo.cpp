@@ -144,7 +144,7 @@ namespace esvo_core
     stdVarMap_pub_ = it_.advertise("Standard_Variance_Map", 1);
     ageMap_pub_ = it_.advertise("Age_Map", 1);
     costMap_pub_ = it_.advertise("Cost_Map", 1);
-    pc_pub_ = nh_.advertise<PointCloud>("/esvo_mvstereo/pointcloud_world", 1);
+    pc_pub_ = nh_.advertise<PointCloud>("/esvo_mvstereo/pointcloud_local", 1);
     pose_pub_ = nh_.advertise<geometry_msgs::PoseStamped>("/esvo_mvstereo/pose_pub", 1);
 
     TotalNumFusion_ = 0;
@@ -775,19 +775,19 @@ bool esvo_MVStereo::getPoseAt(const ros::Time &t,
     tf::transformTFToKindr(st, &Tr);
 
     // HARDCODED: The GT pose of rpg dataset is the pose of stereo rig, namely that of the marker.
-    if(std::strcmp(source_frame.c_str(), "marker") == 0)
-    {
-      Transformation ::TransformationMatrix T_marker_cam;
-      T_marker_cam << 5.363262328777285e-01, -1.748374625145743e-02, -8.438296573030597e-01, -7.009849865398374e-02,
-          8.433577587813513e-01, -2.821937531845164e-02, 5.366109927684415e-01, 1.881333563905305e-02,
-          -3.319431623758162e-02, -9.994488408486204e-01, -3.897382049768972e-04, -6.966829200678797e-02,
-          0, 0, 0, 1;
-      Transformation::TransformationMatrix T_world_marker =
-        Tr.getTransformationMatrix();
-      Transformation::TransformationMatrix T_world_cam =
-        T_world_marker * T_marker_cam;
-      Tr = Transformation(T_world_cam);
-    }
+    // if (std::strcmp(source_frame.c_str(), "marker") == 0)
+    // {
+      // Transformation ::TransformationMatrix T_marker_cam;
+      // T_marker_cam << 5.363262328777285e-01, -1.748374625145743e-02, -8.438296573030597e-01, -7.009849865398374e-02,
+      //     8.433577587813513e-01, -2.821937531845164e-02, 5.366109927684415e-01, 1.881333563905305e-02,
+      //     -3.319431623758162e-02, -9.994488408486204e-01, -3.897382049768972e-04, -6.966829200678797e-02,
+      //     0, 0, 0, 1;
+      // Transformation::TransformationMatrix T_world_marker =
+      //   Tr.getTransformationMatrix();
+      // Transformation::TransformationMatrix T_world_cam =
+      //   T_world_marker * T_marker_cam;
+      // Tr = Transformation(T_world_cam);
+    // }
     return true;
   }
 }

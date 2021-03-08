@@ -32,20 +32,11 @@
     <rosparam command="load" file="$(find esvo_core)/cfg/mvsmono/mvsmono_rpg_mono.yaml" />
   </node>
 
-  <!-- Tracking node -->
-  <!-- <node name="esvo_MonoTracking" pkg="esvo_core" type="esvo_MonoTracking" output="screen" required="true">
-    <remap from="time_surface_left" to="/TS_left" />
-    <remap from="time_surface_right" to="/TS_right" />
-    <remap from="stamped_pose" to="/optitrack/davis_stereo" />
-    <remap from="events_left" to="/davis/left/events" />
-    <remap from="pointcloud" to="/esvo_mvsmono/pointcloud_world" />
-
-    <rosparam param="dvs_frame_id">"dvs"</rosparam>
-    <rosparam param="world_frame_id">"map"</rosparam>
-    <rosparam param="calibInfoDir" subst_value="true">$(arg calibInfoDirStr)</rosparam>
-
-    <rosparam command="load" file="$(find esvo_core)/cfg/tracking/tracking_rpg.yaml" />
-  </node> -->
+  <node name="saveMap" pkg="esvo_core" type="saveMap" output="screen" required="true" >
+    <remap from="events" to="/dvs/events" />  
+    <remap from="pointcloud" to="/esvo_mvsmono/pointcloud_local" />
+    <rosparam command="load" file="$(find esvo_core)/cfg/mvsmono/mvsmono_rpg_mono.yaml" />    
+  </node>
 
   <!-- Visualization -->
   <!-- <node pkg="rqt_gui" type="rqt_gui" name="rqt_gui"

@@ -7,5 +7,5 @@
   </node>
 
   <!-- Publish stereo camera calibration -->
-  <include file="$(find esvo_time_surface)/launch/rosbag_launcher/rpg/rpg_calib_info.launch" />
+  <include file="$(find esvo_time_surface)/launch/rosbag_launcher/rpg_stereo/rpg_calib_info.launch" />
 </launch>

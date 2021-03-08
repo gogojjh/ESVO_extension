@@ -54,7 +54,7 @@ MVSMonoMode: 5
 SAVE_RESULT: False
 PATH_TO_SAVE_RESULT: "/home/jjiao/ESVO_result/" # CHANGE THIS PATH
 Dataset_Name: "rpg_simu"
-Sequence_Name: "checkboard_planar"
+Sequence_Name: "checkerboard_planar"
 EVENTS_SAVE_MAP: 5000000
 
 # EMVS Mapping
