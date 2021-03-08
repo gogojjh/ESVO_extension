@@ -1,5 +1,5 @@
 invDepth_min_range: 0.2
-invDepth_max_range: 2
+invDepth_max_range: 2.0
 TS_HISTORY_LENGTH: 100
 REF_HISTORY_LENGTH: 10
 tracking_rate_hz: 100
@@ -16,6 +16,6 @@ RegProblemType: 1 #( 0 numerical; 1 analytical)
 SAVE_TRAJECTORY: True
 PATH_TO_SAVE_TRAJECTORY: "/home/jjiao/ESVO_result/" # CHANGE THIS PATH
 Dataset_Name: "rpg_stereo"
-Sequence_Name: "rpg_desk" # rpg_desk, rpg_bin, rpg_boxes
+Sequence_Name: "rpg_boxes" # rpg_desk, rpg_bin, rpg_boxes
 Representation_Name: "TS" # EM
 VISUALIZE_TRAJECTORY: True

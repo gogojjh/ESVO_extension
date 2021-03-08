@@ -8,7 +8,7 @@
 		<remap from="camera_info" to="/cam0/camera_info" />
 		<remap from="time_surface" to="/TS_left" />
 
-	<rosparam command="load" file="$(find esvo_core)/cfg/time_surface/ts_parameters.yaml" />
+		<rosparam command="load" file="$(find esvo_core)/cfg/time_surface/ts_parameters.yaml" />
 	</node>
 
 	<!-- Synchronize both Time Surfaces using the rosbag timer -->
@@ -19,24 +19,28 @@
 	<!-- Calibration folder -->
 	<arg name="calibInfoDirStr" default="$(find esvo_core)/calib/rpg_simu"/>
 
-	<!-- launch-prefix="gdb -ex run -\-args" -->
-	<node name="publishMap" pkg="esvo_core" type="publishMap" output="screen" required="true">
-	</node>
-
 	<!-- Tracking node -->
-	<node name="esvo_MonoTracking" pkg="esvo_core" type="esvo_MonoTracking" output="screen" required="true">
+	<node name="Tracking" pkg="esvo_core" type="Tracking" output="screen" required="true">
 		<remap from="time_surface_left" to="/TS_left" />
 		<remap from="time_surface_right" to="/TS_right" />
-		<remap from="stamped_pose" to="/esvo_tracking/pose_pub" />
-		<remap from="gt_pose" to="/optitrack/davis_stereo" />
-		<remap from="events_left" to="/davis/left/events" />
-		<remap from="pointcloud" to="/esvo_mapping/pointcloud_local" />
+		<remap from="stamped_pose" to="/tracking/pose_pub" />
+		<remap from="gt_pose" to="/cam0/pose" />
+		<remap from="events_left" to="/cam0/events" />
+		<remap from="pointcloud" to="/publishMap/pointcloud_local" />
 
 		<rosparam param="dvs_frame_id">"dvs"</rosparam>
 		<rosparam param="world_frame_id">"map"</rosparam>
 		<rosparam param="calibInfoDir" subst_value="true">$(arg calibInfoDirStr)</rosparam>
 
-		<rosparam command="load" file="$(find esvo_core)/cfg/tracking_cvprw/tracking_rpg_simu.yaml" />
+		<rosparam command="load" file="$(find esvo_core)/cfg/tracking/tracking_rpg_simu.yaml" />
+	</node>
+
+	<node name="publishMap" pkg="esvo_core" type="publishMap" output="screen" required="true">
+		<remap from="time_surface_left" to="/TS_left" />
+		<remap from="events_left" to="/cam0/events" />
+		<rosparam param="dvs_frame_id">"dvs"</rosparam>
+		<rosparam param="world_frame_id">"map"</rosparam>
+		<rosparam command="load" file="$(find esvo_core)/cfg/tracking/tracking_rpg_simu.yaml" />
 	</node>
 
 	<!-- Visualization -->

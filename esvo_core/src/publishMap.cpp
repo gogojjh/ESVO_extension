@@ -18,6 +18,7 @@ std::string strSequence;
 size_t mapping_rate_hz;
 std::string world_frame_id, dvs_frame_id;
 std::string strRep;
+size_t TS_start, Event_start;
 
 ros::Time TS_latest_timestamp, EM_latest_timestamp;
 size_t TS_number = 0, event_number = 0;
@@ -82,6 +83,8 @@ int main(int argc, char **argv)
     world_frame_id = param(nh_private, "world_frame_id", std::string("map"));
     dvs_frame_id = param(nh_private, "dvs_frame_id", std::string("dvs"));
     strRep = param(nh_private, "Representation_Name", std::string("TS"));
+    TS_start = param(nh_private, "TS_start", 20);
+    Event_start = param(nh_private, "Event_start", 10000);
 
     ros::Subscriber TS_left_sub_ = nh.subscribe("time_surface_left", 10, timeSurfaceCallback);
     ros::Subscriber events_left_sub = nh.subscribe("events_left", 10, eventsCallback);
@@ -101,11 +104,11 @@ int main(int argc, char **argv)
     {
         ros::spinOnce();
         r.sleep();
-        if (!strRep.compare("TS") && TS_buf.size() < 50) // tracking initialize
+        if (!strRep.compare("TS") && TS_buf.size() < TS_start) // tracking initialize
         {
             continue;
         }
-        else if (!strRep.compare("EM") && event_number < 10000)
+        else if (!strRep.compare("EM") && event_number < Event_start)
         {
             continue;
         }
