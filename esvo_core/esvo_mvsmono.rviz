@@ -6,7 +6,7 @@ Panels:
       Expanded:
         - /TF1/Frames1
       Splitter Ratio: 0.5
-    Tree Height: 986
+    Tree Height: 438
   - Class: rviz/Selection
     Name: Selection
   - Class: rviz/Tool Properties
@@ -56,10 +56,6 @@ Visualization Manager:
       Frame Timeout: 999
       Frames:
         All Enabled: false
-        body:
-          Value: false
-        cam0:
-          Value: true
         dvs:
           Value: true
         dvs_gt:
@@ -73,10 +69,7 @@ Visualization Manager:
       Show Names: true
       Tree:
         map:
-          body:
-            {}
-          cam0:
-            {}
+          {}
       Update Interval: 0
       Value: true
     - Alpha: 1
@@ -154,9 +147,9 @@ Visualization Manager:
       Enabled: true
       Invert Rainbow: true
       Max Color: 255; 255; 255
-      Max Intensity: 0.9896268248558044
+      Max Intensity: 2.0475966930389404
       Min Color: 0; 0; 0
-      Min Intensity: 0.20888903737068176
+      Min Intensity: 0.5037974715232849
       Name: LocalMap_mvs
       Position Transformer: XYZ
       Queue Size: 10
@@ -227,25 +220,25 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz/Orbit
-      Distance: 2.2205851078033447
+      Distance: 3.1268470287323
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.05999999865889549
         Stereo Focal Distance: 1
         Swap Stereo Eyes: false
         Value: false
       Focal Point:
-        X: 0.13636231422424316
-        Y: 0.3218800723552704
-        Z: 0.5826444625854492
+        X: 0.13116273283958435
+        Y: 0.23826265335083008
+        Z: 0.5902596712112427
       Focal Shape Fixed Size: true
       Focal Shape Size: 0.05000000074505806
       Invert Z Axis: false
       Name: Current View
       Near Clip Distance: 0.009999999776482582
-      Pitch: -1.0197945833206177
+      Pitch: -1.5697963237762451
       Target Frame: <Fixed Frame>
       Value: Orbit (rviz)
-      Yaw: 4.628654956817627
+      Yaw: 4.7086567878723145
     Saved: ~
 Window Geometry:
   Displays:

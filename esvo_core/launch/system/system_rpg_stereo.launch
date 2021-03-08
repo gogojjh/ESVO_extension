@@ -25,8 +25,11 @@
     <!-- Modify the rate according to the speed that the bag is played-->
 	</node>
 
+	<!-- Publish stereo camera calibration -->
+	<include file="$(find esvo_time_surface)/launch/rosbag_launcher/rpg_stereo/rpg_calib_info.launch" />
+
 	<!-- Calibration folder -->
-	<arg name="calibInfoDirStr" default="$(find esvo_core)/calib/rpg"/>
+	<arg name="calibInfoDirStr" default="$(find esvo_core)/calib/rpg_stereo"/>
 
 	<!-- Mapping node -->
 	<!-- launch-prefix="gdb -ex run -\-args" -->
@@ -41,11 +44,11 @@
 		<rosparam param="world_frame_id">"map"</rosparam>
 		<rosparam param="calibInfoDir" subst_value="true">$(arg calibInfoDirStr)</rosparam>
 
-		<rosparam command="load" file="$(find esvo_core)/cfg/mapping/mapping_rpg.yaml" />
+		<rosparam command="load" file="$(find esvo_core)/cfg/mapping/mapping_rpg_stereo.yaml" />
 	</node>
 
 	<!-- Tracking node -->
-	<node name="esvo_MonoTracking" pkg="esvo_core" type="esvo_MonoTracking" output="screen" required="true">
+	<node name="esvo_Tracking" pkg="esvo_core" type="esvo_Tracking" output="screen" required="true">
     <remap from="time_surface_left" to="/TS_left" />
     <remap from="time_surface_right" to="/TS_right" />
     <remap from="stamped_pose" to="/esvo_tracking/pose_pub" />
@@ -57,7 +60,7 @@
     <rosparam param="world_frame_id">"map"</rosparam>
   	<rosparam param="calibInfoDir" subst_value="true">$(arg calibInfoDirStr)</rosparam>
 
-    <rosparam command="load" file="$(find esvo_core)/cfg/tracking/tracking_rpg.yaml" />
+    <rosparam command="load" file="$(find esvo_core)/cfg/tracking/tracking_rpg_stereo.yaml" />
 	</node>
 
 	<!-- Visualization -->

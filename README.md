@@ -1,3 +1,9 @@
+# Additional Operation
+1. ```roslaunch esvo_core mvsmono_rpg_mono.launch```: Monocular Mapping given gt poses
+2. ```roslaunch esvo_core mvstereo_rpg_stereo.launch```: Stereo Mapping given gt poses
+3. ```roslaunch esvo_core tracking_rpg_stereo.launch```: Tracking from a known map
+
+
 # ESVO: Event-based Stereo Visual Odometry
 
 **ESVO** is a novel pipeline for real-time visual odometry using a stereo event-based camera. Both the proposed mapping and tracking methods leverage a unified event representation (Time Surfaces), thus, it could be regarded as a ''direct'', geometric method using raw event as input.

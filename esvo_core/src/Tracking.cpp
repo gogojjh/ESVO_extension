@@ -1,4 +1,4 @@
-#include <esvo_core/esvo_MonoTracking.h>
+#include <esvo_core/Tracking.h>
 #include <esvo_core/tools/TicToc.h>
 #include <esvo_core/tools/params_helper.h>
 #include <minkindr_conversions/kindr_tf.h>
@@ -7,7 +7,7 @@
 
 namespace esvo_core
 {
-	esvo_MonoTracking::esvo_MonoTracking(
+	Tracking::Tracking(
 		const ros::NodeHandle &nh,
 		const ros::NodeHandle &nh_private) : nh_(nh),
 											 pnh_(nh_private),
@@ -43,45 +43,45 @@ namespace esvo_core
 		bSaveTrajectory_ = tools::param(pnh_, "SAVE_TRAJECTORY", false);
 		bVisualizeTrajectory_ = tools::param(pnh_, "VISUALIZE_TRAJECTORY", true);
 		resultPath_ = tools::param(pnh_, "PATH_TO_SAVE_TRAJECTORY", std::string());
-		strDataset_ = tools::param(pnh_, "DATASET_NAME", std::string("rpg"));
-		strSequence_ = tools::param(pnh_, "SEQUENCE_NAME", std::string("shapes_poster"));
-		strRep_ = tools::param(pnh_, "REPRESENTATION_NAME", std::string("TS"));
+		strDataset_ = tools::param(pnh_, "Dataset_Name", std::string("rpg"));
+		strSequence_ = tools::param(pnh_, "Sequence_Name", std::string("shapes_poster"));
+		strRep_ = tools::param(pnh_, "Representation_Name", std::string("TS"));
 
 		// online data callbacks
-		events_left_sub_ = nh_.subscribe<dvs_msgs::EventArray>("events_left", 0, &esvo_MonoTracking::eventsCallback, this);
-		TS_left_sub_ = nh_.subscribe("time_surface_left", 10, &esvo_MonoTracking::timeSurfaceCallback, this);
-		map_sub_ = nh_.subscribe("pointcloud", 0, &esvo_MonoTracking::refMapCallback, this);				// local map in the ref view.
-		stampedPose_sub_ = nh_.subscribe("stamped_pose", 0, &esvo_MonoTracking::stampedPoseCallback, this); // for accessing the pose of the ref view.
-		gtPose_sub_ = nh_.subscribe("gt_pose", 0, &esvo_MonoTracking::gtPoseCallback, this); // for accessing the pose of the ref view.
+		events_left_sub_ = nh_.subscribe("events_left", 0, &Tracking::eventsCallback, this);
+		TS_left_sub_ = nh_.subscribe("time_surface_left", 10, &Tracking::timeSurfaceCallback, this);
+		map_sub_ = nh_.subscribe("pointcloud", 0, &Tracking::refMapCallback, this);				// local map in the ref view.
+		stampedPose_sub_ = nh_.subscribe("stamped_pose", 0, &Tracking::stampedPoseCallback, this); // for accessing the pose of the ref view.
+		gtPose_sub_ = nh_.subscribe("gt_pose", 0, &Tracking::gtPoseCallback, this); // for accessing the pose of the ref view.
 		// TF
 		tf_ = std::make_shared<tf::Transformer>(true, ros::Duration(100.0));
 
-		pose_pub_ = nh_.advertise<geometry_msgs::PoseStamped>("/esvo_MonoTracking/pose_pub", 1);
-		path_pub_ = nh_.advertise<nav_msgs::Path>("/esvo_MonoTracking/trajectory", 1);
+		pose_pub_ = nh_.advertise<geometry_msgs::PoseStamped>("/tracking/pose_pub", 1);
+		path_pub_ = nh_.advertise<nav_msgs::Path>("/tracking/trajectory", 1);
 		pose_gt_pub_ = nh_.advertise<geometry_msgs::PoseStamped>("/gt/pose_pub", 1);
 		path_gt_pub_ = nh_.advertise<nav_msgs::Path>("/gt/trajectory", 1);
-		time_surface_left_pub_ = it_.advertise("/esvo_MonoTracking/TS_left", 1);
 
 		/*** For Visualization and Test ***/
 		reprojMap_pub_left_ = it_.advertise("Reproj_Map_Left", 1);
 		rpSolver_.setRegPublisher(&reprojMap_pub_left_);
+		ref_.tr_.setIdentity();
 
 		/*** Tracker ***/
 		T_world_cur_.setIdentity();
 		T_world_map_.setIdentity();
-		std::thread TrackingThread(&esvo_MonoTracking::TrackingLoop, this);
+		std::thread TrackingThread(&Tracking::TrackingLoop, this);
 		TrackingThread.detach();
 
 		last_gt_timestamp_ = 0.0;
 		last_save_trajectory_timestamp_ = 0.0;
 	}
 
-	esvo_MonoTracking::~esvo_MonoTracking()
+	Tracking::~Tracking()
 	{
 		pose_pub_.shutdown();
 	}
 
-	void esvo_MonoTracking::TrackingLoop()
+	void Tracking::TrackingLoop()
 	{
 		ros::Rate r(tracking_rate_hz_);
 		while (true)
@@ -224,7 +224,7 @@ namespace esvo_core
 	/**
     * @brief reload the current point cloud
     **/
-	bool esvo_MonoTracking::refDataTransferring()
+	bool Tracking::refDataTransferring()
 	{
 		// load reference info
 		ref_.t_ = refPCMap_buf_.back().first;
@@ -256,7 +256,7 @@ namespace esvo_core
 	/**
     * @brief extract current events
     **/
-	bool esvo_MonoTracking::curDataTransferring()
+	bool Tracking::curDataTransferring()
 	{
 		// load current observation
 		auto ev_begin_it = EventBuffer_lower_bound(events_left_, cur_.t_);
@@ -269,7 +269,7 @@ namespace esvo_core
 		return true;
 	}
 
-	void esvo_MonoTracking::reset()
+	void Tracking::reset()
 	{
 		m_buf_.lock();
 		// clear all maintained data
@@ -285,7 +285,7 @@ namespace esvo_core
 	}
 
 	/********************** Callback functions *****************************/
-	void esvo_MonoTracking::refMapCallback(const sensor_msgs::PointCloud2::ConstPtr &msg)
+	void Tracking::refMapCallback(const sensor_msgs::PointCloud2::ConstPtr &msg)
 	{
 		m_buf_.lock();
 		PointCloud::Ptr PC_ptr(new PointCloud());
@@ -296,7 +296,7 @@ namespace esvo_core
 		m_buf_.unlock();
 	}
 
-	void esvo_MonoTracking::eventsCallback(const dvs_msgs::EventArray::ConstPtr &msg)
+	void Tracking::eventsCallback(const dvs_msgs::EventArray::ConstPtr &msg)
 	{
 		// std::lock_guard<std::mutex> lock(data_mutex_);
 		m_buf_.lock();
@@ -316,7 +316,7 @@ namespace esvo_core
 		m_buf_.unlock();
 	}
 
-	void esvo_MonoTracking::clearEventQueue()
+	void Tracking::clearEventQueue()
 	{
 		static constexpr size_t MAX_EVENT_QUEUE_LENGTH = 5000000;
 		if (events_left_.size() > MAX_EVENT_QUEUE_LENGTH)
@@ -330,7 +330,7 @@ namespace esvo_core
 		}
 	}
 
-	void esvo_MonoTracking::timeSurfaceCallback(const sensor_msgs::ImageConstPtr &time_surface_left)
+	void Tracking::timeSurfaceCallback(const sensor_msgs::ImageConstPtr &time_surface_left)
 	{
 		// std::lock_guard<std::mutex> lock(data_mutex_);
 		cv_bridge::CvImagePtr cv_ptr_left, cv_ptr_right;
@@ -354,7 +354,7 @@ namespace esvo_core
 		m_buf_.unlock();
 	}
 
-	void esvo_MonoTracking::stampedPoseCallback(const geometry_msgs::PoseStampedConstPtr &ps_msg)
+	void Tracking::stampedPoseCallback(const geometry_msgs::PoseStampedConstPtr &ps_msg)
 	{
 		m_buf_.lock();
 		// add pose to tf
@@ -377,7 +377,7 @@ namespace esvo_core
 		m_buf_.unlock();
 	}
 
-	void esvo_MonoTracking::gtPoseCallback(const geometry_msgs::PoseStampedConstPtr &ps_msg)
+	void Tracking::gtPoseCallback(const geometry_msgs::PoseStampedConstPtr &ps_msg)
 	{
 		// m_buf_.lock();
 		if (ps_msg->header.stamp.toSec() - last_gt_timestamp_ > 0.01)
@@ -492,13 +492,13 @@ namespace esvo_core
 		// m_buf_.unlock();
 	}
 
-	bool esvo_MonoTracking::getPoseAt(const ros::Time &t, esvo_core::Transformation &Tr,
-									  const std::string &source_frame)
+	bool Tracking::getPoseAt(const ros::Time &t, esvo_core::Transformation &Tr,
+							 const std::string &source_frame)
 	{
 		std::string *err_msg = new std::string();
 		if (!tf_->canTransform(world_frame_id_, source_frame, t, err_msg))
 		{
-			LOG(WARNING) << t.toNSec() << " : " << *err_msg;
+			LOG(WARNING) << t << " : " << *err_msg;
 			delete err_msg;
 			return false;
 		}
@@ -511,17 +511,7 @@ namespace esvo_core
 		}
 	}
 
-	/************ publish results *******************/
-	void esvo_MonoTracking::publishTimeSurface(const ros::Time &t)
-	{
-		if (TS_buf_.empty())
-			return;
-		sensor_msgs::ImagePtr aux_left = TS_buf_.back().second.cvImagePtr_left_->toImageMsg();
-		aux_left->header.stamp = t;
-		time_surface_left_pub_.publish(aux_left);
-	}
-
-	void esvo_MonoTracking::publishPose(const ros::Time &t, Transformation &tr)
+	void Tracking::publishPose(const ros::Time &t, Transformation &tr)
 	{
 		geometry_msgs::PoseStampedPtr ps_ptr(new geometry_msgs::PoseStamped());
 		ps_ptr->header.stamp = t;
@@ -536,7 +526,7 @@ namespace esvo_core
 		pose_pub_.publish(ps_ptr);
 	}
 
-	void esvo_MonoTracking::publishPath(const ros::Time &t, Transformation &tr)
+	void Tracking::publishPath(const ros::Time &t, Transformation &tr)
 	{
 		geometry_msgs::PoseStampedPtr ps_ptr(new geometry_msgs::PoseStamped());
 		ps_ptr->header.stamp = t;
@@ -555,9 +545,9 @@ namespace esvo_core
 		path_pub_.publish(path_);
 	}
 
-	void esvo_MonoTracking::saveTrajectory(const std::string &resultDir,
-										   const std::list<std::string> &lTimestamp,
-										   const std::list<Eigen::Matrix<double, 4, 4>, Eigen::aligned_allocator<Eigen::Matrix<double, 4, 4>>> &lPose)
+	void Tracking::saveTrajectory(const std::string &resultDir,
+								  const std::list<std::string> &lTimestamp,
+								  const std::list<Eigen::Matrix<double, 4, 4>, Eigen::aligned_allocator<Eigen::Matrix<double, 4, 4>>> &lPose)
 
 	{
 #ifdef ESVO_CORE_MONO_TRACKING_DEBUG

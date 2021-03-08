@@ -46,12 +46,12 @@ namespace esvo_core
     WORKING
   };
 
-  class esvo_MonoTracking
+  class Tracking
   {
   public:
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
-    esvo_MonoTracking(const ros::NodeHandle &nh, const ros::NodeHandle &nh_private);
-    virtual ~esvo_MonoTracking();
+    Tracking(const ros::NodeHandle &nh, const ros::NodeHandle &nh_private);
+    virtual ~Tracking();
 
     // functions regarding tracking
     void TrackingLoop();
@@ -70,8 +70,6 @@ namespace esvo_core
     void saveTrajectory(const std::string &resultDir,
                         const std::list<std::string> &lTimestamp_,
                         const std::list<Eigen::Matrix<double, 4, 4>, Eigen::aligned_allocator<Eigen::Matrix<double, 4, 4>>> &lPose_);
-    void publishTimeSurface(const ros::Time &t);
-    void publishMCImage(const ros::Time &t);
 
     // utils
     void reset();
@@ -92,8 +90,6 @@ namespace esvo_core
     ros::Subscriber TS_left_sub_;
     ros::Subscriber gtPose_sub_, stampedPose_sub_;
     image_transport::Publisher reprojMap_pub_left_;
-    image_transport::Publisher time_surface_left_pub_, time_surface_right_pub_;
-    image_transport::Publisher mcimage_pub_;
 
     // publishers
     ros::Publisher pose_pub_, path_pub_, pose_gt_pub_, path_gt_pub_;

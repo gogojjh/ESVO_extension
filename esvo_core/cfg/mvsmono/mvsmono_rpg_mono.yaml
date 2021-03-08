@@ -54,7 +54,7 @@ MVSMonoMode: 6
 SAVE_RESULT: False
 PATH_TO_SAVE_RESULT: "/home/jjiao/ESVO_result/" # CHANGE THIS PATH
 Dataset_Name: "rpg_mono"
-Sequence_Name: "boxes_6dof"
+Sequence_Name: "dynamic_6dof"
 EVENTS_SAVE_MAP: 3000000
 
 # EMVS Mapping
