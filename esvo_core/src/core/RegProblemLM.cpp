@@ -24,8 +24,7 @@ namespace esvo_core
     {
       ref_ = ref;
       cur_ = cur;
-      // T_world_ref_ = ref_->tr_.getTransformationMatrix();
-      T_world_ref_ = cur_->tr_.getTransformationMatrix();
+      T_world_ref_ = ref_->tr_.getTransformationMatrix();
       T_world_left_ = cur_->tr_.getTransformationMatrix();
       Eigen::Matrix4d T_ref_left = T_world_ref_.inverse() * T_world_left_; // the initial guess
       R_ = T_ref_left.block<3, 3>(0, 0);

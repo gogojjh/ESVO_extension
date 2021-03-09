@@ -16,9 +16,9 @@ RegProblemType: 1 #( 0 numerical; 1 analytical)
 SAVE_TRAJECTORY: True
 PATH_TO_SAVE_TRAJECTORY: "/home/jjiao/ESVO_result/" # CHANGE THIS PATH
 Dataset_Name: "rpg_simu"
-Sequence_Name: "shapes_poster_planar" # checkerboard_planar, office_planar, shapes_poster_planar
+Sequence_Name: "checkerboard_planar" # checkerboard_planar, office_planar, shapes_poster_planar
 Representation_Name: "TS" # EM
 VISUALIZE_TRAJECTORY: True
 
-TS_start: 2
+TS_start: 0
 Event_start: 10000

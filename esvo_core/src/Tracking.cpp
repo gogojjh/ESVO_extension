@@ -232,13 +232,15 @@ namespace esvo_core
 			ref_.tr_.setIdentity();
 		if (ESVO_System_Status_ == "WORKING" || (ESVO_System_Status_ == "INITIALIZATION" && ets_ == WORKING))
 		{
-			if (!getPoseAt(ref_.t_, ref_.tr_, dvs_frame_id_))
-			{
-				LOG(INFO) << "ESVO_System_Status_: " << ESVO_System_Status_ << ", ref_.t_: " << ref_.t_.toNSec();
-				LOG(INFO) << "Logic error ! There must be a pose for the given timestamp, because mapping has been finished.";
-				exit(-1);
-				return false;
-			}
+			// if (!getPoseAt(ref_.t_, ref_.tr_, dvs_frame_id_))
+			// {
+			// 	LOG(INFO) << "ESVO_System_Status_: " << ESVO_System_Status_ << ", ref_.t_: " << ref_.t_.toNSec();
+			// 	LOG(INFO) << "Logic error ! There must be a pose for the given timestamp, because mapping has been finished.";
+			// 	exit(-1);
+			// 	return false;
+			// }
+			// std::cout << ref_.tr_.getTransformationMatrix() << std::endl;
+			ref_.tr_ = cur_.tr_;
 		}
 		size_t numPoint = refPCMap_buf_.back().second->size();
 		ref_.vPointXYZPtr_.clear();

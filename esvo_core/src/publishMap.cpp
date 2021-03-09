@@ -22,7 +22,8 @@ size_t TS_start, Event_start;
 
 ros::Time TS_latest_timestamp, EM_latest_timestamp;
 size_t TS_number = 0, event_number = 0;
-std::deque<sensor_msgs::Image> TS_buf;
+std::deque<ros::Time> TS_time_buf;
+double start_time = 0.0;
 std::shared_ptr<tf::Transformer> tf_ptr;
 
 template <typename T>
@@ -41,10 +42,12 @@ T param(const ros::NodeHandle &nh, const std::string &name, const T &defaultValu
 
 void timeSurfaceCallback(const sensor_msgs::ImageConstPtr &time_surface_left)
 {
-    TS_buf.push_back(*time_surface_left);
-    while (TS_buf.size() > 100)
+    if (start_time == 0.0)
+        start_time = time_surface_left->header.stamp.toSec();
+    TS_time_buf.push_back(time_surface_left->header.stamp);
+    while (TS_time_buf.size() > 100)
     {
-        TS_buf.pop_front();
+        TS_time_buf.pop_front();
     }
     TS_number++;
 }
@@ -53,21 +56,6 @@ void eventsCallback(const dvs_msgs::EventArray::ConstPtr &msg)
 {
     EM_latest_timestamp = msg->header.stamp;
     event_number += msg->events.size();
-}
-
-bool getPoseAt(const ros::Time &t, const std::string &source_frame)
-{
-    std::string *err_msg = new std::string();
-    if (!tf_ptr->canTransform(world_frame_id, source_frame, t, err_msg))
-    {
-        // std::cout << t << " : " << *err_msg << std::endl;
-        delete err_msg;
-        return false;
-    }
-    else
-    {
-        return true;
-    }
 }
 
 int main(int argc, char **argv)
@@ -97,14 +85,14 @@ int main(int argc, char **argv)
     pcl::io::loadPCDFile(pcdName, *PC_ptr);
     PC_ptr->header.frame_id = world_frame_id;
     std::cout << "Loading point cloud: " << PC_ptr->size() << std::endl;
-    TS_buf.clear();
+    TS_time_buf.clear();
 
     ros::Rate r(mapping_rate_hz);
     while (ros::ok())
     {
         ros::spinOnce();
         r.sleep();
-        if (!strRep.compare("TS") && TS_buf.size() < TS_start) // tracking initialize
+        if (!strRep.compare("TS") && TS_time_buf.size() < TS_start) // tracking initialize
         {
             continue;
         }
@@ -119,25 +107,11 @@ int main(int argc, char **argv)
             pcl::toROSMsg(*PC_ptr, *pc_to_publish);
             if (!strRep.compare("TS"))
             {
-                // auto it_end = TS_buf.rbegin();
-                // it_end++;
-                // while (it_end != TS_buf.rend())
-                // {
-                //     if (getPoseAt(it_end->header.stamp, dvs_frame_id))
-                //     {
-                //         TS_latest_timestamp = it_end->header.stamp;
-                //         std::cout << TS_latest_timestamp << std::endl;
-                //         break;
-                //     }
-                //     it_end++;
-                // }
-                // if (it_end == TS_buf.rend())
-                // {
-                //     continue;
-                // }
-                auto it = TS_buf.end() - 5;
-                TS_latest_timestamp = it->header.stamp;
-                pc_to_publish->header.stamp = TS_latest_timestamp;
+                if (!TS_time_buf.empty())
+                {
+                    TS_latest_timestamp = TS_time_buf.back();
+                    pc_to_publish->header.stamp = TS_latest_timestamp;
+                }
             }
             else if (!strRep.compare("EM"))
             {
@@ -148,3 +122,7 @@ int main(int argc, char **argv)
     }
     return 0;
 }
+
+
+
+

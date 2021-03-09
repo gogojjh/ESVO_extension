@@ -13,9 +13,12 @@ LSnorm: Huber #l2, Huber
 huber_threshold: 50
 MIN_NUM_EVENTS: 1000
 RegProblemType: 1 #( 0 numerical; 1 analytical)
-SAVE_TRAJECTORY: True
+SAVE_TRAJECTORY: False
 PATH_TO_SAVE_TRAJECTORY: "/home/jjiao/ESVO_result/" # CHANGE THIS PATH
 Dataset_Name: "rpg_stereo"
-Sequence_Name: "rpg_boxes" # rpg_desk, rpg_bin, rpg_boxes
+Sequence_Name: "rpg_bin" # rpg_monitor, rpg_desk, rpg_bin, rpg_boxes
 Representation_Name: "TS" # EM
 VISUALIZE_TRAJECTORY: True
+
+TS_start: 50 # 50 for timesurface initialization
+Event_start: 10000

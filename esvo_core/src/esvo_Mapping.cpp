@@ -344,7 +344,7 @@ namespace esvo_core
     LOG(INFO) << "After culling, vdp.size: " << vdp.size();
 #endif
     t_solve = tt_mapping.toc();
-    LOG(INFO) << "Nonliner optimization succeeds";
+    // LOG(INFO) << "Nonliner optimization succeeds";
 
     // Fusion (strategy 1: const number of point)
     if (FusionStrategy_ == "CONST_POINTS")
@@ -374,7 +374,7 @@ namespace esvo_core
       LOG(INFO) << "Invalid FusionStrategy is assigned.";
       exit(-1);
     }
-    LOG(INFO) << "Fusion succeeds";
+    // LOG(INFO) << "Fusion succeeds";
 
     // apply fusion and count the total number of fusion.
     numFusionCount = 0;
