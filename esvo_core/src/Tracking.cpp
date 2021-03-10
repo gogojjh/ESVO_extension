@@ -67,13 +67,27 @@ namespace esvo_core
 		ref_.tr_.setIdentity();
 
 		/*** Tracker ***/
+		if (!strRep_.compare("TS"))
+		{
+			std::thread TrackingThread(&Tracking::TrackingLoopTS, this);
+			TrackingThread.detach();
+		} 
+		else if (!strRep_.compare("EM"))
+		{
+			std::thread TrackingThread(&Tracking::TrackingLoopEM, this);
+			TrackingThread.detach();
+		}
+		else
+		{
+			LOG(INFO) << "Please select proper event frame-based Representation!";
+		}
+
 		T_world_cur_.setIdentity();
 		T_world_map_.setIdentity();
-		std::thread TrackingThread(&Tracking::TrackingLoop, this);
-		TrackingThread.detach();
-
 		last_gt_timestamp_ = 0.0;
 		last_save_trajectory_timestamp_ = 0.0;
+
+		num_NewEvents_ = 0;
 	}
 
 	Tracking::~Tracking()
@@ -81,7 +95,7 @@ namespace esvo_core
 		pose_pub_.shutdown();
 	}
 
-	void Tracking::TrackingLoop()
+	void Tracking::TrackingLoopTS()
 	{
 		ros::Rate r(tracking_rate_hz_);
 		while (true)
@@ -147,23 +161,28 @@ namespace esvo_core
 			
 				// create new regProblem
 				TicToc tt;
-				double t_resetRegProblem, t_solve, t_pub_result, t_pub_gt;
+				double t_resetRegProblem, t_solve, t_pub_result;
 				if (rpSolver_.resetRegProblem(&ref_, &cur_)) // will be false if no enough points in local map, need to reinitialize
 				{
+					t_resetRegProblem = tt.toc();
 					if (ets_ == IDLE)
 						ets_ = WORKING;
 					if (ESVO_System_Status_ != "WORKING")
 						nh_.setParam("/ESVO_SYSTEM_STATUS", "WORKING"); // trigger the main mapping process
 
+					tt.tic();
 					if (rpType_ == REG_NUMERICAL)
 						rpSolver_.solve_numerical();
 					if (rpType_ == REG_ANALYTICAL) // default: analytical
 						rpSolver_.solve_analytical();
-
+					t_solve = tt.toc();
 					T_world_cur_ = cur_.tr_.getTransformationMatrix();
+
+					tt.tic();
 					publishPose(cur_.t_, cur_.tr_);
 					if (bVisualizeTrajectory_)
 						publishPath(cur_.t_, cur_.tr_);
+					t_pub_result = tt.toc();
 
 					// save result and gt if available.
 					if (bSaveTrajectory_)
@@ -186,12 +205,12 @@ namespace esvo_core
 					m_buf_.unlock();
 				}
 
-#ifdef ESVO_CORE_MONO_TRACKING_LOG
 				double t_overall_count = 0;
 				t_overall_count = t_resetRegProblem + t_solve + t_pub_result;
+#ifdef ESVO_CORE_TRACKING_LOG
 				LOG(INFO) << "\n";
 				LOG(INFO) << "------------------------------------------------------------";
-				LOG(INFO) << "--------------------Tracking Computation Cost---------------";
+				LOG(INFO) << "--------------------Tracking Computation Cost (TS)----------";
 				LOG(INFO) << "------------------------------------------------------------";
 				LOG(INFO) << "ResetRegProblem: " << t_resetRegProblem << " ms, (" << t_resetRegProblem / t_overall_count * 100 << "%).";
 				LOG(INFO) << "Registration: " << t_solve << " ms, (" << t_solve / t_overall_count * 100 << "%).";
@@ -200,7 +219,7 @@ namespace esvo_core
 				LOG(INFO) << "------------------------------------------------------------";
 				LOG(INFO) << "------------------------------------------------------------";
 #endif
-				if (bSaveTrajectory_ && (cur_.t_.toSec() - last_save_trajectory_timestamp_ > 0.5))
+				if (bSaveTrajectory_ && (cur_.t_.toSec() - last_save_trajectory_timestamp_ > 1.0))
 				{
 					last_save_trajectory_timestamp_ = cur_.t_.toSec();
 					struct stat st;
@@ -210,12 +229,206 @@ namespace esvo_core
 						_mkdir(resultPath_.c_str());
 						LOG(INFO) << "The directory has been created!!!";
 					}
-#ifdef ESVO_CORE_MONO_TRACKING_LOG
-					LOG(INFO) << "pose size: " << lPose_.size() << ", refPCMap_buf size(): " << refPCMap_buf_.size() << ", TS_buf.size(): " << TS_buf_.size();
+#ifdef ESVO_CORE_TRACKING_LOG
+					// LOG(INFO) << "pose size: " << lPose_.size() << ", refPCMap_buf size(): " << refPCMap_buf_.size() << ", TS_buf.size(): " << TS_buf_.size();
 #endif
 					saveTrajectory(resultPath_ + strDataset_ + "/" + strSequence_ + "_" + strRep_ + "_traj_estimate.txt", lTimestamp_, lPose_);
 					saveTrajectory(resultPath_ + strDataset_ + "/" + strSequence_ + "_" + strRep_ + "_traj_gt.txt", lTimestamp_GT_, lPose_GT_);
+					std::unordered_map<std::string, double> umTimeCost;
+					umTimeCost["resetReg"] = t_resetRegProblem;
+					umTimeCost["solveReg"] = t_solve;
+					umTimeCost["pubReg"] = t_pub_result;
+					umTimeCost["total"] = t_overall_count;
+					vTimeCost_.push_back(umTimeCost);
+					saveTimeCost(resultPath_ + strDataset_ + "/" + strSequence_ + "_" + strRep_ + "_time.txt", vTimeCost_);
 				}
+			}
+			r.sleep();
+		} // while
+	}
+
+	void Tracking::TrackingLoopEM()
+	{
+		ros::Rate r(tracking_rate_hz_);
+		while (true)
+		{
+			if (!ros::ok())
+				break;
+			nh_.getParam("/ESVO_SYSTEM_STATUS", ESVO_System_Status_);
+
+			if (ESVO_System_Status_ == "TERMINATE")
+			{
+				LOG(INFO) << "The tracking node is terminated manually...";
+				break;
+			}
+
+			if (ESVO_System_Status_ == "RESET") // This is true when the system is mannally reset, waiting for mapping's response
+			{
+				r.sleep();
+				continue;
+			}
+
+			if (ESVO_System_Status_ == "INITIALIZATION" && ets_ == WORKING) // This is true when the system is reset from dynamic reconfigure
+			{
+				reset();
+				r.sleep();
+				continue;
+			}
+
+			const size_t MAX_NUM_Event_INVOLVED = 2000;
+			if (num_NewEvents_ >= MAX_NUM_Event_INVOLVED && events_left_.size() > MAX_NUM_Event_INVOLVED)
+			{
+				m_buf_.lock();
+				TicToc t_pre;
+				double t_LoadEvent, t_CurDataTransfer, t_RefDataTransfer;
+
+				std::vector<dvs_msgs::Event *> vEventSubsetPtr;
+				vEventSubsetPtr.reserve(MAX_NUM_Event_INVOLVED);
+				auto ev_begin_it = events_left_.end() - MAX_NUM_Event_INVOLVED;
+				auto ev_end_it = events_left_.end();
+				while (ev_begin_it != ev_end_it)
+				{
+					vEventSubsetPtr.push_back(ev_begin_it._M_cur);
+					ev_begin_it++;
+				}
+
+				if (ref_.t_.toSec() >= vEventSubsetPtr.back()->ts.toSec())
+				{
+					LOG(INFO) << "The time_surface observation should be obtained after the reference frame";
+					exit(-1);
+				}
+				t_LoadEvent = t_pre.toc();
+				t_pre.tic();
+
+				size_t col = camSysPtr_->cam_left_ptr_->width_;
+				size_t row = camSysPtr_->cam_left_ptr_->height_;
+				cv::Mat eventMap = cv::Mat(cv::Size(col, row), CV_8UC1, cv::Scalar(0));
+				for (size_t i = 0; i < vEventSubsetPtr.size(); i++)
+					eventMap.at<uchar>(vEventSubsetPtr[i]->y, vEventSubsetPtr[i]->x) = 255;
+
+				// curDataTransferring
+				cur_.t_ = ros::Time((vEventSubsetPtr.front()->ts.toSec() + vEventSubsetPtr.back()->ts.toSec()) / 2);
+				std_msgs::Header header;
+				header.stamp = ros::Time(cur_.t_);
+				header.frame_id = world_frame_id_;
+				cv_bridge::CvImagePtr cv_ptr_left(new cv_bridge::CvImage(header, "mono8", eventMap));
+				cv_bridge::CvImagePtr cv_ptr_right(new cv_bridge::CvImage(header, "mono8", eventMap));
+				TimeSurfaceObservation TS_obs_fake(cv_ptr_left, cv_ptr_right, 0, false);
+				cur_.pTsObs_ = &TS_obs_fake;
+				cur_.tr_ = Transformation(T_world_cur_);
+				cur_.numEventsSinceLastObs_ = vEventSubsetPtr.size();
+				t_CurDataTransfer = t_pre.toc();
+
+				// cur_.pTsObs_->getTimeSurfaceNegative(5);
+				// cv::Mat TS_negative_mat;
+				// cv::eigen2cv(cur_.pTsObs_->TS_negative_left_, TS_negative_mat);
+				// TS_negative_mat.convertTo(TS_negative_mat, CV_8UC1);
+				// cv::imshow("negative TS", TS_negative_mat);
+				// cv::waitKey(15);
+
+				if (refPCMap_buf_.empty()) // Tracking and Mapping are still in initialization
+				{
+					// publishTimeSurface(cur_.t_);
+					publishPose(cur_.t_, cur_.tr_); // publish identity pose
+					if (bVisualizeTrajectory_)
+						publishPath(cur_.t_, cur_.tr_);
+					m_buf_.unlock();
+					r.sleep();
+					continue;
+				}
+				else if (ref_.t_.toSec() < refPCMap_buf_.back().first.toSec()) // new reference map arrived
+				{
+					refDataTransferring(); // set reference data
+										   // LOG(INFO) << "receive map from Mapping";
+				}
+				m_buf_.unlock();
+
+				// create new regProblem
+				TicToc tt;
+				double t_resetRegProblem, t_solve, t_pub_result;
+				if (rpSolver_.resetRegProblem(&ref_, &cur_)) // will be false if no enough points in local map, need to reinitialize
+				{
+					t_resetRegProblem = tt.toc();
+					if (ets_ == IDLE)
+						ets_ = WORKING;
+					if (ESVO_System_Status_ != "WORKING")
+						nh_.setParam("/ESVO_SYSTEM_STATUS", "WORKING"); // trigger the main mapping process
+
+					tt.tic();
+					if (rpType_ == REG_NUMERICAL)
+						rpSolver_.solve_numerical();
+					if (rpType_ == REG_ANALYTICAL) // default: analytical
+						rpSolver_.solve_analytical();
+					t_solve = tt.toc();
+					T_world_cur_ = cur_.tr_.getTransformationMatrix();
+
+					tt.tic();
+					publishPose(cur_.t_, cur_.tr_);
+					if (bVisualizeTrajectory_)
+						publishPath(cur_.t_, cur_.tr_);
+					t_pub_result = tt.toc();
+
+					// save result and gt if available.
+					if (bSaveTrajectory_)
+					{
+						// save results to listPose and listPoseGt
+						lTimestamp_.push_back(std::to_string(cur_.t_.toSec()));
+						lPose_.push_back(cur_.tr_.getTransformationMatrix());
+					}
+					m_buf_.lock();
+					// publishTimeSurface(cur_.t_);
+					m_buf_.unlock();
+				}
+				else
+				{
+					nh_.setParam("/ESVO_SYSTEM_STATUS", "INITIALIZATION");
+					ets_ = IDLE;
+					LOG(INFO) << "Tracking thread is IDLE";
+					m_buf_.lock();
+					// publishTimeSurface(cur_.t_);
+					m_buf_.unlock();
+				}
+
+				double t_overall_count = 0;
+				t_overall_count = t_resetRegProblem + t_solve + t_pub_result;
+#ifdef ESVO_CORE_TRACKING_LOG
+				LOG(INFO) << "\n";
+				LOG(INFO) << "------------------------------------------------------------";
+				LOG(INFO) << "--------------------Tracking Computation Cost (EM)----------";
+				LOG(INFO) << "------------------------------------------------------------";
+				// LOG(INFO) << "Load events: " << t_LoadEvent << " ms"; // 0.00791ms
+				// LOG(INFO) << "Current data transfer: " << t_CurDataTransfer << " ms"; // 0.45ms
+				LOG(INFO) << "ResetRegProblem: " << t_resetRegProblem << " ms, (" << t_resetRegProblem / t_overall_count * 100 << "%).";
+				LOG(INFO) << "Registration: " << t_solve << " ms, (" << t_solve / t_overall_count * 100 << "%).";
+				LOG(INFO) << "pub result: " << t_pub_result << " ms, (" << t_pub_result / t_overall_count * 100 << "%).";
+				LOG(INFO) << "Total Computation (" << rpSolver_.lmStatics_.nPoints_ << "): " << t_overall_count << " ms.";
+				LOG(INFO) << "------------------------------------------------------------";
+				LOG(INFO) << "------------------------------------------------------------";
+#endif
+				if (bSaveTrajectory_ && (cur_.t_.toSec() - last_save_trajectory_timestamp_ > 1.0))
+				{
+					last_save_trajectory_timestamp_ = cur_.t_.toSec();
+					struct stat st;
+					if (stat(resultPath_.c_str(), &st) == -1) // there is no such dir, create one
+					{
+						LOG(INFO) << "There is no such directory: " << resultPath_;
+						_mkdir(resultPath_.c_str());
+						LOG(INFO) << "The directory has been created!!!";
+					}
+#ifdef ESVO_CORE_TRACKING_LOG
+					// LOG(INFO) << "pose size: " << lPose_.size() << ", refPCMap_buf size(): " << refPCMap_buf_.size() << ", TS_buf.size(): " << TS_buf_.size();
+#endif
+					saveTrajectory(resultPath_ + strDataset_ + "/" + strSequence_ + "_" + strRep_ + "_traj_estimate.txt", lTimestamp_, lPose_);
+					saveTrajectory(resultPath_ + strDataset_ + "/" + strSequence_ + "_" + strRep_ + "_traj_gt.txt", lTimestamp_GT_, lPose_GT_);
+					std::unordered_map<std::string, double> umTimeCost;
+					umTimeCost["resetReg"] = t_resetRegProblem;
+					umTimeCost["solveReg"] = t_solve;
+					umTimeCost["pubReg"] = t_pub_result;
+					umTimeCost["total"] = t_overall_count;
+					vTimeCost_.push_back(umTimeCost);
+					saveTimeCost(resultPath_ + strDataset_ + "/" + strSequence_ + "_" + strRep_ + "_time.txt", vTimeCost_);
+				}
+				num_NewEvents_ = 0;
 			}
 			r.sleep();
 		} // while
@@ -315,6 +528,8 @@ namespace esvo_core
 			events_left_[i + 1] = e;
 		}
 		clearEventQueue();
+
+		num_NewEvents_ += msg->events.size();
 		m_buf_.unlock();
 	}
 
@@ -552,7 +767,7 @@ namespace esvo_core
 								  const std::list<Eigen::Matrix<double, 4, 4>, Eigen::aligned_allocator<Eigen::Matrix<double, 4, 4>>> &lPose)
 
 	{
-#ifdef ESVO_CORE_MONO_TRACKING_DEBUG
+#ifdef ESVO_CORE_TRACKING_DEBUG
 		LOG(INFO) << "Saving trajectory to " << resultDir << " ......";
 #endif
 		std::ofstream f;
@@ -582,9 +797,31 @@ namespace esvo_core
 			  << q.x() << " " << q.y() << " " << q.z() << " " << q.w() << std::endl;
 		}
 		f.close();
-#ifdef ESVO_CORE_MONO_TRACKING_DEBUG
+#ifdef ESVO_CORE_TRACKING_DEBUG
 		LOG(INFO) << "Saving trajectory to " << resultDir << ". Done !!!!!!.";
 #endif
+	}
+
+	void Tracking::saveTimeCost(const std::string &resultDir,
+								const std::vector<std::unordered_map<std::string, double>> &vTimeCost_)
+	{
+		std::ofstream f;
+		f.open(resultDir.c_str(), std::ofstream::out);
+		if (!f.is_open())
+		{
+			LOG(INFO) << "File at " << resultDir << " is not opened, save trajectory failed.";
+			exit(-1);
+		}
+		f << std::fixed;
+		for (auto it_TimeCost = vTimeCost_.begin(); it_TimeCost != vTimeCost_.end(); it_TimeCost++)
+		{
+			for (auto it = it_TimeCost->begin(); it != it_TimeCost->end(); it++)
+			{
+				f << it->second << " ";
+			}
+			f << std::endl;
+		}
+		f.close();
 	}
 
 } // namespace esvo_core

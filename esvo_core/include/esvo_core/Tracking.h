@@ -35,7 +35,7 @@
 #include <pcl_ros/point_cloud.h>
 
 // #define ESVO_CORE_MONO_TRACKING_DEBUG
-// #define ESVO_CORE_MONO_TRACKING_LOG
+#define ESVO_CORE_TRACKING_LOG
 
 namespace esvo_core
 {
@@ -54,7 +54,8 @@ namespace esvo_core
     virtual ~Tracking();
 
     // functions regarding tracking
-    void TrackingLoop();
+    void TrackingLoopTS();
+    void TrackingLoopEM();
     bool refDataTransferring();
     bool curDataTransferring(); // These two data transferring functions are decoupled because the data are not updated at the same frequency.
 
@@ -70,6 +71,8 @@ namespace esvo_core
     void saveTrajectory(const std::string &resultDir,
                         const std::list<std::string> &lTimestamp_,
                         const std::list<Eigen::Matrix<double, 4, 4>, Eigen::aligned_allocator<Eigen::Matrix<double, 4, 4>>> &lPose_);
+    void saveTimeCost(const std::string &resultDir,
+                      const std::vector<std::unordered_map<std::string, double>> &vTimeCost_);
 
     // utils
     void reset();
@@ -101,6 +104,8 @@ namespace esvo_core
     std::list<Eigen::Matrix<double, 4, 4>, Eigen::aligned_allocator<Eigen::Matrix<double, 4, 4>>> lPose_GT_;
     std::list<std::string> lTimestamp_GT_;
     double last_gt_timestamp_, last_save_trajectory_timestamp_;
+
+    std::vector<std::unordered_map<std::string, double> > vTimeCost_;
 
     Eigen::Quaterniond q_gt_s_;
     Eigen::Vector3d t_gt_s_;
@@ -144,6 +149,7 @@ namespace esvo_core
     RegProblemConfig::Ptr rpConfigPtr_;
     RegProblemSolverLM rpSolver_;
 
+    size_t num_NewEvents_;
   };
 } // namespace esvo_core
 

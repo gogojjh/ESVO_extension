@@ -1,3 +1,7 @@
+/**
+ * LK method turtorial: Lucas-Kanade 20 Years On: A Unifying Framework 
+ **/ 
+
 #ifndef ESVO_CORE_CORE_REGPROBLEMSOLVERLM_H
 #define ESVO_CORE_CORE_REGPROBLEMSOLVERLM_H
 

@@ -42,13 +42,7 @@ T param(const ros::NodeHandle &nh, const std::string &name, const T &defaultValu
 
 void timeSurfaceCallback(const sensor_msgs::ImageConstPtr &time_surface_left)
 {
-    if (start_time == 0.0)
-        start_time = time_surface_left->header.stamp.toSec();
-    TS_time_buf.push_back(time_surface_left->header.stamp);
-    while (TS_time_buf.size() > 100)
-    {
-        TS_time_buf.pop_front();
-    }
+    TS_latest_timestamp = time_surface_left->header.stamp;
     TS_number++;
 }
 
@@ -92,7 +86,7 @@ int main(int argc, char **argv)
     {
         ros::spinOnce();
         r.sleep();
-        if (!strRep.compare("TS") && TS_time_buf.size() < TS_start) // tracking initialize
+        if (!strRep.compare("TS") && TS_number < TS_start) // tracking initialize
         {
             continue;
         }
@@ -107,15 +101,17 @@ int main(int argc, char **argv)
             pcl::toROSMsg(*PC_ptr, *pc_to_publish);
             if (!strRep.compare("TS"))
             {
-                if (!TS_time_buf.empty())
+                if (TS_number != 0)
                 {
-                    TS_latest_timestamp = TS_time_buf.back();
                     pc_to_publish->header.stamp = TS_latest_timestamp;
                 }
             }
             else if (!strRep.compare("EM"))
             {
-                pc_to_publish->header.stamp = EM_latest_timestamp;
+                if (event_number != 0)
+                {
+                    pc_to_publish->header.stamp = EM_latest_timestamp;
+                }
             }
             pc_pub.publish(pc_to_publish);
         }

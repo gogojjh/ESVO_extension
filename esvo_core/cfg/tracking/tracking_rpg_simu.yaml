@@ -8,17 +8,11 @@ patch_size_Y: 1
 kernelSize: 5
 MAX_REGISTRATION_POINTS: 2000
 BATCH_SIZE: 300
-MAX_ITERATION: 10
+MAX_ITERATION: 5
 LSnorm: Huber #l2, Huber
 huber_threshold: 50
 MIN_NUM_EVENTS: 1000
 RegProblemType: 1 #( 0 numerical; 1 analytical)
-SAVE_TRAJECTORY: True
+SAVE_TRAJECTORY: False
 PATH_TO_SAVE_TRAJECTORY: "/home/jjiao/ESVO_result/" # CHANGE THIS PATH
-Dataset_Name: "rpg_simu"
-Sequence_Name: "checkerboard_planar" # checkerboard_planar, office_planar, shapes_poster_planar
-Representation_Name: "TS" # EM
 VISUALIZE_TRAJECTORY: True
-
-TS_start: 0
-Event_start: 10000
