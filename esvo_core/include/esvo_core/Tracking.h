@@ -56,6 +56,7 @@ namespace esvo_core
     // functions regarding tracking
     void TrackingLoopTS();
     void TrackingLoopEM();
+    void TrackingLoopTSEM();
     bool refDataTransferring();
     bool curDataTransferring(); // These two data transferring functions are decoupled because the data are not updated at the same frequency.
 
