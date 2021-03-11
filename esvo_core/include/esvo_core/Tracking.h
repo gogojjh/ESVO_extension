@@ -35,7 +35,7 @@
 #include <pcl_ros/point_cloud.h>
 
 // #define ESVO_CORE_MONO_TRACKING_DEBUG
-#define ESVO_CORE_TRACKING_LOG
+// #define ESVO_CORE_TRACKING_LOG
 
 namespace esvo_core
 {

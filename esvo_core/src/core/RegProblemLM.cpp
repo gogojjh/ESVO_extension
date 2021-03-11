@@ -50,7 +50,7 @@ namespace esvo_core
                               (double)ref->vPointXYZPtr_[i]->y,
                               (double)ref->vPointXYZPtr_[i]->z);
         Eigen::Vector3d p_cam = R_world_ref.transpose() * (p_tmp - t_world_ref); // points in the ref
-        ResItems_[i].initialize(p_cam(0), p_cam(1), p_cam(2)); //, var);
+        ResItems_[i].initialize(p_cam(0), p_cam(1), p_cam(2));                   //, var);
       }
       // for stochastic sampling
       numBatches_ = std::max(ResItems_.size() / rpConfigPtr_->BATCH_SIZE_, (size_t)1);
@@ -60,6 +60,7 @@ namespace esvo_core
       pTsObs_->getTimeSurfaceNegative(rpConfigPtr_->kernelSize_);
       if (bComputeGrad)
         pTsObs_->computeTsNegativeGrad();
+
       // set fval dimension
       resetNumberValues(numPoints_ * patchSize_);
       if (bPrint_)
@@ -204,7 +205,7 @@ namespace esvo_core
       Eigen::MatrixXd fjacBlock;
       fjacBlock.resize(numPoints_, 12);
       Eigen::MatrixXd fjacTMP(3, 6); //FOR Test
-      Eigen::Matrix4d T_left_ref = Eigen::Matrix4d::Identity(); 
+      Eigen::Matrix4d T_left_ref = Eigen::Matrix4d::Identity();
       T_left_ref.block<3, 3>(0, 0) = R_.transpose(); // update at each iteration
       T_left_ref.block<3, 1>(0, 3) = -R_.transpose() * t_;
 
@@ -247,9 +248,9 @@ namespace esvo_core
           //      LOG(INFO) << "dT_dG:\n" << dT_dG;
 
           //ri.p_(2) refers to 1/rho_i which is actually coming with dInvPi_dx.
-          fjacBlock.row(i) = grad.transpose() * 
-                             dPi_dT * J_constPart * dPi_dT * dT_dG * 
-                             ri.p_(2); 
+          fjacBlock.row(i) = grad.transpose() *
+                             dPi_dT * J_constPart * dPi_dT * dT_dG *
+                             ri.p_(2);
         }
       }
       // assemble with dG_dtheta
@@ -257,7 +258,7 @@ namespace esvo_core
       fjac = -fjacBlock * J_G_0_;
       // The explanation for the factor -1 is as follows. The transformation recovered from dThetha
       // is T_right_left (R_, t_). However, the one used for warping is T_left_right (R_.transpose(), -R.transpose() * t).
-      // Thus, R_.transpose() is used as dT_dInvPi. 
+      // Thus, R_.transpose() is used as dT_dInvPi.
       // Besides, J_theta = dPi_dT * dT_dG' * dG'_dG * dG_dtheta. G'(dtheta) recovers
       // the motion for the warping, namely R_.transpose(), -R.transpose() * t.
       //          /                                 \
@@ -282,6 +283,10 @@ namespace esvo_core
       return 0;
     }
 
+    /**
+     * @brief: This function pre-computes the Jacobians of the warping function w.r.t. the pose parameters: 
+     * \partial W/ \partial theta
+     **/
     void
     RegProblemLM::computeJ_G(const Eigen::Matrix<double, 6, 1> &x, Eigen::Matrix<double, 12, 6> &J_G)
     {
@@ -384,7 +389,7 @@ namespace esvo_core
       t_ = dt + dR * t_;
     }
 
-   void RegProblemLM::setPose()
+    void RegProblemLM::setPose()
     {
       T_world_left_.block<3, 3>(0, 0) = T_world_ref_.block<3, 3>(0, 0) * R_;
       T_world_left_.block<3, 1>(0, 3) = T_world_ref_.block<3, 3>(0, 0) * t_ + T_world_ref_.block<3, 1>(0, 3);
@@ -515,29 +520,29 @@ namespace esvo_core
 
 /******************************************
  * note by jjiao
- ******************************************/ 
+ ******************************************/
 // {
 //   {
-    /**
+/**
      * @brief: This function just show an example of warpingTransformation on LK method
      **/
-    // void
-    // RegProblemLM::getWarpingTransformationLK(
-    //     Eigen::Matrix4d &warpingTransf,
-    //     const Eigen::Matrix<double, 6, 1> &x) const
-    // {
-    //   // To calcuate R_cur_ref, t_cur_ref
-    //   Eigen::Matrix3d R_cur_ref = tools::cayley2rot(x + dx);
-    //   Eigen::Vector3d t_cur_ref = tools::cayley2rot(x + dx);
-    //   warpingTransf.block<3, 3>(0, 0) = R_cur_ref;
-    //   warpingTransf.block<3, 1>(0, 3) = t_cur_ref;
-    // }
-    // void
-    // RegProblemLM::addMotionUpdateLK(const Eigen::Matrix<double, 6, 1> &dx)
-    // {
-    //   // To update R_, t_
-    //   R_ = tools::cayley2rot(x + dx);
-    //   t_ = tools::cayley2rot(x + dx);
-    // }
+// void
+// RegProblemLM::getWarpingTransformationLK(
+//     Eigen::Matrix4d &warpingTransf,
+//     const Eigen::Matrix<double, 6, 1> &x) const
+// {
+//   // To calcuate R_cur_ref, t_cur_ref
+//   Eigen::Matrix3d R_cur_ref = tools::cayley2rot(x + dx);
+//   Eigen::Vector3d t_cur_ref = tools::cayley2rot(x + dx);
+//   warpingTransf.block<3, 3>(0, 0) = R_cur_ref;
+//   warpingTransf.block<3, 1>(0, 3) = t_cur_ref;
+// }
+// void
+// RegProblemLM::addMotionUpdateLK(const Eigen::Matrix<double, 6, 1> &dx)
+// {
+//   // To update R_, t_
+//   R_ = tools::cayley2rot(x + dx);
+//   t_ = tools::cayley2rot(x + dx);
+// }
 //   }
 // }

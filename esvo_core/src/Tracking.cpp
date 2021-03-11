@@ -48,7 +48,7 @@ namespace esvo_core
 		strRep_ = tools::param(pnh_, "Representation_Name", std::string("TS"));
 
 		// online data callbacks
-		events_left_sub_ = nh_.subscribe("events_left", 0, &Tracking::eventsCallback, this);
+		events_left_sub_ = nh_.subscribe("events_left", 10, &Tracking::eventsCallback, this);
 		TS_left_sub_ = nh_.subscribe("time_surface_left", 10, &Tracking::timeSurfaceCallback, this);
 		map_sub_ = nh_.subscribe("pointcloud", 0, &Tracking::refMapCallback, this);				// local map in the ref view.
 		stampedPose_sub_ = nh_.subscribe("stamped_pose", 0, &Tracking::stampedPoseCallback, this); // for accessing the pose of the ref view.
@@ -77,7 +77,7 @@ namespace esvo_core
 			std::thread TrackingThread(&Tracking::TrackingLoopEM, this);
 			TrackingThread.detach();
 		}
-		else if (!strRep_.compare("TS_EM"))
+		else if (!strRep_.compare("TSEM"))
 		{
 			std::thread TrackingThread(&Tracking::TrackingLoopTSEM, this);
 			TrackingThread.detach();
@@ -85,6 +85,7 @@ namespace esvo_core
 		else
 		{
 			LOG(INFO) << "Please select proper event frame-based Representation!";
+			exit(-1);
 		}
 
 		T_world_cur_.setIdentity();
@@ -330,7 +331,7 @@ namespace esvo_core
 				cur_.t_ = ros::Time((vEventSubsetPtr.front()->ts.toSec() + vEventSubsetPtr.back()->ts.toSec()) / 2);
 				std_msgs::Header header;
 				header.stamp = ros::Time(cur_.t_);
-				header.frame_id = world_frame_id_;
+				header.frame_id = dvs_frame_id_;
 				cv_bridge::CvImagePtr cv_ptr_left(new cv_bridge::CvImage(header, "mono8", eventMap));
 				cv_bridge::CvImagePtr cv_ptr_right(new cv_bridge::CvImage(header, "mono8", eventMap));
 				TimeSurfaceObservation TS_obs_fake(cv_ptr_left, cv_ptr_right, 0, false);
@@ -411,6 +412,7 @@ namespace esvo_core
 				LOG(INFO) << "------------------------------------------------------------";
 				// LOG(INFO) << "Load events: " << t_LoadEvent << " ms"; // 0.00791ms
 				// LOG(INFO) << "Current data transfer: " << t_CurDataTransfer << " ms"; // 0.45ms
+				LOG(INFO) << "Time within the EM: " << ros::Time((vEventSubsetPtr.back()->ts.toSec() - vEventSubsetPtr.front()->ts.toSec()) * 1000) << " ms";
 				LOG(INFO) << "ResetRegProblem: " << t_resetRegProblem << " ms, (" << t_resetRegProblem / t_overall_count * 100 << "%).";
 				LOG(INFO) << "Registration: " << t_solve << " ms, (" << t_solve / t_overall_count * 100 << "%).";
 				LOG(INFO) << "pub result: " << t_pub_result << " ms, (" << t_pub_result / t_overall_count * 100 << "%).";
@@ -511,10 +513,54 @@ namespace esvo_core
 				}
 				m_buf_.unlock();
 
-				// check which type of representations can be used
-				// selectionCriterion();
+				// The criterion to switch EM-based representations: 
+				// 		TS provides less constraints, while EM provides rich constraints
+				const size_t MAX_NUM_Event_INVOLVED = 4000;
+				std::vector<dvs_msgs::Event *> vEventSubsetPtr;
+				vEventSubsetPtr.reserve(MAX_NUM_Event_INVOLVED);
+				auto ev_begin_it = events_left_.end() - std::min(MAX_NUM_Event_INVOLVED, events_left_.size());
+				auto ev_end_it = events_left_.end();
+				while (ev_begin_it != ev_end_it)
+				{
+					vEventSubsetPtr.push_back(ev_begin_it._M_cur);
+					ev_begin_it++;
+				}
+				size_t col = camSysPtr_->cam_left_ptr_->width_;
+				size_t row = camSysPtr_->cam_left_ptr_->height_;
+				cv::Mat eventMap = cv::Mat(cv::Size(col, row), CV_8UC1, cv::Scalar(0));
+				for (size_t i = 0; i < vEventSubsetPtr.size(); i++)
+				{
+					bool bDistorted = true;
+					Eigen::Vector2d coor;
+					if (bDistorted)
+						coor = camSysPtr_->cam_left_ptr_->getRectifiedUndistortedCoordinate(vEventSubsetPtr[i]->x, vEventSubsetPtr[i]->y);
+					else
+						coor = Eigen::Vector2d(vEventSubsetPtr[i]->x, vEventSubsetPtr[i]->y);
+					if (coor(0) < 0 || coor(0) >= camSysPtr_->cam_left_ptr_->width_ || coor(1) < 0 || coor(1) >= camSysPtr_->cam_left_ptr_->height_)
+					{
+						continue;
+					}
+					else
+					{
+						eventMap.at<uchar>(std::floor(coor(1)), std::floor(coor(0))) = 255;
+					}
+				}
 
-				// create new regProblem
+				std_msgs::Header header;
+				header.stamp = cur_.t_;
+				header.frame_id = world_frame_id_;
+				cv_bridge::CvImagePtr cv_ptr_left(new cv_bridge::CvImage(header, "mono8", eventMap));
+				cv_bridge::CvImagePtr cv_ptr_right(new cv_bridge::CvImage(header, "mono8", eventMap));
+				TimeSurfaceObservation TS_obs_fake(cv_ptr_left, cv_ptr_right, 0, false);
+				if (cur_.numEventsSinceLastObs_ < rpConfigPtr_->MIN_NUM_EVENTS_ &&
+					vEventSubsetPtr.size() >= rpConfigPtr_->MIN_NUM_EVENTS_ * 2)
+				{
+					LOG(INFO) << "Switch to EM-based representation with Events: " << vEventSubsetPtr.size() << "!";
+					cur_.pTsObs_ = &TS_obs_fake;
+					cur_.tr_ = Transformation(T_world_cur_);
+					cur_.numEventsSinceLastObs_ = vEventSubsetPtr.size();
+				}
+
 				TicToc tt;
 				double t_resetRegProblem, t_solve, t_pub_result;
 				if (rpSolver_.resetRegProblem(&ref_, &cur_)) // will be false if no enough points in local map, need to reinitialize
@@ -697,7 +743,10 @@ namespace esvo_core
 		}
 		clearEventQueue();
 
-		num_NewEvents_ += msg->events.size();
+		if (!strRep_.compare("EM"))
+		{
+			num_NewEvents_ += msg->events.size();
+		}
 		m_buf_.unlock();
 	}
 
