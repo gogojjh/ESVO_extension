@@ -1,28 +1,37 @@
+<!-- Example: roslaunch esvo_core system_rpg_simu.launch 
+				TS_start:=0 Event_start:=10000 Dataset_Name:=rpg_stereo
+				Sequence_Name:=monitor Representation_Name:=TS -->
+
 <launch>
+	<arg name="tracking_rate_hz" default="100" />
+	<arg name="Dataset_Name" default="rpg_simu" />
+	<arg name="Sequence_Name" default="shapes_poster_planar" />
+	<arg name="Representation_Name" default="TS" />
+	<arg name="eventNum_EM" default="2000" />
+
 	<rosparam param="/use_sim_time">true</rosparam>
 
-  <!-- Time surfaces generation -->
-  <node name="TimeSurface_left" pkg="esvo_time_surface" type="esvo_time_surface">
-    <remap from="events" to="/davis/left/events" />
-    <remap from="image" to="/davis/left/image_raw" />
-    <remap from="camera_info" to="/davis/left/camera_info" />
-    <remap from="time_surface" to="TS_left" />
+	<!-- Time surfaces generation -->
+	<node name="TimeSurface_left" pkg="esvo_time_surface" type="esvo_time_surface">
+		<remap from="events" to="/davis/left/events" />
+		<remap from="image" to="/davis/left/image_raw" />
+		<remap from="camera_info" to="/davis/left/camera_info" />
+		<remap from="time_surface" to="TS_left" />
 
-    <rosparam command="load" file="$(find esvo_core)/cfg/time_surface/ts_parameters.yaml" />
-  </node>
+		<rosparam command="load" file="$(find esvo_core)/cfg/time_surface/ts_parameters.yaml" />
+	</node>
 
-  <node name="TimeSurface_right" pkg="esvo_time_surface" type="esvo_time_surface">
-    <remap from="events" to="/davis/right/events" />
-    <remap from="image" to="/davis/right/image_raw" />
-    <remap from="camera_info" to="/davis/right/camera_info" />
-    <remap from="time_surface" to="TS_right" />
+	<node name="TimeSurface_right" pkg="esvo_time_surface" type="esvo_time_surface">
+		<remap from="events" to="/davis/right/events" />
+		<remap from="image" to="/davis/right/image_raw" />
+		<remap from="camera_info" to="/davis/right/camera_info" />
+		<remap from="time_surface" to="TS_right" />
 
-    <rosparam command="load" file="$(find esvo_core)/cfg/time_surface/ts_parameters.yaml" />
-  </node>
+		<rosparam command="load" file="$(find esvo_core)/cfg/time_surface/ts_parameters.yaml" />
+	</node>
 
 	<!-- Synchronize both Time Surfaces using the rosbag timer -->
-  <node name="global_timer" pkg="rostopic" type="rostopic" args="pub -s -r 70 /sync std_msgs/Time 'now' ">
-    <!-- Modify the rate according to the speed that the bag is played-->
+	<node name="global_timer" pkg="rostopic" type="rostopic" args="pub -s -r 50 /sync std_msgs/Time 'now' ">
 	</node>
 
 	<!-- Publish stereo camera calibration -->
@@ -39,29 +48,65 @@
 		<remap from="stamped_pose" to="/esvo_tracking/pose_pub" />
 		<remap from="events_left" to="/davis/left/events" />
 		<remap from="events_right" to="/davis/right/events" />
+		<rosparam param="dvs_frame_id">"dvs"</rosparam>
+		<rosparam param="world_frame_id">"map"</rosparam>
+		<rosparam param="calibInfoDir" subst_value="true">$(arg calibInfoDirStr)</rosparam>
+		<rosparam command="load" file="$(find esvo_core)/cfg/mapping/mapping_rpg_stereo.yaml" />
+	</node>
+
+	<node name="Tracking" pkg="esvo_core" type="Tracking" output="screen" required="true">
+		<remap from="time_surface_left" to="/TS_left" />
+		<remap from="time_surface_right" to="/TS_right" />
+		<remap from="stamped_pose" to="/esvo_tracking/pose_pub" />
+		<remap from="gt_pose" to="/optitrack/davis_stereo" />
+		<remap from="events_left" to="/davis/left/events" />
+		<remap from="pointcloud" to="/esvo_mapping/pointcloud_local" />
+		<rosparam param="dvs_frame_id">"dvs"</rosparam>
+		<rosparam param="world_frame_id">"map"</rosparam>
+		<rosparam param="calibInfoDir" subst_value="true">$(arg calibInfoDirStr)</rosparam>
+		<rosparam command="load" file="$(find esvo_core)/cfg/tracking/tracking_rpg_stereo.yaml" />
+
+		<param name="tracking_rate_hz" type="int" value="$(arg tracking_rate_hz)" />
+		<param name="Dataset_Name" type="string" value="$(arg Dataset_Name)" />
+		<param name="Sequence_Name" type="string" value="$(arg Sequence_Name)" />
+		<param name="Representation_Name" type="string" value="$(arg Representation_Name)" />
+		<param name="eventNum_EM" type="int" value="$(arg eventNum_EM)" />
+	</node>
+
+	<!-- Tracking node -->
+	<!-- <node name="esvo_Tracking" pkg="esvo_core" type="esvo_Tracking" output="screen" required="true">
+		<remap from="time_surface_left" to="/TS_left" />
+		<remap from="time_surface_right" to="/TS_right" />
+		<remap from="stamped_pose" to="/esvo_tracking/pose_pub" />
+		<remap from="gt_pose" to="/optitrack/davis_stereo" />
+		<remap from="events_left" to="/davis/left/events" />
+		<remap from="pointcloud" to="/esvo_mapping/pointcloud_local" />
 
 		<rosparam param="dvs_frame_id">"dvs"</rosparam>
 		<rosparam param="world_frame_id">"map"</rosparam>
 		<rosparam param="calibInfoDir" subst_value="true">$(arg calibInfoDirStr)</rosparam>
 
-		<rosparam command="load" file="$(find esvo_core)/cfg/mapping/mapping_rpg_stereo.yaml" />
+		<rosparam command="load" file="$(find esvo_core)/cfg/tracking/tracking_rpg_stereo.yaml" />
+	</node> -->
+
+	<node pkg="rosbag" type="play" name="play" output="screen" required="true"
+		args="/Monster/dataset/event_camera/rpg_stereo_tro/$(arg Sequence_Name)_edited.bag -r 0.5 --clock">
 	</node>
 
-	<!-- Tracking node -->
-	<node name="esvo_Tracking" pkg="esvo_core" type="esvo_Tracking" output="screen" required="true">
-    <remap from="time_surface_left" to="/TS_left" />
-    <remap from="time_surface_right" to="/TS_right" />
-    <remap from="stamped_pose" to="/esvo_tracking/pose_pub" />
-    <remap from="gt_pose" to="/optitrack/davis_stereo" />
-    <remap from="events_left" to="/davis/left/events" />
-    <remap from="pointcloud" to="/esvo_mapping/pointcloud_local" />
+  <!-- PublishMap node -->
+	<!-- <node name="publishMap" pkg="esvo_core" type="publishMap" output="screen" required="true">
+		<remap from="time_surface_left" to="/TS_left" />
+		<remap from="events_left" to="/cam0/events" />
+		<remap from="stamped_pose" to="/tracking/pose_pub" />
+		<rosparam param="dvs_frame_id">"dvs"</rosparam>
+		<rosparam param="world_frame_id">"map"</rosparam>
+		<rosparam command="load" file="$(find esvo_core)/cfg/tracking/tracking_rpg_simu.yaml" />
 
-    <rosparam param="dvs_frame_id">"dvs"</rosparam>
-    <rosparam param="world_frame_id">"map"</rosparam>
-  	<rosparam param="calibInfoDir" subst_value="true">$(arg calibInfoDirStr)</rosparam>
-
-    <rosparam command="load" file="$(find esvo_core)/cfg/tracking/tracking_rpg_stereo.yaml" />
-	</node>
+		<param name="TS_start" type="int" value="$(arg TS_start)" />
+		<param name="Event_start" type="int" value="$(arg Event_start)" />
+		<param name="Dataset_Name" type="string" value="$(arg Dataset_Name)" />
+		<param name="Sequence_Name" type="string" value="$(arg Sequence_Name)" />
+	</node> -->
 
 	<!-- Visualization -->
 	<!-- <node pkg="rqt_gui" type="rqt_gui" name="rqt_gui"

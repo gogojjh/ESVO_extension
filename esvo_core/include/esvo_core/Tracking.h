@@ -62,7 +62,9 @@ namespace esvo_core
 
     // topic callback functions
     void refMapCallback(const sensor_msgs::PointCloud2::ConstPtr &msg);
-    void timeSurfaceCallback(const sensor_msgs::ImageConstPtr &time_surface_left);
+    void timeSurfaceCallback(
+        const sensor_msgs::ImageConstPtr &time_surface_left,
+        const sensor_msgs::ImageConstPtr &time_surface_right);
     void eventsCallback(const dvs_msgs::EventArray::ConstPtr &msg);
 
     // results
@@ -90,8 +92,9 @@ namespace esvo_core
 
     // subscribers and publishers
     ros::Subscriber events_left_sub_;
+    message_filters::Subscriber<sensor_msgs::Image> TS_left_sub_, TS_right_sub_;
+
     ros::Subscriber map_sub_;
-    ros::Subscriber TS_left_sub_;
     ros::Subscriber gtPose_sub_, stampedPose_sub_;
     image_transport::Publisher reprojMap_pub_left_;
 
@@ -111,6 +114,10 @@ namespace esvo_core
     Eigen::Quaterniond q_gt_s_;
     Eigen::Vector3d t_gt_s_;
 
+    // Time Surface sync policy
+    typedef message_filters::sync_policies::ExactTime<sensor_msgs::Image, sensor_msgs::Image> ExactSyncPolicy;
+    message_filters::Synchronizer<ExactSyncPolicy> TS_sync_;
+
     // offline data
     std::string dvs_frame_id_;
     std::string world_frame_id_;
@@ -129,7 +136,7 @@ namespace esvo_core
     CurFrame cur_;
 
     std::deque<std::pair<ros::Time, PointCloud::Ptr>> refPCMap_buf_;
-    std::deque<std::pair<ros::Time, TimeSurfaceObservation>> TS_buf_;
+    std::deque<std::pair<ros::Time, TimeSurfaceObservation>> TS_history_;
 
     /**** offline parameters ***/
     size_t tracking_rate_hz_;
@@ -139,6 +146,7 @@ namespace esvo_core
     bool bVisualizeTrajectory_;
     std::string resultPath_;
     std::string strDataset_, strSequence_, strRep_;
+    size_t eventNum_EM_;
 
     Eigen::Matrix<double, 4, 4> T_world_cur_;
     Eigen::Matrix<double, 4, 4> T_world_map_;
