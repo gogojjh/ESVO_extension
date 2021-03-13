@@ -163,8 +163,6 @@ namespace esvo_core
     dynamic_reconfigure_callback_ = boost::bind(&esvo_Mapping::onlineParameterChangeCallback, this, _1, _2);
     server_.reset(new dynamic_reconfigure::Server<DVS_MappingStereoConfig>(nh_private));
     server_->setCallback(dynamic_reconfigure_callback_);
-
-    invDepth_INIT_ = 1.0;
   }
 
   esvo_Mapping::~esvo_Mapping()

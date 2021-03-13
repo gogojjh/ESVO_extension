@@ -5,14 +5,12 @@
 
 #include <ros/ros.h>
 #include <image_transport/image_transport.h>
-#include <sensor_msgs/Image.h>
 
 #include <message_filters/subscriber.h>
 #include <message_filters/synchronizer.h>
 #include <message_filters/sync_policies/exact_time.h>
 
 #include <tf2_ros/transform_broadcaster.h>
-#include <std_msgs/Int16.h>
 
 #include <esvo_core/container/CameraSystem.h>
 #include <esvo_core/core/RegProblemLM.h>
@@ -56,23 +54,24 @@ namespace esvo_core
 
     // topic callback functions
     void refMapCallback(const sensor_msgs::PointCloud2::ConstPtr &msg);
-    void timeSurfaceCallback(const sensor_msgs::ImageConstPtr &time_surface_left, const sensor_msgs::ImageConstPtr &time_surface_right);
+    void timeSurfaceCallback(
+        const sensor_msgs::ImageConstPtr &time_surface_left,
+        const sensor_msgs::ImageConstPtr &time_surface_right);
     void eventsCallback(const dvs_msgs::EventArray::ConstPtr &msg);
 
     // results
     void publishPose(const ros::Time &t, Transformation &tr);
     void publishPath(const ros::Time &t, Transformation &tr);
     void saveTrajectory(const std::string &resultDir);
-    // void publishTimeSurface(const ros::Time &t);
 
     // utils
     void reset();
     void clearEventQueue();
     void stampedPoseCallback(const geometry_msgs::PoseStampedConstPtr &msg);
-    void gtPoseCallback(const geometry_msgs::PoseStampedConstPtr &msg);
-    bool getPoseAt(const ros::Time &t,
-                   esvo_core::Transformation &Tr, // T_world_something
-                   const std::string &source_frame);
+    bool getPoseAt(
+        const ros::Time &t,
+        esvo_core::Transformation &Tr, // T_world_something
+        const std::string &source_frame);
 
   private:
     ros::NodeHandle nh_, pnh_;
@@ -82,22 +81,16 @@ namespace esvo_core
     ros::Subscriber events_left_sub_;
     ros::Subscriber map_sub_;
     message_filters::Subscriber<sensor_msgs::Image> TS_left_sub_, TS_right_sub_;
-    ros::Subscriber gtPose_sub_, stampedPose_sub_;
+    ros::Subscriber stampedPose_sub_;
     image_transport::Publisher reprojMap_pub_left_;
-    image_transport::Publisher time_surface_left_pub_, time_surface_right_pub_;
-    image_transport::Publisher mcimage_pub_;
 
     // publishers
-    ros::Publisher pose_pub_, path_pub_, pose_gt_pub_, path_gt_pub_;
-    ros::Publisher keyFrame_pub_;
+    ros::Publisher pose_pub_, path_pub_;
 
     // results
-    nav_msgs::Path path_, path_gt_;
+    nav_msgs::Path path_;
     std::list<Eigen::Matrix<double, 4, 4>, Eigen::aligned_allocator<Eigen::Matrix<double, 4, 4>>> lPose_;
     std::list<std::string> lTimestamp_;
-
-    Eigen::Quaterniond q_gt_s_;
-    Eigen::Vector3d t_gt_s_;
 
     // Time Surface sync policy
     typedef message_filters::sync_policies::ExactTime<sensor_msgs::Image, sensor_msgs::Image> ExactSyncPolicy;
@@ -111,7 +104,6 @@ namespace esvo_core
 
     // inter-thread management
     std::mutex data_mutex_;
-    std::mutex m_buf_;
 
     // online data
     EventQueue events_left_;
@@ -121,9 +113,6 @@ namespace esvo_core
     RefPointCloudMap refPCMap_;
     RefFrame ref_;
     CurFrame cur_;
-
-    std::deque<std::pair<ros::Time, TimeSurfaceObservation>> TS_buf_;
-    std::deque<std::pair<ros::Time, PointCloud::Ptr>> refPCMap_buf_;
 
     /**** offline parameters ***/
     size_t tracking_rate_hz_;
