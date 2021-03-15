@@ -61,17 +61,20 @@ namespace esvo_core
       if (bComputeGrad)
         pTsObs_->computeTsNegativeGrad();
 
-      // set fval dimension
+      // set fvec dimension
       resetNumberValues(numPoints_ * patchSize_);
       if (bPrint_)
         LOG(INFO) << "RegProblemLM::setProblem succeeds.";
     }
 
+    /**
+     * @brief: This function sample residuals: 0...N; offset...N+offset; offset*2...N+offset*3 
+     **/
     void RegProblemLM::setStochasticSampling(size_t offset, size_t N)
     {
       ResItemsStochSampled_.clear();
       ResItemsStochSampled_.reserve(N);
-      for (size_t i = 0; i < N; i++)
+      for (size_t i = 0; i < N; i++) 
       {
         if (offset + i >= ResItems_.size())
           break;
@@ -134,12 +137,13 @@ namespace esvo_core
           fvec[i] = sqrt(irls_weight) * ri.residual_(0);
         }
       }
+      // fvec[ResItemsStochSampled_.size()] = x.norm() * 10000; // modified by jjiao
       //  LOG(INFO) << "assign weighted residual ..............";
       return 0;
     }
 
     /**
-     * @brief: This function calculate the tracking residuals by exploiting the negative TS as distance fields
+     * @brief: This function assign the tracking residuals by exploiting the negative TS as distance fields
      */
     void RegProblemLM::thread(Job &job) const
     {
@@ -255,7 +259,9 @@ namespace esvo_core
       }
       // assemble with dG_dtheta
       // J = image_grad * dW_dx * dW_dtheta (at theta = 0)
-      fjac = -fjacBlock * J_G_0_;
+      fjac.block(0, 0, fjacBlock.rows(), 6) = -fjacBlock * J_G_0_;
+      // fjac.block(fjacBlock.rows(), 0, 1, 6) = 10000 * x.transpose();  // modified by jjiao
+
       // The explanation for the factor -1 is as follows. The transformation recovered from dThetha
       // is T_right_left (R_, t_). However, the one used for warping is T_left_right (R_.transpose(), -R.transpose() * t).
       // Thus, R_.transpose() is used as dT_dInvPi.

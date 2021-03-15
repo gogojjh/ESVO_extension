@@ -214,7 +214,7 @@ namespace esvo_core
 			LOG(INFO) << "------------------------------------------------------------";
 			LOG(INFO) << "------------------------------------------------------------";
 #endif
-			if (bSaveTrajectory_ && cur_.t_.toSec() - last_save_trajectory_timestamp_ > 0.)
+			if (bSaveTrajectory_ && cur_.t_.toSec() - last_save_trajectory_timestamp_ > 0.1)
 			{
 				last_save_trajectory_timestamp_ = cur_.t_.toSec();
 				struct stat st;
@@ -275,7 +275,7 @@ namespace esvo_core
 			{
 				// LOG(INFO) << "[EM] process " << MAX_NUM_Event_INVOLVED << " events";
 				TicToc t_pre;
-				double t_LoadEvent, t_CurDataTransfer, t_RefDataTransfer;
+				double t_construct_EM;
 				
 				m_buf_.lock();
 				std::vector<dvs_msgs::Event *> vEventSubsetPtr;
@@ -293,8 +293,6 @@ namespace esvo_core
 					LOG(INFO) << "The time_surface observation should be obtained after the reference frame";
 					exit(-1);
 				}
-				t_LoadEvent = t_pre.toc();
-				t_pre.tic();
 
 				size_t col = camSysPtr_->cam_left_ptr_->width_;
 				size_t row = camSysPtr_->cam_left_ptr_->height_;
@@ -316,6 +314,8 @@ namespace esvo_core
 						eventMap.at<uchar>(std::floor(coor(1)), std::floor(coor(0))) = 255;
 					}
 				}
+				t_construct_EM = t_pre.toc();
+				LOG_EVERY_N(INFO, 100) << "EM lasts " << (vEventSubsetPtr.back()->ts.toSec() - vEventSubsetPtr.front()->ts.toSec()) * 1000 << " ms";
 
 				// curDataTransferring
 				cur_.t_ = ros::Time((vEventSubsetPtr.front()->ts.toSec() + vEventSubsetPtr.back()->ts.toSec()) / 2);
@@ -328,7 +328,6 @@ namespace esvo_core
 				cur_.pTsObs_ = &TS_obs_fake;
 				cur_.tr_ = Transformation(T_world_cur_);
 				cur_.numEventsSinceLastObs_ = vEventSubsetPtr.size();
-				t_CurDataTransfer = t_pre.toc();
 				m_buf_.unlock();
 
 				// create new regProblem
@@ -376,6 +375,7 @@ namespace esvo_core
 				if (bSaveTrajectory_)
 				{
 					std::unordered_map<std::string, double> umTimeCost;
+					umTimeCost["constructEM"] = t_construct_EM;
 					umTimeCost["resetReg"] = t_resetRegProblem;
 					umTimeCost["solveReg"] = t_solve;
 					umTimeCost["pubReg"] = t_pub_result;
@@ -387,8 +387,7 @@ namespace esvo_core
 				LOG(INFO) << "------------------------------------------------------------";
 				LOG(INFO) << "--------------------Tracking Computation Cost (EM)----------";
 				LOG(INFO) << "------------------------------------------------------------";
-				// LOG(INFO) << "Load events: " << t_LoadEvent << " ms"; // 0.00791ms
-				// LOG(INFO) << "Current data transfer: " << t_CurDataTransfer << " ms"; // 0.45ms
+				LOG(INFO) << "Time to constrcut EM: " << t_construct_EM << " ms"; // 0.45ms
 				LOG(INFO) << "Time within the EM: " << ros::Time((vEventSubsetPtr.back()->ts.toSec() - vEventSubsetPtr.front()->ts.toSec()) * 1000) << " ms";
 				LOG(INFO) << "ResetRegProblem: " << t_resetRegProblem << " ms, (" << t_resetRegProblem / t_overall_count * 100 << "%).";
 				LOG(INFO) << "Registration: " << t_solve << " ms, (" << t_solve / t_overall_count * 100 << "%).";
@@ -628,6 +627,8 @@ namespace esvo_core
 	{
 		// load reference info
 		ref_.t_ = refPCMap_buf_.back().first;
+		nh_.getParam("/ESVO_SYSTEM_STATUS", ESVO_System_Status_);
+		//  LOG(INFO) << "SYSTEM STATUS(T"
 		if (ESVO_System_Status_ == "INITIALIZATION" && ets_ == IDLE) // will be true if receive the first PCMap from mapping
 			ref_.tr_.setIdentity();
 		if (ESVO_System_Status_ == "WORKING" || (ESVO_System_Status_ == "INITIALIZATION" && ets_ == WORKING))
@@ -659,13 +660,30 @@ namespace esvo_core
 	bool Tracking::curDataTransferring()
 	{
 		// load current observation
-		auto ev_begin_it = EventBuffer_lower_bound(events_left_, cur_.t_);
-		cur_.t_ = TS_history_.back().first;
-		cur_.pTsObs_ = &TS_history_.back().second;
-		cur_.tr_ = Transformation(T_world_cur_);
-		auto ev_end_it = EventBuffer_lower_bound(events_left_, cur_.t_);
-		cur_.numEventsSinceLastObs_ = std::distance(ev_begin_it, ev_end_it) + 1; // Count the number of events occuring since the last observation.
-		// LOG(INFO) << "event number in 10ms: " << cur_.numEventsSinceLastObs_; // 2000-1400
+		auto ev_last_it = EventBuffer_lower_bound(events_left_, cur_.t_);
+		auto TS_it = TS_history_.rbegin();
+
+		// TS_history may not be updated before the tracking loop excutes the data transfering
+		if (cur_.t_ == TS_it->first)
+			return false;
+		cur_.t_ = TS_it->first;
+		cur_.pTsObs_ = &TS_it->second;
+
+		nh_.getParam("/ESVO_SYSTEM_STATUS", ESVO_System_Status_);
+		if (ESVO_System_Status_ == "INITIALIZATION" && ets_ == IDLE)
+		{
+			cur_.tr_ = ref_.tr_;
+			//    LOG(INFO) << "(IDLE) Assign cur's ("<< cur_.t_.toNSec() << ") pose with ref's at " << ref_.t_.toNSec();
+			// LOG(INFO) << " " << cur_.tr_.getTransformationMatrix() << " ";
+		}
+		if (ESVO_System_Status_ == "WORKING" || (ESVO_System_Status_ == "INITIALIZATION" && ets_ == WORKING))
+		{
+			cur_.tr_ = Transformation(T_world_cur_);
+			//    LOG(INFO) << "(WORKING) Assign cur's ("<< cur_.t_.toNSec() << ") pose with T_world_cur.";
+		}
+		// Count the number of events occuring since the last observation.
+		auto ev_cur_it = EventBuffer_lower_bound(events_left_, cur_.t_);
+		cur_.numEventsSinceLastObs_ = std::distance(ev_last_it, ev_cur_it) + 1;
 		return true;
 	}
 
@@ -786,14 +804,6 @@ namespace esvo_core
 	void Tracking::gtPoseCallback(const geometry_msgs::PoseStampedConstPtr &ps_msg)
 	{
 		// m_buf_.lock();
-		if (ps_msg->header.stamp.toSec() - last_gt_timestamp_ > 0.01)
-		{
-			last_gt_timestamp_ = ps_msg->header.stamp.toSec();
-		}
-		else
-		{
-			return;
-		}
 		Eigen::Matrix4d T_world_marker = Eigen::Matrix4d::Identity();
 		T_world_marker.topLeftCorner<3, 3>() = Eigen::Quaterniond(ps_msg->pose.orientation.w,
 																  ps_msg->pose.orientation.x,
@@ -1000,6 +1010,13 @@ namespace esvo_core
 		{
 			LOG(INFO) << "File at " << resultDir << " is not opened, save trajectory failed.";
 			exit(-1);
+		}
+		if (!vTimeCost_.empty())
+		{
+			f << "# ";
+			for (auto it = vTimeCost_[0].begin(); it != vTimeCost_[0].end(); it++)
+				f << it->first << " ";
+			f << std::endl;
 		}
 		f << std::fixed;
 		for (auto it_TimeCost = vTimeCost_.begin(); it_TimeCost != vTimeCost_.end(); it_TimeCost++)

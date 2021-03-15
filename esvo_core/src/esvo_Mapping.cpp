@@ -307,7 +307,7 @@ namespace esvo_core
 
     // block matching
     tt_mapping.tic();
-    ebm_.createMatchProblem(&TS_obs_, &st_map_, &vDenoisedEventsPtr_left_);
+    ebm_.createMatchProblem(&TS_obs_, &st_map_, &vDenoisedEventsPtr_left_); // epipolar search with the smallest temporal residual
     ebm_.match_all_HyperThread(vEMP);
     // ebm_.match_all_SingleThread(vEMP);
 #ifdef ESVO_CORE_MAPPING_DEBUG
