@@ -53,7 +53,7 @@ namespace esvo_core
       bool resetRegProblem(RefFrame *ref, CurFrame *cur);
       bool solve_numerical();  // relatively slower
       bool solve_analytical(); // faster
-      bool evalDegeneracy(RefFrame *ref, CurFrame *cur);
+      bool evalDegeneracy(RefFrame *ref, CurFrame *cur, double &lambda);
 
       // For test and visualization
       void setRegPublisher(image_transport::Publisher *reprojMap_pub);

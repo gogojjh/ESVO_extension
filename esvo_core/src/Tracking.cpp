@@ -199,7 +199,7 @@ namespace esvo_core
 				umTimeCost["resetReg"] = t_resetRegProblem;
 				umTimeCost["solveReg"] = t_solve;
 				umTimeCost["pubReg"] = t_pub_result;
-				umTimeCost["total"] = t_overall_count;
+				umTimeCost["totalReg"] = t_overall_count;
 				vTimeCost_.push_back(umTimeCost);
 			}
 #ifdef ESVO_CORE_TRACKING_LOG
@@ -214,7 +214,7 @@ namespace esvo_core
 			LOG(INFO) << "------------------------------------------------------------";
 			LOG(INFO) << "------------------------------------------------------------";
 #endif
-			if (bSaveTrajectory_ && cur_.t_.toSec() - last_save_trajectory_timestamp_ > 0.1)
+			if (bSaveTrajectory_ && cur_.t_.toSec() - last_save_trajectory_timestamp_ > 0.5)
 			{
 				last_save_trajectory_timestamp_ = cur_.t_.toSec();
 				struct stat st;
@@ -379,7 +379,7 @@ namespace esvo_core
 					umTimeCost["resetReg"] = t_resetRegProblem;
 					umTimeCost["solveReg"] = t_solve;
 					umTimeCost["pubReg"] = t_pub_result;
-					umTimeCost["total"] = t_overall_count;
+					umTimeCost["totalReg"] = t_overall_count;
 					vTimeCost_.push_back(umTimeCost);
 				}
 #ifdef ESVO_CORE_TRACKING_LOG
@@ -396,7 +396,7 @@ namespace esvo_core
 				LOG(INFO) << "------------------------------------------------------------";
 				LOG(INFO) << "------------------------------------------------------------";
 #endif
-				if (bSaveTrajectory_ && (cur_.t_.toSec() - last_save_trajectory_timestamp_ > 0.1))
+				if (bSaveTrajectory_ && (cur_.t_.toSec() - last_save_trajectory_timestamp_ > 0.5))
 				{
 					last_save_trajectory_timestamp_ = cur_.t_.toSec();
 					struct stat st;
@@ -472,8 +472,9 @@ namespace esvo_core
 
 			TicToc tt;
 			double t_resetRegProblem, t_evalDegeneracy, t_solve, t_pub_result;
+			double lambda = 0.0;
 			if (rpSolver_.resetRegProblem(&ref_, &cur_)) // will be false if no enough points in local map, need to reinitialize
-			{			
+			{		
 				t_resetRegProblem = tt.toc();
 				if (ets_ == IDLE)
 					ets_ = WORKING;
@@ -483,8 +484,7 @@ namespace esvo_core
 
 				{
 					std::lock_guard<std::mutex> lock(data_mutex_);
-					// LOG(INFO) << "evalDegeneracy";
-					if (rpSolver_.evalDegeneracy(&ref_, &cur_))
+					if (rpSolver_.evalDegeneracy(&ref_, &cur_, lambda))
 					{
 						const size_t MAX_NUM_Event_INVOLVED = eventNum_EM_;
 						LOG(INFO) << "Switch to EM-based representation with Events: " << std::min(MAX_NUM_Event_INVOLVED, events_left_.size()) << "!";
@@ -500,7 +500,6 @@ namespace esvo_core
 						size_t col = camSysPtr_->cam_left_ptr_->width_;
 						size_t row = camSysPtr_->cam_left_ptr_->height_;
 						cv::Mat eventMap = cv::Mat(cv::Size(col, row), CV_8UC1, cv::Scalar(0));
-						// LOG(INFO) << "EventMap";
 						for (size_t i = 0; i < vEventSubsetPtr.size(); i++)
 						{
 							bool bDistorted = true;
@@ -515,7 +514,6 @@ namespace esvo_core
 							}
 							eventMap.at<uchar>(std::floor(coor(1)), std::floor(coor(0))) = 255;
 						}
-						// LOG(INFO) << "CurDataTransfer";
 						std_msgs::Header header;
 						header.stamp = ros::Time(cur_.t_);
 						header.frame_id = dvs_frame_id_;
@@ -524,10 +522,8 @@ namespace esvo_core
 						TimeSurfaceObservation TS_obs_fake(cv_ptr_left, cv_ptr_right, 0, false);
 						cur_.pTsObs_ = &TS_obs_fake;
 						cur_.numEventsSinceLastObs_ = vEventSubsetPtr.size();
-						// LOG(INFO) << "Reset";
 						rpSolver_.resetRegProblem(&ref_, &cur_);
 					}
-					// LOG(INFO) << "Finish evaluation";
 					t_evalDegeneracy = tt.toc();
 				}
 
@@ -569,8 +565,11 @@ namespace esvo_core
 				umTimeCost["evalDeg"] = t_evalDegeneracy;
 				umTimeCost["solveReg"] = t_solve;
 				umTimeCost["pubReg"] = t_pub_result;
-				umTimeCost["total"] = t_overall_count;
+				umTimeCost["totalReg"] = t_overall_count;
 				vTimeCost_.push_back(umTimeCost);
+				std::unordered_map<std::string, double> umLambda;
+				umLambda["degenFactor"] = lambda;
+				vLambda_.push_back(umLambda);
 			}
 #ifdef ESVO_CORE_TRACKING_LOG
 			LOG(INFO) << "\n";
@@ -584,7 +583,7 @@ namespace esvo_core
 			LOG(INFO) << "------------------------------------------------------------";
 			LOG(INFO) << "------------------------------------------------------------";
 #endif
-			if (bSaveTrajectory_ && (cur_.t_.toSec() - last_save_trajectory_timestamp_ > 1.0))
+			if (bSaveTrajectory_ && cur_.t_.toSec() - last_save_trajectory_timestamp_ > 0.5)
 			{
 				last_save_trajectory_timestamp_ = cur_.t_.toSec();
 				struct stat st;
@@ -598,9 +597,10 @@ namespace esvo_core
 				LOG(INFO) << "pose size: " << lPose_.size();
 				LOG(INFO) << ", refPCMap_buf size(): " << refPCMap_buf_.size() << ", TS_buf.size(): " << TS_history_.size();
 #endif
-				saveTrajectory(resultPath_ + strDataset_ + "/" + strSequence_ + "_" + strRep_ + "_traj_estimate.txt", lTimestamp_, lPose_);
-				saveTrajectory(resultPath_ + strDataset_ + "/" + strSequence_ + "_" + strRep_ + "_traj_gt.txt", lTimestamp_GT_, lPose_GT_);
-				saveTimeCost(resultPath_ + strDataset_ + "/" + strSequence_ + "_" + strRep_ + "_time.txt", vTimeCost_);
+				saveTrajectory(resultPath_ + strDataset_ + "/" + strSequence_ + "/traj/" + strRep_ + "_traj_estimate.txt", lTimestamp_, lPose_);
+				saveTrajectory(resultPath_ + strDataset_ + "/" + strSequence_ + "/traj/" + "traj_gt.txt", lTimestamp_GT_, lPose_GT_);
+				saveTimeCost(resultPath_ + strDataset_ + "/" + strSequence_ + "/time/" + strRep_ + "_time.txt", vTimeCost_);
+				saveTimeCost(resultPath_ + strDataset_ + "/" + strSequence_ + "/traj/" + strRep_ + "_lambda.txt", vLambda_);
 			}
 			r.sleep();
 		} // while
@@ -675,17 +675,22 @@ namespace esvo_core
 
 	void Tracking::reset()
 	{
-		m_buf_.lock();
+		std::lock_guard<std::mutex> lock(data_mutex_);
 		ets_ = IDLE;
 		TS_id_ = 0;
 		TS_history_.clear();
 		refPCMap_buf_.clear();
 		events_left_.clear();
-		pose_predictor_.reset();
 
 		path_.poses.clear();
 		path_gt_.poses.clear();
-		m_buf_.unlock();
+
+		lPose_.clear();
+		lTimestamp_.clear();
+		lPose_GT_.clear();
+		lTimestamp_GT_.clear();
+		vTimeCost_.clear();
+		vLambda_.clear();
 	}
 
 	/********************** Callback functions *****************************/

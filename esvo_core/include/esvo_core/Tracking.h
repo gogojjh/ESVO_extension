@@ -47,48 +47,48 @@ namespace esvo_core
     WORKING
   };
 
-  class PosePredictor
-  {
-  public:
-    PosePredictor()
-    {
-      T0_.setIdentity();
-      T1_.setIdentity();
-      T_pred_.setIdentity();
-      t0_ = ros::Time::now();
-      t1_ = ros::Time::now();
-    }
+  // class PosePredictor
+  // {
+  // public:
+  //   PosePredictor()
+  //   {
+  //     T0_.setIdentity();
+  //     T1_.setIdentity();
+  //     T_pred_.setIdentity();
+  //     t0_ = ros::Time::now();
+  //     t1_ = ros::Time::now();
+  //   }
 
-    void reset()
-    {
-      T0_.setIdentity();
-      T1_.setIdentity();
-      T_pred_.setIdentity();
-      t0_ = ros::Time::now();
-      t1_ = ros::Time::now();
-    }
+  //   void reset()
+  //   {
+  //     T0_.setIdentity();
+  //     T1_.setIdentity();
+  //     T_pred_.setIdentity();
+  //     t0_ = ros::Time::now();
+  //     t1_ = ros::Time::now();
+  //   }
 
-    void predict(const ros::Time &t)
-    {
-      // Linear interpolation in SE(3)
-      const Eigen::Matrix4d T_relative = T0_.inverse() * T1_;
-      const double delta_t = (t - t0_).toSec() / (t1_ - t0_).toSec();
-      T_pred_ = T0_ * getLinearInterpolation(T_relative, delta_t);
-    }
+  //   void predict(const ros::Time &t)
+  //   {
+  //     // Linear interpolation in SE(3)
+  //     const Eigen::Matrix4d T_relative = T0_.inverse() * T1_;
+  //     const double delta_t = (t - t0_).toSec() / (t1_ - t0_).toSec();
+  //     T_pred_ = T0_ * getLinearInterpolation(T_relative, delta_t);
+  //   }
 
-    Eigen::Matrix4d getLinearInterpolation(const Eigen::Matrix4d &T_relative, const double &delta_t) const
-    {
-      Eigen::Matrix3d R_relative = T_relative.topLeftCorner<3, 3>();
-      Eigen::Quaterniond q_relative(R_relative);
-      Eigen::Matrix4d T = Eigen::Matrix4d::Identity();
-      T.topLeftCorner<3, 3>() = q_relative.slerp(delta_t, q_relative).toRotationMatrix();
-      T.topRightCorner<3, 1>() = delta_t * T_relative.topRightCorner<3, 1>();
-      return T;
-    }
+  //   Eigen::Matrix4d getLinearInterpolation(const Eigen::Matrix4d &T_relative, const double &delta_t) const
+  //   {
+  //     Eigen::Matrix3d R_relative = T_relative.topLeftCorner<3, 3>();
+  //     Eigen::Quaterniond q_relative(R_relative);
+  //     Eigen::Matrix4d T = Eigen::Matrix4d::Identity();
+  //     T.topLeftCorner<3, 3>() = q_relative.slerp(delta_t, q_relative).toRotationMatrix();
+  //     T.topRightCorner<3, 1>() = delta_t * T_relative.topRightCorner<3, 1>();
+  //     return T;
+  //   }
 
-    Eigen::Matrix4d T0_, T1_, T_pred_;
-    ros::Time t0_, t1_;
-  };
+  //   Eigen::Matrix4d T0_, T1_, T_pred_;
+  //   ros::Time t0_, t1_;
+  // };
 
   class Tracking
   {
@@ -153,7 +153,8 @@ namespace esvo_core
     std::list<std::string> lTimestamp_GT_;
     double last_gt_timestamp_, last_save_trajectory_timestamp_;
 
-    std::vector<std::unordered_map<std::string, double> > vTimeCost_;
+    std::vector<std::unordered_map<std::string, double>> vTimeCost_;
+    std::vector<std::unordered_map<std::string, double>> vLambda_;
 
     Eigen::Quaterniond q_gt_s_;
     Eigen::Vector3d t_gt_s_;
@@ -194,7 +195,7 @@ namespace esvo_core
 
     Eigen::Matrix<double, 4, 4> T_world_cur_;
     Eigen::Matrix<double, 4, 4> T_world_map_;
-    PosePredictor pose_predictor_;
+    // PosePredictor pose_predictor_;
 
     /*** system objects ***/
     RegProblemType rpType_;
