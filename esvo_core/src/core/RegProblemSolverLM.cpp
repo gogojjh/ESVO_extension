@@ -219,5 +219,59 @@ namespace esvo_core
       reprojMap_pub_ = reprojMap_pub;
     }
 
+    bool RegProblemSolverLM::evalDegeneracy(RefFrame *ref, CurFrame *cur)
+    {
+      size_t numBatches;
+      if (rpType_ == REG_NUMERICAL)
+        numBatches = numDiff_regProblemPtr_->numBatches_;
+      if (rpType_ == REG_ANALYTICAL)
+        numBatches = regProblemPtr_->numBatches_;
+      Eigen::VectorXd x(6);
+      x.fill(0.0);
+      // LOG(INFO) << "compute Jacobians";
+      for (size_t i = 0; i < numBatches; i++)
+      {
+        regProblemPtr_->setStochasticSampling((i % numBatches) * rpConfigPtr_->BATCH_SIZE_, rpConfigPtr_->BATCH_SIZE_);
+        Eigen::MatrixXd J, JTJ;
+        if (rpType_ == REG_NUMERICAL)
+        {
+          numDiff_regProblemPtr_->df(x, J);
+        }
+        if (rpType_ == REG_ANALYTICAL)
+        {
+          regProblemPtr_->df(x, J);
+        }
+
+        // LOG(INFO) << "compute Hessian";
+        JTJ = J.transpose() * J / 65025.0;
+        Eigen::SelfAdjointEigenSolver<Eigen::Matrix<double, 6, 6>> esolver(JTJ);
+        Eigen::Matrix<double, 1, 6> mat_E = esolver.eigenvalues().real();    // 6*1
+        Eigen::Matrix<double, 6, 6> mat_V_f = esolver.eigenvectors().real(); // 6*6, column is the corresponding eigenvector
+        Eigen::Matrix<double, 6, 6> mat_V_p = mat_V_f.transpose();
+        Eigen::Matrix<double, 6, 6> mat_P;
+        const double eignThre = 100.0;
+        // LOG(INFO) << "compute Degeneracy";
+        for (size_t i = 0; i < 6; i++)
+        {
+          if (mat_E(0, i) < eignThre)
+          {
+            // for (int j = 0; j < 6; j++)
+            // {
+            //   mat_V_p(i, j) = 0;
+            // }
+            // LOG(WARNING) << "Degeneracy in LM (Tracking)." << std::endl;
+            return true;
+          }
+          else
+          {
+            break;
+          }
+        }
+      }
+      return false;
+      // matP = matV.transpose().inverse() * matV_p;
+      // delta_x = matP * x;
+    }
+
   } //namespace core
 } //namespace esvo_core

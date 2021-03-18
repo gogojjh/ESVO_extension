@@ -82,7 +82,14 @@
   </node> -->
 
 	<!-- Synchronize both Time Surfaces using the rosbag timer -->
-	<node name="global_timer" pkg="rostopic" type="rostopic" args="pub -s -r 50 /sync std_msgs/Time 'now' ">
+	<!-- <node name="global_timer" pkg="rostopic" type="rostopic" args="pub -s -r 50 /sync std_msgs/Time 'now' ">
+	</node> -->
+
+	<node name="TimeSurface_global_timer" pkg="esvo_time_surface" type="TimeSurface_global_timer" required="true" >
+		<remap from="events" to="/davis/left/events" />
+		<!-- <param name="minimum_events" type="int" value="2000" /> -->
+		<param name="frequency_timer" type="int" value="50" /> 
+    <!-- <param name="minimum_frequency_timer" type="int" value="20" /> -->
 	</node>
 
 	<node pkg="rosbag" type="play" name="play" output="screen" required="true"

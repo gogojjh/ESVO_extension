@@ -1,4 +1,11 @@
 <launch>
+	<arg name="tracking_rate_hz" default="100" />
+	<arg name="TS_start" default="0" />
+	<arg name="Event_start" default="10000" />
+	<arg name="Dataset_Name" default="rpg_simu" />
+	<arg name="Sequence_Name" default="shapes_poster_planar" />
+	<arg name="Representation_Name" default="TS" />
+
 	<rosparam param="/use_sim_time">true</rosparam>
 
 	<!-- Time surfaces generation -->
@@ -12,7 +19,7 @@
 	</node>
 
 	<!-- Synchronize both Time Surfaces using the rosbag timer -->
-  	<node name="global_timer" pkg="rostopic" type="rostopic" args="pub -s -r 70 /sync std_msgs/Time 'now' ">
+  	<node name="global_timer" pkg="rostopic" type="rostopic" args="pub -s -r 50 /sync std_msgs/Time 'now' ">
     <!-- Modify the rate according to the speed that the bag is played-->
 	</node>
 
@@ -30,12 +37,15 @@
 		<remap from="gt_pose" to="/optitrack/davis_stereo" />
 		<remap from="events_left" to="/davis/left/events" />
 		<remap from="pointcloud" to="/publishMap/pointcloud_local" />
-
 		<rosparam param="dvs_frame_id">"dvs"</rosparam>
 		<rosparam param="world_frame_id">"map"</rosparam>
 		<rosparam param="calibInfoDir" subst_value="true">$(arg calibInfoDirStr)</rosparam>
-
 		<rosparam command="load" file="$(find esvo_core)/cfg/tracking/tracking_rpg_stereo.yaml" />
+
+		<param name="tracking_rate_hz" type="int" value="$(arg tracking_rate_hz)" />
+		<param name="Dataset_Name" type="string" value="$(arg Dataset_Name)" />
+		<param name="Sequence_Name" type="string" value="$(arg Sequence_Name)" />
+		<param name="Representation_Name" type="string" value="$(arg Representation_Name)" />
 	</node>
 
 	<node name="publishMap" pkg="esvo_core" type="publishMap" output="screen" required="true">
@@ -45,6 +55,11 @@
 		<rosparam param="dvs_frame_id">"dvs"</rosparam>
 		<rosparam param="world_frame_id">"map"</rosparam>
 		<rosparam command="load" file="$(find esvo_core)/cfg/tracking/tracking_rpg_stereo.yaml" />
+
+		<param name="TS_start" type="int" value="$(arg TS_start)" />
+		<param name="Event_start" type="int" value="$(arg Event_start)" />
+		<param name="Dataset_Name" type="string" value="$(arg Dataset_Name)" />
+		<param name="Sequence_Name" type="string" value="$(arg Sequence_Name)" />
 	</node>
 
 	<!-- Visualization -->

@@ -28,4 +28,15 @@ target_link_libraries(esvo_time_surface
    ${OpenCV_LIBRARIES}
 )
 
+# make the executable
+cs_add_executable(TimeSurface_global_timer
+    src/TimeSurface_global_timer.cpp
+)
+
+# link the executable to the necesarry libs
+target_link_libraries(TimeSurface_global_timer
+   ${catkin_LIBRARIES}
+)
+
+
 cs_install()

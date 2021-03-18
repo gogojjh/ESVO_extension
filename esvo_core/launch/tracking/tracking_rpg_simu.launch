@@ -11,7 +11,7 @@
 	<arg name="Representation_Name" default="TS" />
 
 	<rosparam param="/use_sim_time">true</rosparam>
-
+	
 	<!-- Time surfaces generation -->
 	<node name="TimeSurface_left" pkg="esvo_time_surface" type="esvo_time_surface">
 		<remap from="events" to="/cam0/events" />
@@ -24,7 +24,6 @@
 
 	<!-- Synchronize both Time Surfaces using the rosbag timer -->
 	<node name="global_timer" pkg="rostopic" type="rostopic" args="pub -s -r 50 /sync std_msgs/Time 'now' ">
-	<!-- Modify the rate according to the speed that the bag is played-->
 	</node>
 
 	<!-- Calibration folder -->
@@ -52,7 +51,7 @@
 	<node name="publishMap" pkg="esvo_core" type="publishMap" output="screen" required="true">
 		<remap from="time_surface_left" to="/TS_left" />
 		<remap from="events_left" to="/cam0/events" />
-		<remap from="stamped_pose" to="/tracking/pose_pub" />
+		<!-- <remap from="stamped_pose" to="/tracking/pose_pub" /> -->
 		<rosparam param="dvs_frame_id">"dvs"</rosparam>
 		<rosparam param="world_frame_id">"map"</rosparam>
 		<rosparam command="load" file="$(find esvo_core)/cfg/tracking/tracking_rpg_simu.yaml" />
