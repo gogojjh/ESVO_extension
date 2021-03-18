@@ -164,12 +164,12 @@ namespace esvo_core
         ResidualItem &ri = vRI[i];
         ri.residual_ = Eigen::VectorXd(residualDim);
         Eigen::Vector2d x1_s;
-        if (!reprojection(ri.p_, T_left_ref, x1_s))
-          ri.residual_.setConstant(255.0);
+        if (!reprojection(ri.p_, T_left_ref, x1_s)) // projected points are outside the image
+          ri.residual_.setConstant(255.0); // jacobians are zero
         else
         {
           Eigen::MatrixXd tau1;
-          if (patchInterpolation(TsObs.TS_negative_left_, x1_s, tau1))
+          if (patchInterpolation(TsObs.TS_negative_left_, x1_s, tau1)) // projected points are outside the image
           {
             for (size_t y = 0; y < wy; y++)
               for (size_t x = 0; x < wx; x++)

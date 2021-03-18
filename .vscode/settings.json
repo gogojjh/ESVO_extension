@@ -76,7 +76,8 @@
         "*.txx": "cpp",
         "*.cuh": "cpp",
         "__tree": "cpp",
-        "eigen": "cpp"
+        "eigen": "cpp",
+        "__split_buffer": "cpp"
     },
     "cmake.configureOnOpen": true,
     "C_Cpp.errorSquiggles": "Disabled"
