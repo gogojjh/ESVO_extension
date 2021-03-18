@@ -10,6 +10,8 @@
 #include <mutex>
 #include <unistd.h>
 
+#define TIME_SURFACE_SYNC 
+
 int newEvents;
 
 template <typename T>
@@ -49,16 +51,27 @@ int main(int argc, char *argv[])
     while (ros::ok())
     {
         ros::spinOnce();
-        if ((ros::WallTime::now().toSec() - timestampLast >= 1.0 / FREQUENCY_TIMER) && (newEvents >= MINIMUM_EVENTS)
-         || (ros::WallTime::now().toSec() - timestampLast >= 1.0 / MINIMUM_FREQUENCY_TIMER))
+#ifdef TIME_SURFACE_SYNC
+        if (ros::WallTime::now().toSec() - timestampLast >= 1.0 / FREQUENCY_TIMER)
         {
-            // LOG_EVERY_N(INFO, 10) << ros::WallTime::now().toSec() - timestampLast;
             std_msgs::Time msg;
             msg.data = ros::Time(ros::WallTime::now().toSec());
             global_time_pub.publish(msg);
             timestampLast = msg.data.toSec();
             newEvents = 0;
         }
+#else
+        if ((ros::WallTime::now().toSec() - timestampLast >= 1.0 / FREQUENCY_TIMER) && (newEvents >= MINIMUM_EVENTS)
+         || (ros::WallTime::now().toSec() - timestampLast >= 1.0 / MINIMUM_FREQUENCY_TIMER))
+        {
+            // LOG_EVERY_N(INFO, 10) << (ros::WallTime::now().toSec() - timestampLast) * 1000 << " ms";
+            std_msgs::Time msg;
+            msg.data = ros::Time(ros::WallTime::now().toSec());
+            global_time_pub.publish(msg);
+            timestampLast = msg.data.toSec();
+            newEvents = 0;
+        }
+#endif 
         usleep(1e3); // 1ms
     }
     return 0;
