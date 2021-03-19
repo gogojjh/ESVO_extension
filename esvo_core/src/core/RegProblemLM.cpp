@@ -117,6 +117,7 @@ namespace esvo_core
         if (thread.joinable())
           thread.join();
 
+      // LOG(INFO) << ResItemsStochSampled_.size() << ", fvec: " << fvec.rows();
       // assign the reweighted residual to fvec
       if (strcmp(rpConfigPtr_->LSnorm_.c_str(), "l2") == 0)
       {
@@ -137,8 +138,7 @@ namespace esvo_core
           fvec[i] = sqrt(irls_weight) * ri.residual_(0);
         }
       }
-      // fvec[ResItemsStochSampled_.size()] = x.norm() * 10000; // modified by jjiao
-      //  LOG(INFO) << "assign weighted residual ..............";
+      // LOG(INFO) << "finish computing residuals";
       return 0;
     }
 
@@ -159,6 +159,7 @@ namespace esvo_core
 
       // calculate point-wise spatio-temporal residual
       // the residual can be either a scalr or a vector, up to the residualDim.
+      // LOG(INFO) << "patchInterpolation";
       for (size_t i = i_thread; i < numPoint; i += NUM_THREAD_)
       {
         ResidualItem &ri = vRI[i];
@@ -182,6 +183,7 @@ namespace esvo_core
             ri.residual_.setConstant(255.0);
         }
       }
+      // LOG(INFO) << "finish patchInterpolation";
     }
 
     /**
@@ -220,6 +222,7 @@ namespace esvo_core
       const double P22 = camSysPtr_->cam_left_ptr_->P_(1, 1);
       const double P24 = camSysPtr_->cam_left_ptr_->P_(1, 3);
 
+      // LOG(INFO) << "start patchInterpolation";
       for (size_t i = 0; i < numPoints_; i++)
       {
         Eigen::Vector2d x1_s;
@@ -249,7 +252,6 @@ namespace esvo_core
           dT_dG.block<3, 3>(0, 3) = ri.p_(1) * Eigen::Matrix3d::Identity();
           dT_dG.block<3, 3>(0, 6) = ri.p_(2) * Eigen::Matrix3d::Identity();
           dT_dG.block<3, 3>(0, 9) = Eigen::Matrix3d::Identity();
-          //      LOG(INFO) << "dT_dG:\n" << dT_dG;
 
           //ri.p_(2) refers to 1/rho_i which is actually coming with dInvPi_dx.
           fjacBlock.row(i) = grad.transpose() *
@@ -284,8 +286,6 @@ namespace esvo_core
       // The linearization is performed around dtheta = 0, thus tx = ty = tz = 0, r_{ii} = 1, r_{ij} = 0.
       // dG'_dG * dG_dtheta = -dG_dtheta. This explains where is "-1" from.
 
-      // LOG(INFO) << "fjac:\n" << fjac;
-      // LOG(INFO) << "Jacobian Computation takes " << tt.toc() << " ms.";
       return 0;
     }
 
@@ -450,6 +450,7 @@ namespace esvo_core
       return true;
     }
 
+    // a bug shoule be fixed
     bool RegProblemLM::patchInterpolation(
         const Eigen::MatrixXd &img,
         const Eigen::Vector2d &location,
@@ -518,6 +519,7 @@ namespace esvo_core
 
       // Compute F, size wy * wx.
       patch = q3 * R.block(0, 0, wy, wx) + q4 * R.block(1, 0, wy, wx);
+
       return true;
     }
 

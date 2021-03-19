@@ -94,66 +94,6 @@ namespace esvo_core
 
       TimeSurfaceObservation(){};
 
-//       void setTSObs(
-//           cv_bridge::CvImagePtr &left,
-//           cv_bridge::CvImagePtr &right,
-//           Transformation &tr,
-//           size_t id,
-//           bool bCalcTsGradient = false)
-//       {
-//         tr_ = tr;
-//         id_ = id;
-//         T_w_obs_ = tr.getTransformationMatrix();
-
-//         cv::cv2eigen(left->image, TS_left_);
-//         cv::cv2eigen(right->image, TS_right_);
-
-//         if (bCalcTsGradient)
-//         {
-// #ifdef TIME_SURFACE_OBSERVATION_LOG
-//           TicToc tt;
-//           tt.tic();
-// #endif
-//           cv::Mat cv_dTS_du_left, cv_dTS_dv_left;
-//           cv::Sobel(left->image, cv_dTS_du_left, CV_64F, 1, 0);
-//           cv::Sobel(left->image, cv_dTS_dv_left, CV_64F, 0, 1);
-//           cv::cv2eigen(cv_dTS_du_left, dTS_du_left_);
-//           cv::cv2eigen(cv_dTS_dv_left, dTS_dv_left_);
-// #ifdef TIME_SURFACE_OBSERVATION_LOG
-//           LOG(INFO) << "@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@Sobel computation (" << id_ << ") takes " << tt.toc() << " ms.";
-// #endif
-//         }
-//       }
-
-//       void setTSObs(
-//           cv_bridge::CvImagePtr &left,
-//           cv_bridge::CvImagePtr &right,
-//           size_t id,
-//           bool bCalcTsGradient = false)
-//       {
-//         id_ = id;
-//         T_w_obs_.setIdentity();
-
-//         cv::cv2eigen(left->image, TS_left_);
-//         cv::cv2eigen(right->image, TS_right_);
-
-//         if (bCalcTsGradient)
-//         {
-// #ifdef TIME_SURFACE_OBSERVATION_LOG
-//           TicToc tt;
-//           tt.tic();
-// #endif
-//           cv::Mat cv_dTS_du_left, cv_dTS_dv_left;
-//           cv::Sobel(left->image, cv_dTS_du_left, CV_64F, 1, 0);
-//           cv::Sobel(left->image, cv_dTS_dv_left, CV_64F, 0, 1);
-//           cv::cv2eigen(cv_dTS_du_left, dTS_du_left_);
-//           cv::cv2eigen(cv_dTS_dv_left, dTS_dv_left_);
-// #ifdef TIME_SURFACE_OBSERVATION_LOG
-//           LOG(INFO) << "@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@Sobel computation (" << id_ << ") takes " << tt.toc() << " ms.";
-// #endif
-//         }
-//       }
-
       inline bool isEmpty()
       {
         if (TS_left_.rows() == 0 || TS_left_.cols() == 0 || TS_right_.rows() == 0 || TS_right_.cols() == 0)

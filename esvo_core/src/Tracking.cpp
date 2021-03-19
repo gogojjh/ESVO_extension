@@ -30,7 +30,7 @@ namespace esvo_core
 												 tools::param(pnh_, "BATCH_SIZE", 200),
 												 tools::param(pnh_, "MAX_ITERATION", 10))),
 											 rpType_((RegProblemType)((size_t)tools::param(pnh_, "RegProblemType", 0))),
-											 rpSolver_(camSysPtr_, rpConfigPtr_, rpType_, 2), // NUM_THREAD_TRACKING
+											 rpSolver_(camSysPtr_, rpConfigPtr_, rpType_, NUM_THREAD_TRACKING), // NUM_THREAD_TRACKING
 											 ESVO_System_Status_("INITIALIZATION"),
 											 ets_(IDLE)
 	{
@@ -86,7 +86,7 @@ namespace esvo_core
 		}
 		else
 		{
-			LOG(INFO) << "Please select proper event frame-based Representation!";
+			LOG(INFO) << "Please select proper event frame-based Representation: TS, EM, TSEM!";
 			exit(-1);
 		}
 
@@ -414,7 +414,10 @@ namespace esvo_core
 					saveTrajectory(resultPath_ + strDataset_ + "/" + strSequence_ + "/traj/" + "traj_gt.txt", lTimestamp_GT_, lPose_GT_);
 					saveTimeCost(resultPath_ + strDataset_ + "/" + strSequence_ + "/time/" + strRep_ + std::to_string(eventNum_EM_) + "_time.txt", vTimeCost_);
 				}
-				num_NewEvents_ = 0;
+				{
+					std::lock_guard<std::mutex> lock(data_mutex_);
+					num_NewEvents_ = 0;
+				}
 			}
 			r.sleep();
 		} // while
@@ -482,15 +485,16 @@ namespace esvo_core
 					nh_.setParam("/ESVO_SYSTEM_STATUS", "WORKING"); // trigger the main mapping process
 				tt.tic();
 
+				TimeSurfaceObservation TS_obs_fake;
 				{
 					std::lock_guard<std::mutex> lock(data_mutex_);
-					if (rpSolver_.evalDegeneracy(&ref_, &cur_, lambda))
+					const size_t MAX_NUM_Event_INVOLVED = eventNum_EM_;
+					if (events_left_.size() > MAX_NUM_Event_INVOLVED && rpSolver_.evalDegeneracy(&ref_, &cur_, lambda))
 					{
-						const size_t MAX_NUM_Event_INVOLVED = eventNum_EM_;
-						LOG(INFO) << "Switch to EM-based representation with Events: " << std::min(MAX_NUM_Event_INVOLVED, events_left_.size()) << "!";
+						LOG(INFO) << "Switch to EM-based representation with Events: " << MAX_NUM_Event_INVOLVED << "!";
 						std::vector<dvs_msgs::Event *> vEventSubsetPtr;
 						vEventSubsetPtr.reserve(MAX_NUM_Event_INVOLVED);
-						auto ev_begin_it = events_left_.end() - std::min(MAX_NUM_Event_INVOLVED, events_left_.size());
+						auto ev_begin_it = events_left_.end() - MAX_NUM_Event_INVOLVED;
 						auto ev_end_it = events_left_.end();
 						while (ev_begin_it != ev_end_it)
 						{
@@ -508,24 +512,26 @@ namespace esvo_core
 								coor = camSysPtr_->cam_left_ptr_->getRectifiedUndistortedCoordinate(vEventSubsetPtr[i]->x, vEventSubsetPtr[i]->y);
 							else
 								coor = Eigen::Vector2d(vEventSubsetPtr[i]->x, vEventSubsetPtr[i]->y);
-							if (coor(0) < 0 || coor(0) >= camSysPtr_->cam_left_ptr_->width_ || coor(1) < 0 || coor(1) >= camSysPtr_->cam_left_ptr_->height_)
+							if (coor(0) < 0 || coor(0) >= eventMap.cols || coor(1) < 0 || coor(1) >= eventMap.rows)
 							{
 								continue;
 							}
 							eventMap.at<uchar>(std::floor(coor(1)), std::floor(coor(0))) = 255;
 						}
+						cv::medianBlur(eventMap, eventMap, 1);
 						std_msgs::Header header;
 						header.stamp = ros::Time(cur_.t_);
 						header.frame_id = dvs_frame_id_;
 						cv_bridge::CvImagePtr cv_ptr_left(new cv_bridge::CvImage(header, "mono8", eventMap));
 						cv_bridge::CvImagePtr cv_ptr_right(new cv_bridge::CvImage(header, "mono8", eventMap));
-						TimeSurfaceObservation TS_obs_fake(cv_ptr_left, cv_ptr_right, 0, false);
+						TS_obs_fake = TimeSurfaceObservation(cv_ptr_left, cv_ptr_right, 0, false);
 						cur_.pTsObs_ = &TS_obs_fake;
 						cur_.numEventsSinceLastObs_ = vEventSubsetPtr.size();
 						rpSolver_.resetRegProblem(&ref_, &cur_);
 					}
 					t_evalDegeneracy = tt.toc();
 				}
+
 
 				tt.tic();
 				if (rpType_ == REG_NUMERICAL)

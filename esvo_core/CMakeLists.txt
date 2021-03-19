@@ -153,3 +153,5 @@ target_link_libraries(saveMap ${catkin_LIBARIES})
 
 cs_add_executable(publishMap src/publishMap.cpp)
 target_link_libraries(publishMap ${catkin_LIBARIES})
+
+
