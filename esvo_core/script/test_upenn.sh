@@ -59,7 +59,7 @@ roslaunch esvo_core system_upenn.launch \
 sleep 2
 
 roslaunch esvo_core system_upenn.launch \
-    Dataset_Name:=upenn Sequence_Name:=indoor_flying1 \
+    Dataset_Name:=upenn Sequence_Name:=indoor_flying3 \
     Representation_Name:=TSEM eventNum_EM:=4000 tracking_rate_hz:=100 kernelSize:=5
 sleep 2
 
