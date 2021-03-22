@@ -525,6 +525,17 @@ namespace esvo_core
 						cv_bridge::CvImagePtr cv_ptr_left(new cv_bridge::CvImage(header, "mono8", eventMap));
 						cv_bridge::CvImagePtr cv_ptr_right(new cv_bridge::CvImage(header, "mono8", eventMap));
 						TS_obs_fake = TimeSurfaceObservation(cv_ptr_left, cv_ptr_right, 0, false);
+#ifdef ESVO_CORE_SAVE_IMAGE
+						if (vLambda_.size() >= 750 && vLambda_.size() <= 950)
+						{
+							cur_.pTsObs_->getTimeSurfaceNegative(5);
+							cv::Mat TS_negative_mat;
+							cv::eigen2cv(cur_.pTsObs_->TS_negative_left_, TS_negative_mat);
+							TS_negative_mat.convertTo(TS_negative_mat, CV_8UC1);
+							cv::imwrite("/tmp/TS_negative_mat.png", TS_negative_mat);
+							LOG(INFO) << "save degenerate TS: " << vLambda_.size();
+						}
+#endif
 						cur_.pTsObs_ = &TS_obs_fake;
 						cur_.numEventsSinceLastObs_ = vEventSubsetPtr.size();
 						rpSolver_.resetRegProblem(&ref_, &cur_);
@@ -823,7 +834,7 @@ namespace esvo_core
 		{
 			T_marker_cam.setIdentity();
 		}
-		else if (!strDataset_.compare("rpg_simu"))
+		else if (!strDataset_.compare("simu"))
 		{
 			// T_marker_cam << 1.0, 0.0, 0.0, 0.0,
 			// 				0.0, -1.0, 0.0, 0.0,

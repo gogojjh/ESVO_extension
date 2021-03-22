@@ -47,7 +47,7 @@
     <rosparam command="load" file="$(find esvo_core)/cfg/mapping/mapping_upenn.yaml" />
   </node>
 
-	<node name="Tracking" pkg="esvo_core" type="Tracking" output="screen" required="true">
+	<node name="Tracking" pkg="esvo_core" type="Tracking" output="screen" required="true" >
 		<remap from="time_surface_left" to="/TS_left" />
 		<remap from="time_surface_right" to="/TS_right" />
 		<remap from="stamped_pose" to="/esvo_tracking/pose_pub" />
@@ -88,12 +88,12 @@
 	<node name="TimeSurface_global_timer" pkg="esvo_time_surface" type="TimeSurface_global_timer" required="true" >
 		<remap from="events" to="/davis/left/events" />
 		<!-- <param name="minimum_events" type="int" value="2000" /> -->
-		<param name="frequency_timer" type="int" value="50" /> 
+		<param name="frequency_timer" type="int" value="100" /> 
     <!-- <param name="minimum_frequency_timer" type="int" value="20" /> -->
 	</node>
 
-	<node pkg="rosbag" type="play" name="play" output="screen" required="true"
-		args="/Monster/dataset/event_camera/upenn_stereo_ral/$(arg Sequence_Name)_edited.bag -r 0.5 --clock">
+	<node pkg="rosbag" type="play" name="play" required="true"
+		args="/Monster/dataset/event_camera/upenn_stereo_ral/$(arg Sequence_Name)_edited.bag -r 1.0 --clock">
 	</node>
 
 

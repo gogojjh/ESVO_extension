@@ -96,11 +96,11 @@ int main(int argc, char* argv[])
 
   // process events
   std::vector<std::string> topics;
-  topics.push_back(std::string("/davis_left/events"));
-  topics.push_back(std::string("/davis_right/events"));
+  topics.push_back(std::string(argv[3]));
+  topics.push_back(std::string(argv[4]));
   std::vector<std::string> topics_rename;
-  topics_rename.push_back(std::string("/davis/left/events"));
-  topics_rename.push_back(std::string("/davis/right/events"));
+  topics_rename.push_back(std::string(argv[3]));
+  topics_rename.push_back(std::string(argv[4]));
   for(size_t i = 0;i < topics.size(); i++)
   {
     rosbag::View view(bag_src, rosbag::TopicQuery(topics[i]));

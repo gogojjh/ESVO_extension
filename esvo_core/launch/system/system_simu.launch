@@ -1,0 +1,78 @@
+<!-- Example: roslaunch esvo_core system_rpg_simu.launch 
+				TS_start:=0 Event_start:=10000 Dataset_Name:=simu
+				Sequence_Name:=monitor Representation_Name:=TS -->
+<launch>
+	<arg name="tracking_rate_hz" default="100" />
+	<arg name="Dataset_Name" default="simu" />
+	<arg name="Sequence_Name" default="poster_planar" />
+	<arg name="Representation_Name" default="TS" />
+	<arg name="eventNum_EM" default="2000" />
+	<arg name="kernelSize" default="5" />
+
+	<rosparam param="/use_sim_time">true</rosparam>
+
+	<!-- Time surfaces generation -->
+	<node name="TimeSurface_left" pkg="esvo_time_surface" type="esvo_time_surface">
+		<remap from="events" to="/cam0/events" />
+		<remap from="image" to="/cam0/image_raw" />
+		<remap from="camera_info" to="/cam0/camera_info" />
+		<remap from="time_surface" to="TS_left" />
+		<rosparam command="load" file="$(find esvo_core)/cfg/time_surface/ts_parameters.yaml" />
+	</node>
+
+	<node name="TimeSurface_right" pkg="esvo_time_surface" type="esvo_time_surface">
+		<remap from="events" to="/cam1/events" />
+		<remap from="image" to="/cam1/image_raw" />
+		<remap from="camera_info" to="/cam1/camera_info" />
+		<remap from="time_surface" to="TS_right" />
+		<rosparam command="load" file="$(find esvo_core)/cfg/time_surface/ts_parameters.yaml" />
+	</node>
+
+	<!-- Calibration folder -->
+	<arg name="calibInfoDirStr" default="$(find esvo_core)/calib/simu"/>
+
+	<!-- Mapping node -->
+	<!-- launch-prefix="gdb -ex run -\-args" -->
+	<node name="esvo_Mapping" pkg="esvo_core" type="esvo_Mapping" required="true">
+		<remap from="time_surface_left" to="/TS_left" />
+		<remap from="time_surface_right" to="/TS_right" />
+		<remap from="stamped_pose" to="/esvo_tracking/pose_pub" />
+		<remap from="events_left" to="/cam0/events" />
+		<remap from="events_right" to="/cam1/events" />
+		<rosparam param="dvs_frame_id">"dvs"</rosparam>
+		<rosparam param="world_frame_id">"map"</rosparam>
+		<rosparam param="calibInfoDir" subst_value="true">$(arg calibInfoDirStr)</rosparam>
+		<rosparam command="load" file="$(find esvo_core)/cfg/mapping/mapping_simu.yaml" />
+	</node>
+
+	<node name="Tracking" pkg="esvo_core" type="Tracking" output="screen" required="true">
+		<remap from="time_surface_left" to="/TS_left" />
+		<remap from="time_surface_right" to="/TS_right" />
+		<remap from="stamped_pose" to="/esvo_tracking/pose_pub" />
+		<remap from="gt_pose" to="/cam0/pose" />
+		<remap from="events_left" to="/cam0/events" />
+		<remap from="pointcloud" to="/esvo_mapping/pointcloud_local" />
+		<rosparam param="dvs_frame_id">"dvs"</rosparam>
+		<rosparam param="world_frame_id">"map"</rosparam>
+		<rosparam param="calibInfoDir" subst_value="true">$(arg calibInfoDirStr)</rosparam>
+		<rosparam command="load" file="$(find esvo_core)/cfg/tracking/tracking_simu.yaml" />
+
+		<param name="tracking_rate_hz" type="int" value="$(arg tracking_rate_hz)" />
+		<param name="Dataset_Name" type="string" value="$(arg Dataset_Name)" />
+		<param name="Sequence_Name" type="string" value="$(arg Sequence_Name)" />
+		<param name="Representation_Name" type="string" value="$(arg Representation_Name)" />
+		<param name="eventNum_EM" type="int" value="$(arg eventNum_EM)" />
+		<param name="kernelSize" type="int" value="$(arg kernelSize)" />
+	</node>
+
+	<node name="TimeSurface_global_timer" pkg="esvo_time_surface" type="TimeSurface_global_timer" required="true" >
+		<remap from="events" to="/cam0/events" />
+		<!-- <param name="minimum_events" type="int" value="4000" /> -->
+		<param name="frequency_timer" type="int" value="100" /> 
+	    <!-- <param name="minimum_frequency_timer" type="int" value="20" /> -->
+	</node>
+
+	<node pkg="rosbag" type="play" name="play" output="screen" required="true"
+		args="/Monster/dataset/event_camera/simu/$(arg Sequence_Name)_edited.bag -r 1.0 --clock">
+	</node>
+</launch>

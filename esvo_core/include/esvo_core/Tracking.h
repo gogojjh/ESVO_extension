@@ -37,6 +37,7 @@
 
 // #define ESVO_CORE_MONO_TRACKING_DEBUG
 // #define ESVO_CORE_TRACKING_LOG
+// #define ESVO_CORE_SAVE_IMAGE
 
 namespace esvo_core
 {

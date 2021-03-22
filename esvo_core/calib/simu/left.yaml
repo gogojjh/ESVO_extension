@@ -1,11 +1,11 @@
-image_width: 240
-image_height: 180
-camera_name: rpg_simu
+image_width: 346
+image_height: 260
+camera_name: simu_left
 camera_matrix:
   rows: 3
   cols: 3
-  data: [200.0, 0.0, 120.0, 
-         0.0, 200.0, 90.0, 
+  data: [200.0, 0.0, 173.0, 
+         0.0, 200.0, 130.0, 
          0.0, 0.0, 1.0]
 distortion_model: plumb_bob
 distortion_coefficients:
@@ -21,12 +21,13 @@ rectification_matrix:
 projection_matrix:
   rows: 3
   cols: 4
-  data: [200.0, 0.0, 120.0, 0.0, 
-         0.0, 200.0, 90.0, 0.0, 
+  data: [200.0, 0.0, 173.0, 0.0, 
+         0.0, 200.0, 130.0, 0.0, 
          0.0, 0.0, 1.0, 0.0]
 T_right_left:
   rows: 3
   cols: 4
-  data: [1, 0, 0, 0,
+  data: [1, 0, 0, -0.15,
          0, 1, 0, 0,
          0, 0, 1, 0]
+

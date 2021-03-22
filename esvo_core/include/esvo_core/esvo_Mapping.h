@@ -37,8 +37,7 @@
 #include <pcl/point_types.h>
 #include <pcl_ros/point_cloud.h>
 
-const double VAR_RANDOM_INIT_INITIAL_ = 0.2;
-const double INIT_DP_NUM_Threshold_ = 500;
+// #define ESVO_CORE_MAPPING_DEBUG
 
 namespace esvo_core
 {
