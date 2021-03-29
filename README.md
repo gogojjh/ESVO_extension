@@ -1,10 +1,15 @@
 # ESVO Extension
 
 ## 1. Overview
-We extend the ESVO framework to three other modules: multi-view monocular event camera-based mapping (given Groundtruth poses); monocular event camera-based tracking & mapping; event camera-based tracing with multiple event representations. The usage of these modules are listed below:
+We extend the ESVO framework to three other modules: 
+* multi-view monocular event camera-based mapping (given Groundtruth poses); 
+* monocular event camera-based tracking & mapping; 
+* event camera-based tracking with multiple event representations. 
+
+The usage of these modules are listed below:
 
 ### 1.1 esvo_MVSMono.cpp
-We follow [EMVS](https://github.com/uzh-rpg/rpg_emvs) to integrate the monocular multi-view monocular mapping (given the Groundtruth Pose) under the ESVO framework. To launch the mapper, run
+We modify [EMVS](https://github.com/uzh-rpg/rpg_emvs) monocular multi-view monocular mapping (given the Groundtruth Pose) under the ESVO framework. To launch the mapper, run
 
 	$ roslaunch esvo_core mvsmono_xxx.launch
 
