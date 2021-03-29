@@ -22,6 +22,10 @@ We follow [EVO](http://www.cvlibs.net/projects/autonomous_vision_survey/literatu
 ### 1.3 Tracking.cpp
 ESVO trackles the tracking problem using the time surface (TS), while EVO does it on the binary event map (EM). This module additionally implements the EM-basd tracker for a comparative evaluation. Complete experimental results will be published.
 
+Table: mean ATE [*cm*] of all tracker variations under 10 SLAM trials
+
+<a target="_blank"><img src="pict/tracker_comparison.png" alt="" width="630" height="277.374" /></a>
+
 Video: from left to right: TS-based, EM-based, TSEM-based tracker.
 
 <a target="_blank"><img src="pict/Tracking_upenn_flying3.gif" alt="" width="630" height="314.48" /></a>
