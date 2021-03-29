@@ -1,9 +1,47 @@
-# Additional Operation
-1. ```roslaunch esvo_core mvsmono_rpg_mono.launch```: Monocular Mapping given gt poses
-2. ```roslaunch esvo_core mvstereo_rpg_stereo.launch```: Stereo Mapping given gt poses
-3. ```roslaunch esvo_core tracking_rpg_stereo.launch```: Tracking from a known map
+# ESVO Extension
 
+## 1. Overview
+We extend the ESVO framework to three other modules: multi-view monocular event camera-based mapping (given Groundtruth poses); monocular event camera-based tracking & mapping; event camera-based tracing with multiple event representations. The usage of these modules are listed below:
 
+### 1.1 esvo_MVSMono.cpp
+We follow [EMVS](https://github.com/uzh-rpg/rpg_emvs) to integrate the monocular multi-view monocular mapping (given the Groundtruth Pose) under the ESVO framework. To launch the mapper, run
+
+	$ roslaunch esvo_core mvsmono_xxx.launch
+
+This will launch one *esvo_time_surface nodes* (for the left event camera), and the mapping node simultaneously. The time surface is not used in the mapper, but for the API compatible with the original ESVO.
+
+Video: from top to bottom: raw image, confidence map, mask, depth map
+
+<a target="_blank"><img src="./pict/MVSMONO_simu_office_planar.gif" alt="" width="420" height="300" /></a>
+
+### 1.2 esvo_MonoMapping.cpp and esvo_MonoTracking.cpp
+We follow [EVO](http://www.cvlibs.net/projects/autonomous_vision_survey/literature/Rebecq2016RAL.pdf) to integrate the monocular mapper with the time surface-based tracker for the monocular event-based visual odometry. Preliminary results are provided. To launch the mapper, run
+
+	$ roslaunch esvo_core monosystem_xxx.launch
+
+### 1.3 Tracking.cpp
+ESVO trackles the tracking problem using the time surface (TS), while EVO does it on the binary event map (EM). This module additionally implements the EM-basd tracker for a comparative evaluation. Complete experimental results will be published.
+
+Video: from left to right: TS-based, EM-based, TSEM-based tracker.
+
+<a target="_blank"><img src="./pict/Tracking_upenn_flying3.gif" alt="" width="630" height="314.48" /></a>
+
+## 2. Simulated Datasets
+We use the event camera-based simulator: [ESIM](https://github.com/uzh-rpg/rpg_esim) to collect several simulated stereo event camera-based sequences. The stereo rig perform planar or 6DoF motion before a wall with different backgrounds: simple shapes, checkerboard, and office. These sequences can be used for algorithm verification. 
+They can be downloaded [here](http://gofile.me/4jm56/pPihl95L2).
+
+We write a script to perform batch tests and evaluation. To run the ESVO with trackers on different event representations:
+
+	$ python run_esvo.py -dataset=rpg_stereo -sequence=rpg_bin -representation=TS,EM,TSEM -eventnum=2000,3000,4000 -trials=1 -program=run,eval,load_result
+
+We use this package: [rpg_trajectory_evaluation](https://github.com/uzh-rpg/rpg_trajectory_evaluation) to compute the RMSE and RPE.
+
+## 3. Acknoledgement
+Thanks again for authors' great work on ESVO!
+
+----
+----
+----
 # ESVO: Event-based Stereo Visual Odometry
 
 **ESVO** is a novel pipeline for real-time visual odometry using a stereo event-based camera. Both the proposed mapping and tracking methods leverage a unified event representation (Time Surfaces), thus, it could be regarded as a ''direct'', geometric method using raw event as input.
@@ -12,7 +50,7 @@ Please refer to the **[ESVO Project Page](https://sites.google.com/view/esvo-pro
 
 ### Related Publications
 
-* **[Event-based Stereo Visual Odometry](https://arxiv.org/abs/2007.15548)**, *Yi Zhou, Guillermo Gallego, Shaojie Shen*, arXiv preprint 2020 (under review).
+* **[Event-based Stereo Visual Odometry](https://arxiv.org/abs/2007.15548)**, *Yi Zhou, Guillermo Gallego, Shaojie Shen*, IEEE T-RO.
 
 * **[Semi-dense 3D Reconstruction with a Stereo Event Camera](https://arxiv.org/abs/1807.07429)**, *Yi Zhou, Guillermo Gallego, Henri Rebecq, Laurent Kneip, Hongdong Li, Davide Scaramuzza*, ECCV 2018.
 

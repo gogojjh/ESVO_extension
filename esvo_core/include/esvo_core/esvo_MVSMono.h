@@ -11,12 +11,9 @@
 #include <tf/transform_broadcaster.h>
 #include <tf2_ros/transform_broadcaster.h>
 
+#include <esvo_core/container/DepthPoint.h>
 #include <esvo_core/container/CameraSystem.h>
-#include <esvo_core/container/DepthMap.h>
-#include <esvo_core/container/EventMatchPair.h>
 #include <esvo_core/container/TimeSurfaceObservation.h>
-#include <esvo_core/core/DepthMonoFusion.h>
-#include <esvo_core/core/DepthMonoRegularization.h>
 #include <esvo_core/core/DepthProblemConfig.h>
 #include <esvo_core/tools/Visualization.h>
 #include <esvo_core/tools/utils.h>
@@ -43,22 +40,11 @@
 #include <pcl/filters/voxel_grid.h>
 #include <pcl/filters/radius_outlier_removal.h>
 
-#define ESVO_MVSMONO_TRACKING_DEBUG
+// #define ESVO_MVSMONO_LOG
 
 namespace esvo_core
 {
 	using namespace core;
-	enum eMVSMonoMode
-	{
-		PURE_EVENT_MATCHING,	   //0 (this one implements GTS [26])
-		PURE_BLOCK_MATCHING,	   //1 (this one implements BM)
-		EM_PLUS_ESTIMATION,		   //2 (GTS [26] + nonliear opt.)
-		BM_PLUS_ESTIMATION,		   //3 (this one is ESVO's mapping method, namely BM + nonliear opt.)
-		PURE_SEMI_GLOBAL_MATCHING, //4 (this one implements SGM [45])
-		PURE_EMVS,				   //5 (this one implements EMVS [33])
-		PURE_EMVS_PLUS_ESTIMATION  //6 (this one implements EMVS [33] + nonliear opt.)
-	};
-
 	enum SolverFlag
 	{
 		INITIAL,
@@ -90,19 +76,10 @@ namespace esvo_core
 		void onlineParameterChangeCallback(DVS_MappingStereoConfig &config, uint32_t level);
 
 		// utils
-		// bool getPoseAt(const ros::Time &t, Transformation &Tr, const std::string &source_frame);
 		void clearEventQueue(EventQueue &EQ);
 		void reset();
 
 		// results
-		void publishMappingResults(
-			DepthMap::Ptr depthMapPtr,
-			Eigen::Matrix4d T,
-			ros::Time t);
-		void publishPointCloud(
-			DepthMap::Ptr &depthMapPtr,
-			Eigen::Matrix4d &T,
-			ros::Time &t);
 		void publishEMVSPointCloud(
 			const ros::Time &t);
 		void publishImage(
@@ -111,10 +88,6 @@ namespace esvo_core
 			image_transport::Publisher &pub,
 			std::string encoding = "bgr8");
 		void publishKFPose(const ros::Time &t, const Eigen::Matrix4d &T);
-		void saveDepthMap(
-			DepthMap::Ptr &depthMapPtr,
-			std::string &saveDir,
-			ros::Time t);
 
 		void createEdgeMask(
 			std::vector<dvs_msgs::Event *> &vEventsPtr,
@@ -148,10 +121,6 @@ namespace esvo_core
 		ros::Publisher pc_pub_, gpc_pub_, emvs_pc_pub_;
 		image_transport::ImageTransport it_;
 
-		// Time-Surface sync policy
-		// typedef message_filters::sync_policies::ExactTime<sensor_msgs::Image, sensor_msgs::Image> ExactSyncPolicy;
-		// message_filters::Synchronizer<ExactSyncPolicy> TS_sync_;
-
 		// dynamic configuration (modify parameters online)
 		boost::shared_ptr<dynamic_reconfigure::Server<DVS_MappingStereoConfig>> server_;
 		dynamic_reconfigure::Server<DVS_MappingStereoConfig>::CallbackType dynamic_reconfigure_callback_;
@@ -163,21 +132,15 @@ namespace esvo_core
 		CameraSystem::Ptr camSysPtr_;
 
 		// online data
-		EventQueue events_left_, events_right_;
+		EventQueue events_left_;
 		TimeSurfaceHistory TS_history_;
 		StampedTimeSurfaceObs TS_obs_;
-		StampTransformationMap st_map_;
 		std::shared_ptr<tf::Transformer> tf_;
 		size_t TS_id_;
 		ros::Time tf_lastest_common_time_;
 
 		// system
-		eMVSMonoMode msm_;
 		DepthProblemConfig::Ptr dpConfigPtr_;
-		// DepthFusion dFusor_;
-		DepthMonoFusion dFusor_;
-		// DepthRegularization dRegularizor_;
-		DepthMonoRegularization dRegularizor_;
 		Visualization visualizor_;
 
 		// data transfer
@@ -207,17 +170,6 @@ namespace esvo_core
 		// range and visualization parameters
 		double invDepth_min_range_;
 		double invDepth_max_range_;
-		double cost_vis_threshold_;
-		size_t patch_area_;
-		double residual_vis_threshold_;
-		double stdVar_vis_threshold_;
-		double stdVar_init_;
-		size_t age_max_range_;
-		size_t age_vis_threshold_;
-		int fusion_radius_;
-		std::string FusionStrategy_;
-		int maxNumFusionFrames_;
-		int maxNumFusionPoints_;
 		// module parameters
 		size_t PROCESS_EVENT_NUM_;
 		size_t TS_HISTORY_LENGTH_;
@@ -229,10 +181,6 @@ namespace esvo_core
 		bool bDenoising_;
 
 		ros::Publisher pose_pub_;
-		image_transport::Publisher invDepthMap_pub_, stdVarMap_pub_, ageMap_pub_, costMap_pub_;
-		image_transport::Publisher eventMap_pub_, trackFrame_pub_, mcImage_pub_;
-		// For counting the total number of fusion
-		size_t TotalNumFusion_;
 
 		std::string resultPath_;
 
@@ -252,7 +200,6 @@ namespace esvo_core
 		EMVS::LinearTrajectory trajectory_;
 		bool isKeyframe_;
 		Eigen::Matrix4d T_w_keyframe_, T_w_frame_, T_world_map_;
-		double last_timestampe_;
 
 		double meanDepth_;
 		double KEYFRAME_LINEAR_DIS_, KEYFRAME_ORIENTATION_DIS_, KEYFRAME_MEANDEPTH_DIS_;

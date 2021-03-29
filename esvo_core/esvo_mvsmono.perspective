@@ -5,7 +5,7 @@
       "keys": {
         "running-plugins": {
           "type": "repr",
-          "repr": "{u'rqt_image_view/ImageView': [6, 5, 4, 3, 2, 1]}"
+          "repr": "{u'rqt_image_view/ImageView': [4, 3, 2, 1]}"
         }
       },
       "groups": {
@@ -16,7 +16,7 @@
               "keys": {
                 "dockable": {
                   "type": "repr",
-                  "repr": "True"
+                  "repr": "u'true'"
                 },
                 "parent": {
                   "type": "repr",
@@ -33,15 +33,15 @@
               "keys": {
                 "max_range": {
                   "type": "repr",
-                  "repr": "10.0"
+                  "repr": "u'10'"
                 },
                 "rotate": {
                   "type": "repr",
-                  "repr": "0"
+                  "repr": "u'0'"
                 },
                 "smooth_image": {
                   "type": "repr",
-                  "repr": "False"
+                  "repr": "u'false'"
                 },
                 "mouse_pub_topic": {
                   "type": "repr",
@@ -49,19 +49,19 @@
                 },
                 "num_gridlines": {
                   "type": "repr",
-                  "repr": "0"
+                  "repr": "u'0'"
                 },
                 "toolbar_hidden": {
                   "type": "repr",
-                  "repr": "False"
+                  "repr": "u'false'"
                 },
                 "zoom1": {
                   "type": "repr",
-                  "repr": "False"
+                  "repr": "u'false'"
                 },
                 "dynamic_range": {
                   "type": "repr",
-                  "repr": "False"
+                  "repr": "u'false'"
                 },
                 "topic": {
                   "type": "repr",
@@ -69,7 +69,7 @@
                 },
                 "publish_click_location": {
                   "type": "repr",
-                  "repr": "False"
+                  "repr": "u'false'"
                 }
               },
               "groups": {}
@@ -83,7 +83,7 @@
               "keys": {
                 "dockable": {
                   "type": "repr",
-                  "repr": "True"
+                  "repr": "u'true'"
                 },
                 "parent": {
                   "type": "repr",
@@ -100,15 +100,15 @@
               "keys": {
                 "max_range": {
                   "type": "repr",
-                  "repr": "10.0"
+                  "repr": "u'10'"
                 },
                 "rotate": {
                   "type": "repr",
-                  "repr": "0"
+                  "repr": "u'0'"
                 },
                 "smooth_image": {
                   "type": "repr",
-                  "repr": "False"
+                  "repr": "u'false'"
                 },
                 "mouse_pub_topic": {
                   "type": "repr",
@@ -116,19 +116,19 @@
                 },
                 "num_gridlines": {
                   "type": "repr",
-                  "repr": "0"
+                  "repr": "u'0'"
                 },
                 "toolbar_hidden": {
                   "type": "repr",
-                  "repr": "False"
+                  "repr": "u'false'"
                 },
                 "zoom1": {
                   "type": "repr",
-                  "repr": "False"
+                  "repr": "u'false'"
                 },
                 "dynamic_range": {
                   "type": "repr",
-                  "repr": "False"
+                  "repr": "u'false'"
                 },
                 "topic": {
                   "type": "repr",
@@ -136,7 +136,7 @@
                 },
                 "publish_click_location": {
                   "type": "repr",
-                  "repr": "False"
+                  "repr": "u'false'"
                 }
               },
               "groups": {}
@@ -179,7 +179,7 @@
                 },
                 "mouse_pub_topic": {
                   "type": "repr",
-                  "repr": "u'/Standard_Variance_Map_mouse_left'"
+                  "repr": "u'/DSI_Semi_Dense_Mask_mouse_left'"
                 },
                 "num_gridlines": {
                   "type": "repr",
@@ -199,7 +199,7 @@
                 },
                 "topic": {
                   "type": "repr",
-                  "repr": "u'/Standard_Variance_Map'"
+                  "repr": "u'/DSI_Semi_Dense_Mask'"
                 },
                 "publish_click_location": {
                   "type": "repr",
@@ -217,7 +217,7 @@
               "keys": {
                 "dockable": {
                   "type": "repr",
-                  "repr": "True"
+                  "repr": "u'true'"
                 },
                 "parent": {
                   "type": "repr",
@@ -234,15 +234,15 @@
               "keys": {
                 "max_range": {
                   "type": "repr",
-                  "repr": "10.0"
+                  "repr": "u'10'"
                 },
                 "rotate": {
                   "type": "repr",
-                  "repr": "0"
+                  "repr": "u'0'"
                 },
                 "smooth_image": {
                   "type": "repr",
-                  "repr": "False"
+                  "repr": "u'false'"
                 },
                 "mouse_pub_topic": {
                   "type": "repr",
@@ -250,19 +250,19 @@
                 },
                 "num_gridlines": {
                   "type": "repr",
-                  "repr": "0"
+                  "repr": "u'0'"
                 },
                 "toolbar_hidden": {
                   "type": "repr",
-                  "repr": "False"
+                  "repr": "u'false'"
                 },
                 "zoom1": {
                   "type": "repr",
-                  "repr": "False"
+                  "repr": "u'false'"
                 },
                 "dynamic_range": {
                   "type": "repr",
-                  "repr": "False"
+                  "repr": "u'false'"
                 },
                 "topic": {
                   "type": "repr",
@@ -270,7 +270,7 @@
                 },
                 "publish_click_location": {
                   "type": "repr",
-                  "repr": "False"
+                  "repr": "u'false'"
                 }
               },
               "groups": {}
@@ -313,7 +313,7 @@
                 },
                 "mouse_pub_topic": {
                   "type": "repr",
-                  "repr": "u'/Reproj_Map_Left_mouse_left'"
+                  "repr": "u'/DSI_Confidence_Map_mouse_left'"
                 },
                 "num_gridlines": {
                   "type": "repr",
@@ -333,7 +333,7 @@
                 },
                 "topic": {
                   "type": "repr",
-                  "repr": "u'/Reproj_Map_Left'"
+                  "repr": "u'/DSI_Confidence_Map'"
                 },
                 "publish_click_location": {
                   "type": "repr",
@@ -380,7 +380,7 @@
                 },
                 "mouse_pub_topic": {
                   "type": "repr",
-                  "repr": "u'/Inverse_Depth_Map_mouse_left'"
+                  "repr": "u'/DSI_Depth_Map_mouse_left'"
                 },
                 "num_gridlines": {
                   "type": "repr",
@@ -400,7 +400,7 @@
                 },
                 "topic": {
                   "type": "repr",
-                  "repr": "u'/Inverse_Depth_Map'"
+                  "repr": "u'/DSI_Depth_Map'"
                 },
                 "publish_click_location": {
                   "type": "repr",
@@ -447,7 +447,7 @@
                 },
                 "mouse_pub_topic": {
                   "type": "repr",
-                  "repr": "u'/TS_left_mouse_left'"
+                  "repr": "u'/cam0/image_raw_mouse_left'"
                 },
                 "num_gridlines": {
                   "type": "repr",
@@ -467,7 +467,7 @@
                 },
                 "topic": {
                   "type": "repr",
-                  "repr": "u'/TS_left'"
+                  "repr": "u'/cam0/image_raw'"
                 },
                 "publish_click_location": {
                   "type": "repr",
@@ -531,7 +531,7 @@
               "keys": {
                 "dockable": {
                   "type": "repr",
-                  "repr": "True"
+                  "repr": "u'true'"
                 },
                 "parent": {
                   "type": "repr",
@@ -548,15 +548,15 @@
               "keys": {
                 "max_range": {
                   "type": "repr",
-                  "repr": "10.0"
+                  "repr": "u'10'"
                 },
                 "rotate": {
                   "type": "repr",
-                  "repr": "0"
+                  "repr": "u'0'"
                 },
                 "smooth_image": {
                   "type": "repr",
-                  "repr": "False"
+                  "repr": "u'false'"
                 },
                 "mouse_pub_topic": {
                   "type": "repr",
@@ -564,19 +564,19 @@
                 },
                 "num_gridlines": {
                   "type": "repr",
-                  "repr": "0"
+                  "repr": "u'0'"
                 },
                 "toolbar_hidden": {
                   "type": "repr",
-                  "repr": "False"
+                  "repr": "u'false'"
                 },
                 "zoom1": {
                   "type": "repr",
-                  "repr": "False"
+                  "repr": "u'false'"
                 },
                 "dynamic_range": {
                   "type": "repr",
-                  "repr": "False"
+                  "repr": "u'false'"
                 },
                 "topic": {
                   "type": "repr",
@@ -584,7 +584,7 @@
                 },
                 "publish_click_location": {
                   "type": "repr",
-                  "repr": "False"
+                  "repr": "u'false'"
                 }
               },
               "groups": {}
@@ -598,7 +598,7 @@
               "keys": {
                 "dockable": {
                   "type": "repr",
-                  "repr": "True"
+                  "repr": "u'true'"
                 },
                 "parent": {
                   "type": "repr",
@@ -615,15 +615,15 @@
               "keys": {
                 "max_range": {
                   "type": "repr",
-                  "repr": "10.0"
+                  "repr": "u'10'"
                 },
                 "rotate": {
                   "type": "repr",
-                  "repr": "0"
+                  "repr": "u'0'"
                 },
                 "smooth_image": {
                   "type": "repr",
-                  "repr": "False"
+                  "repr": "u'false'"
                 },
                 "mouse_pub_topic": {
                   "type": "repr",
@@ -631,19 +631,19 @@
                 },
                 "num_gridlines": {
                   "type": "repr",
-                  "repr": "0"
+                  "repr": "u'0'"
                 },
                 "toolbar_hidden": {
                   "type": "repr",
-                  "repr": "False"
+                  "repr": "u'false'"
                 },
                 "zoom1": {
                   "type": "repr",
-                  "repr": "False"
+                  "repr": "u'false'"
                 },
                 "dynamic_range": {
                   "type": "repr",
-                  "repr": "False"
+                  "repr": "u'false'"
                 },
                 "topic": {
                   "type": "repr",
@@ -651,7 +651,7 @@
                 },
                 "publish_click_location": {
                   "type": "repr",
-                  "repr": "False"
+                  "repr": "u'false'"
                 }
               },
               "groups": {}
@@ -665,7 +665,7 @@
               "keys": {
                 "dockable": {
                   "type": "repr",
-                  "repr": "True"
+                  "repr": "u'true'"
                 },
                 "parent": {
                   "type": "repr",
@@ -682,7 +682,7 @@
               "keys": {
                 "expanded_nodes": {
                   "type": "repr",
-                  "repr": "[]"
+                  "repr": "None"
                 },
                 "splitter": {
                   "type": "repr(QByteArray.hex)",
@@ -691,7 +691,7 @@
                 },
                 "selected_nodes": {
                   "type": "repr",
-                  "repr": "[]"
+                  "repr": "None"
                 },
                 "_splitter": {
                   "type": "repr(QByteArray.hex)",
@@ -713,13 +713,13 @@
       "keys": {
         "geometry": {
           "type": "repr(QByteArray.hex)",
-          "repr(QByteArray.hex)": "QtCore.QByteArray('01d9d0cb000200000000000500000022000004a2000002fc000000060000003a000004a1000002fb000000020000000004b0')",
-          "pretty-print": "       \"       :         "
+          "repr(QByteArray.hex)": "QtCore.QByteArray('01d9d0cb0002000000000a8c0000001800000c0a0000043700000a8d0000003000000c090000043600000000000000000780')",
+          "pretty-print": "           7   0   6     "
         },
         "state": {
           "type": "repr(QByteArray.hex)",
-          "repr(QByteArray.hex)": "QtCore.QByteArray('000000ff00000000fd00000001000000030000049c000002a9fc0100000005fc000000000000049c000003b600fffffffc0100000003fc0000000000000182000000fd00fffffffc0200000002fb0000005a007200710074005f0069006d006100670065005f0076006900650077005f005f0049006d0061006700650056006900650077005f005f0031005f005f0049006d00610067006500560069006500770057006900640067006500740100000000000001600000005c00fffffffb0000005a007200710074005f0069006d006100670065005f0076006900650077005f005f0049006d0061006700650056006900650077005f005f0033005f005f0049006d00610067006500560069006500770057006900640067006500740100000166000001430000005c00fffffffc0000018800000314000002b300fffffffc0200000002fc0000000000000154000000b300fffffffc0100000002fb0000005a007200710074005f0069006d006100670065005f0076006900650077005f005f0049006d0061006700650056006900650077005f005f0032005f005f0049006d0061006700650056006900650077005700690064006700650074010000018800000121000000fd00fffffffb0000005a007200710074005f0069006d006100670065005f0076006900650077005f005f0049006d0061006700650056006900650077005f005f0035005f005f0049006d006100670065005600690065007700570069006400670065007401000002af000001ed000001b000fffffffc0000015a0000014f000000b300fffffffc0100000002fb0000005a007200710074005f0069006d006100670065005f0076006900650077005f005f0049006d0061006700650056006900650077005f005f0034005f005f0049006d0061006700650056006900650077005700690064006700650074010000018800000121000000fd00fffffffb0000005a007200710074005f0069006d006100670065005f0076006900650077005f005f0049006d0061006700650056006900650077005f005f0036005f005f0049006d006100670065005600690065007700570069006400670065007401000002af000001ed000001b000fffffffb0000006c007200710074005f007200650063006f006e006600690067007500720065005f005f0050006100720061006d005f005f0031005f005f005f0070006c007500670069006e0063006f006e007400610069006e00650072005f0074006f0070005f007700690064006700650074010000037c000001320000000000000000fb00000042007200710074005f006e00610076005f0076006900650077005f005f004e0061007600690067006100740069006f006e0056006900650077005f005f0031005f005f010000064a000000f50000000000000000fc000001fa000005860000000000fffffffa000000000100000001fb00000072007200710074005f0073006500720076006900630065005f00630061006c006c00650072005f005f005300650072007600690063006500430061006c006c00650072005f005f0031005f005f005300650072007600690063006500430061006c006c006500720057006900640067006500740100000000ffffffff0000000000000000fb00000030005f005f0044006f0063006b0057006900640067006500740043006f006e007400610069006e00650072005f005f003101000006a40000009b0000000000000000fb00000064007200710074005f006c00610075006e00630068005f005f004c00610075006e00630068005f005f0031005f005f005f0070006c007500670069006e0063006f006e007400610069006e00650072005f0074006f0070005f0077006900640067006500740100000566000001d700000000000000000000049c0000000000000004000000040000000800000008fc00000001000000030000000100000036004d0069006e0069006d0069007a006500640044006f0063006b00570069006400670065007400730054006f006f006c0062006100720000000000ffffffff0000000000000000')",
-          "pretty-print": "                                        Zrqt_image_view__ImageView__1__ImageViewWidget          Zrqt_image_view__ImageView__3__ImageViewWidget                                 Zrqt_image_view__ImageView__2__ImageViewWidget          Zrqt_image_view__ImageView__5__ImageViewWidget          Z O                                                          !                                                                                                                      | 2                                         J                     rrqt_service_caller__ServiceCaller__1__ServiceCallerWidget          0__DockWidgetContainer__1          drqt_launch__Launch__1___plugincontainer_top_widget                            6MinimizedDockWidgetsToolbar        "
+          "repr(QByteArray.hex)": "QtCore.QByteArray('000000ff00000000fd00000001000000030000017d000003eefc0100000005fc000000000000017d000000fd00fffffffc0100000002fc000000000000017d000000fd00fffffffc0200000002fc00000000000001ec000000ae00fffffffc0100000002fc000000000000017d000000fd00fffffffc0200000002fb0000005a007200710074005f0069006d006100670065005f0076006900650077005f005f0049006d0061006700650056006900650077005f005f0031005f005f0049006d00610067006500560069006500770057006900640067006500740100000000000000ee0000005400fffffffb0000005a007200710074005f0069006d006100670065005f0076006900650077005f005f0049006d0061006700650056006900650077005f005f0032005f005f0049006d006100670065005600690065007700570069006400670065007401000000f4000000f80000005400fffffffb0000005a007200710074005f0069006d006100670065005f0076006900650077005f005f0049006d0061006700650056006900650077005f005f0035005f005f0049006d0061006700650056006900650077005700690064006700650074010000026e0000022e0000000000000000fc000001f2000001fc000000ae00fffffffc0100000002fc000000000000017d000000fd00fffffffc0200000002fb0000005a007200710074005f0069006d006100670065005f0076006900650077005f005f0049006d0061006700650056006900650077005f005f0034005f005f0049006d006100670065005600690065007700570069006400670065007401000001f2000000fa0000005400fffffffb0000005a007200710074005f0069006d006100670065005f0076006900650077005f005f0049006d0061006700650056006900650077005f005f0033005f005f0049006d006100670065005600690065007700570069006400670065007401000002f2000000fc0000005400fffffffb0000005a007200710074005f0069006d006100670065005f0076006900650077005f005f0049006d0061006700650056006900650077005f005f0036005f005f0049006d006100670065005600690065007700570069006400670065007401000002ec000001b00000000000000000fb0000006c007200710074005f007200650063006f006e006600690067007500720065005f005f0050006100720061006d005f005f0031005f005f005f0070006c007500670069006e0063006f006e007400610069006e00650072005f0074006f0070005f007700690064006700650074010000037c000001320000000000000000fb00000042007200710074005f006e00610076005f0076006900650077005f005f004e0061007600690067006100740069006f006e0056006900650077005f005f0031005f005f010000064a000000f50000000000000000fc000001fa000005860000000000fffffffa000000000100000001fb00000072007200710074005f0073006500720076006900630065005f00630061006c006c00650072005f005f005300650072007600690063006500430061006c006c00650072005f005f0031005f005f005300650072007600690063006500430061006c006c006500720057006900640067006500740100000000ffffffff0000000000000000fb00000030005f005f0044006f0063006b0057006900640067006500740043006f006e007400610069006e00650072005f005f003101000006a40000009b0000000000000000fb00000064007200710074005f006c00610075006e00630068005f005f004c00610075006e00630068005f005f0031005f005f005f0070006c007500670069006e0063006f006e007400610069006e00650072005f0074006f0070005f0077006900640067006500740100000566000001d700000000000000000000017d0000000000000004000000040000000800000008fc00000001000000030000000100000036004d0069006e0069006d0069007a006500640044006f0063006b00570069006400670065007400730054006f006f006c0062006100720000000000ffffffff0000000000000000')",
+          "pretty-print": "                   }                                           Zrqt_image_view__ImageView__1__ImageViewWidget          Zrqt_image_view__ImageView__2__ImageViewWidget          Zrqt_image_view__ImageView__5__ImageViewWidget                                 Zrqt_image_view__ImageView__4__ImageViewWidget          Zrqt_image_view__ImageView__3__ImageViewWidget          Zrqt_image_view__ImageView__6__ImageViewWidget          lrqt_reconfigure__Param__1___plugincontainer_top_widget          Brqt_nav_view__NavigationView__1__                                                                                                                                                                                   f       }                                                      "
         }
       },
       "groups": {

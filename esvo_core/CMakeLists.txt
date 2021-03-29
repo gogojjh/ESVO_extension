@@ -12,8 +12,6 @@ catkin_simple(ALL_DEPS_REQUIRED)
 find_package(OpenCV REQUIRED)
 find_package(yaml-cpp REQUIRED)
 find_package(PkgConfig REQUIRED)
-# pkg_check_modules(gsl REQUIRED gsl)
-
 
 ## Specify additional locations of header files
 ## Your package locations should be listed before other locations
@@ -82,76 +80,38 @@ cs_add_executable(esvo_MVStereo src/esvo_MVStereoNode.cpp
 target_link_libraries(esvo_MVStereo ${PROJECT_NAME}_LIB 
     ${catkin_LIBRARIES} ${OpenCV_LIBRARIES} yaml-cpp)
 
-#################
-### Monocular ###
-#################
-set(HEADERS
-  include/esvo_core/core/DepthMonoFusion.h
-  include/esvo_core/core/DepthMonoRegularization.h
-  include/esvo_core/core/RegProblemLM.h
-  include/esvo_core/core/RegProblemSolverLM.h
-  include/esvo_core/optimization/OptimizationFunctor.h
-  include/esvo_core/container/CameraSystem.h
-  include/esvo_core/container/DepthPoint.h
-  include/esvo_core/container/SmartGrid.h
-  include/esvo_core/container/DepthMap.h
-  include/esvo_core/container/ResidualItem.h
-  include/esvo_core/container/TimeSurfaceObservation.h
-  include/esvo_core/tools/Visualization.h
-  include/esvo_core/tools/utils.h
-  include/esvo_core/tools/TicToc.h
-  include/esvo_core/tools/sobel.h
-  include/esvo_core/tools/cayley.h
-  include/esvo_core/tools/params_helper.h)
-
-set(SOURCES
-  src/core/DepthMonoFusion.cpp
-  src/core/DepthMonoRegularization.cpp
-  src/core/RegProblemLM.cpp
-  src/core/RegProblemSolverLM.cpp
-  src/container/CameraSystem.cpp
-  src/container/DepthPoint.cpp
-  src/container/ResidualItem.cpp
-  src/tools/Visualization.cpp
-  src/tools/sobel.cpp
-  src/tools/cayley.cpp)
-
-cs_add_library(${PROJECT_NAME}_mono_LIB ${SOURCES} ${HEADERS})
-
 ############################################
 #option(DEFINE_USE_INVERSE_DEPTH "Use linear spacing in inverse depth (if OFF, will use linear spacing in depth)" ON)
 #if(DEFINE_USE_INVERSE_DEPTH)
 #    add_definitions(-DUSE_INVERSE_DEPTH)
 #endif(DEFINE_USE_INVERSE_DEPTH)
-
-# cs_add_library(mc_lib src/initial/InitialMotionEstimator.cpp)
 cs_add_library(emvs_lib src/emvs_core/MapperEMVS.cpp src/emvs_core/MedianFilter.cpp)
 
 ########### Mapping experiments 
 cs_add_executable(esvo_MonoMapping src/esvo_MonoMappingNode.cpp
     src/esvo_MonoMapping.cpp include/esvo_core/esvo_MonoMapping.h)
-target_link_libraries(esvo_MonoMapping ${PROJECT_NAME}_mono_LIB emvs_lib 
+target_link_libraries(esvo_MonoMapping ${PROJECT_NAME}_LIB emvs_lib 
     ${catkin_LIBRARIES} ${OpenCV_LIBRARIES} yaml-cpp)
 
 # Node esvo_MVSMono (newly added in branch "mvs")
 cs_add_executable(esvo_MVSMono src/esvo_MVSMonoNode.cpp 
   src/esvo_MVSMono.cpp include/esvo_core/esvo_MVSMono.h)
-target_link_libraries(esvo_MVSMono ${PROJECT_NAME}_mono_LIB emvs_lib 
+target_link_libraries(esvo_MVSMono ${PROJECT_NAME}_LIB emvs_lib 
     ${catkin_LIBRARIES} ${OpenCV_LIBRARIES} yaml-cpp)
 
-########### Tracking experiments
+########### Tracking with Multiple representations 
 cs_add_executable(Tracking src/TrackingNode.cpp
     src/Tracking.cpp include/esvo_core/Tracking.h)
-target_link_libraries(Tracking ${PROJECT_NAME}_mono_LIB 
+target_link_libraries(Tracking ${PROJECT_NAME}_LIB
     ${catkin_LIBRARIES} ${OpenCV_LIBRARIES} yaml-cpp)
 
 #####################
 ### Tool programs ###
 #####################
-cs_add_executable(saveMap src/saveMap.cpp)
+cs_add_executable(saveMap src/tools/saveMap.cpp)
 target_link_libraries(saveMap ${catkin_LIBARIES})
 
-cs_add_executable(publishMap src/publishMap.cpp)
+cs_add_executable(publishMap src/tools/publishMap.cpp)
 target_link_libraries(publishMap ${catkin_LIBARIES})
 
 

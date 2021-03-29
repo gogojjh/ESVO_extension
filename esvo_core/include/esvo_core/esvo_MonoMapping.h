@@ -13,8 +13,8 @@
 #include <esvo_core/container/CameraSystem.h>
 #include <esvo_core/container/DepthMap.h>
 #include <esvo_core/container/TimeSurfaceObservation.h>
-#include <esvo_core/core/DepthMonoFusion.h>
-#include <esvo_core/core/DepthMonoRegularization.h>
+#include <esvo_core/core/DepthFusion.h>
+#include <esvo_core/core/DepthRegularization.h>
 #include <esvo_core/core/DepthProblemConfig.h>
 #include <esvo_core/tools/utils.h>
 #include <esvo_core/tools/Visualization.h>
@@ -150,8 +150,8 @@ namespace esvo_core
         // system
         std::string ESVO_System_Status_;
         DepthProblemConfig::Ptr dpConfigPtr_;
-        DepthMonoFusion dFusor_;
-        DepthMonoRegularization dRegularizor_;
+        DepthFusion dFusor_;
+        DepthRegularization dRegularizor_;
         Visualization visualizor_;
 
         // data transfer

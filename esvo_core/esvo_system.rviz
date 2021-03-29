@@ -4,13 +4,12 @@ Panels:
     Name: Displays
     Property Tree Widget:
       Expanded:
-        - /Global Options1
         - /TF1/Frames1
         - /TF1/Tree1
-        - /Axes1
-        - /TrackingPath1
-      Splitter Ratio: 0.4783715009689331
-    Tree Height: 981
+        - /GlobalMap1
+        - /GTPath1
+      Splitter Ratio: 0.6014235019683838
+    Tree Height: 438
   - Class: rviz/Selection
     Name: Selection
   - Class: rviz/Tool Properties
@@ -29,7 +28,7 @@ Panels:
     Experimental: false
     Name: Time
     SyncMode: 0
-    SyncSource: ""
+    SyncSource: LocalMap
 Preferences:
   PromptSaveOnExit: true
 Toolbars:
@@ -41,7 +40,7 @@ Visualization Manager:
       Cell Size: 1
       Class: rviz/Grid
       Color: 160; 160; 164
-      Enabled: false
+      Enabled: true
       Line Style:
         Line Width: 0.029999999329447746
         Value: Lines
@@ -49,12 +48,12 @@ Visualization Manager:
       Normal Cell Count: 0
       Offset:
         X: 0
-        Y: 0
+        Y: 0.5
         Z: 0
-      Plane: XY
+      Plane: XZ
       Plane Cell Count: 10
       Reference Frame: <Fixed Frame>
-      Value: false
+      Value: true
     - Class: rviz/TF
       Enabled: true
       Frame Timeout: 999
@@ -63,9 +62,7 @@ Visualization Manager:
         dvs:
           Value: true
         dvs_gt:
-          Value: true
-        gt:
-          Value: true
+          Value: false
         map:
           Value: true
       Marker Scale: 1
@@ -77,13 +74,13 @@ Visualization Manager:
         map:
           dvs:
             {}
-          gt:
+          dvs_gt:
             {}
       Update Interval: 0
       Value: true
     - Alpha: 1
-      Axes Length: 0.15000000596046448
-      Axes Radius: 0.019999999552965164
+      Axes Length: 0.10000000149011612
+      Axes Radius: 0.009999999776482582
       Class: rviz/Pose
       Color: 255; 25; 0
       Enabled: false
@@ -93,18 +90,18 @@ Visualization Manager:
       Shaft Length: 1
       Shaft Radius: 0.05000000074505806
       Shape: Axes
-      Topic: /esvo_core/pose_pub
+      Topic: /esvo_tracking/pose_pub
       Unreliable: false
       Value: false
     - Class: rviz/Axes
-      Enabled: true
+      Enabled: false
       Length: 0.10000000149011612
       Name: Axes
       Radius: 0.009999999776482582
       Reference Frame: <Fixed Frame>
-      Value: true
+      Value: false
     - Alpha: 1
-      Autocompute Intensity Bounds: true
+      Autocompute Intensity Bounds: false
       Autocompute Value Bounds:
         Max Value: 7.365790843963623
         Min Value: 1.6606168746948242
@@ -118,12 +115,12 @@ Visualization Manager:
       Enabled: true
       Invert Rainbow: false
       Max Color: 255; 255; 255
-      Max Intensity: 5.1671552658081055
+      Max Intensity: 1.0057710409164429
       Min Color: 0; 0; 0
-      Min Intensity: 0.810275673866272
+      Min Intensity: 0.9322989583015442
       Name: LocalMap
       Position Transformer: XYZ
-      Queue Size: 10
+      Queue Size: 0
       Selectable: true
       Size (Pixels): 3
       Size (m): 0.05000000074505806
@@ -164,45 +161,15 @@ Visualization Manager:
       Use rainbow: true
       Value: false
     - Alpha: 1
-      Autocompute Intensity Bounds: true
-      Autocompute Value Bounds:
-        Max Value: 7.365790843963623
-        Min Value: 1.6606168746948242
-        Value: true
-      Axis: X
-      Channel Name: z
-      Class: rviz/PointCloud2
-      Color: 255; 255; 255
-      Color Transformer: Intensity
-      Decay Time: 0
-      Enabled: true
-      Invert Rainbow: false
-      Max Color: 255; 255; 255
-      Max Intensity: 5.001749038696289
-      Min Color: 0; 0; 0
-      Min Intensity: 0.7398507595062256
-      Name: MonoMap
-      Position Transformer: XYZ
-      Queue Size: 10
-      Selectable: true
-      Size (Pixels): 3
-      Size (m): 0.05000000074505806
-      Style: Points
-      Topic: /esvo_mapping/pointcloud_mono
-      Unreliable: false
-      Use Fixed Frame: true
-      Use rainbow: true
-      Value: true
-    - Alpha: 1
       Buffer Length: 1
       Class: rviz/Path
-      Color: 10; 205; 25
+      Color: 255; 0; 0
       Enabled: true
       Head Diameter: 0.30000001192092896
       Head Length: 0.20000000298023224
       Length: 0.30000001192092896
       Line Style: Billboards
-      Line Width: 0.009999999776482582
+      Line Width: 0.004999999888241291
       Name: TrackingPath
       Offset:
         X: 0
@@ -220,12 +187,12 @@ Visualization Manager:
       Buffer Length: 1
       Class: rviz/Path
       Color: 10; 205; 25
-      Enabled: false
+      Enabled: true
       Head Diameter: 0.30000001192092896
       Head Length: 0.20000000298023224
       Length: 0.30000001192092896
       Line Style: Billboards
-      Line Width: 0.009999999776482582
+      Line Width: 0.004999999888241291
       Name: GTPath
       Offset:
         X: 0
@@ -238,7 +205,7 @@ Visualization Manager:
       Shaft Length: 0.10000000149011612
       Topic: /gt/trajectory
       Unreliable: false
-      Value: false
+      Value: true
   Enabled: true
   Global Options:
     Background Color: 85; 87; 83
@@ -267,16 +234,16 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz/Orbit
-      Distance: 5.822004795074463
+      Distance: 3.3511555194854736
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.05999999865889549
         Stereo Focal Distance: 1
         Swap Stereo Eyes: false
         Value: false
       Focal Point:
-        X: 0.391800194978714
-        Y: 0.5021840333938599
-        Z: 1.2245086431503296
+        X: 0.05782435089349747
+        Y: 0.4233551323413849
+        Z: 1.2892578840255737
       Focal Shape Fixed Size: true
       Focal Shape Size: 0.05000000074505806
       Invert Z Axis: false
@@ -285,15 +252,15 @@ Visualization Manager:
       Pitch: -1.1547967195510864
       Target Frame: <Fixed Frame>
       Value: Orbit (rviz)
-      Yaw: 4.602224826812744
+      Yaw: 4.680353164672852
     Saved: ~
 Window Geometry:
   Displays:
-    collapsed: false
-  Height: 1118
-  Hide Left Dock: false
+    collapsed: true
+  Height: 1126
+  Hide Left Dock: true
   Hide Right Dock: true
-  QMainWindow State: 000000ff00000000fd0000000400000000000002a300000417fc0200000008fb0000001200530065006c0065006300740069006f006e00000001e10000009b0000005e00fffffffb0000001e0054006f006f006c002000500072006f007000650072007400690065007302000001ed000001df00000185000000a3fb000000120056006900650077007300200054006f006f02000001df000002110000018500000122fb000000200054006f006f006c002000500072006f0070006500720074006900650073003203000002880000011d000002210000017afb000000100044006900730070006c006100790073010000002700000417000000ce00fffffffb0000002000730065006c0065006300740069006f006e00200062007500660066006500720200000138000000aa0000023a00000294fb00000014005700690064006500530074006500720065006f02000000e6000000d2000003ee0000030bfb0000000c004b0069006e0065006300740200000186000001060000030c00000261000000010000010f00000255fc0200000003fb0000001e0054006f006f006c002000500072006f00700065007200740069006500730100000041000000780000000000000000fb0000000a00560069006500770073000000003d00000255000000ac00fffffffb0000001200530065006c0065006300740069006f006e010000025a000000b200000000000000000000000200000490000000a9fc0100000001fb0000000a00560069006500770073030000004e00000080000002e10000019700000003000004ae0000003efc0100000002fb0000000800540069006d00650000000000000004ae000002b800fffffffb0000000800540069006d00650100000000000004500000000000000000000002050000041700000004000000040000000800000008fc0000000100000002000000010000000a0054006f006f006c00730100000000ffffffff0000000000000000
+  QMainWindow State: 000000ff00000000fd0000000400000000000002360000041ffc020000000afb0000001200530065006c0065006300740069006f006e00000001e10000009b0000005e00fffffffb0000001e0054006f006f006c002000500072006f007000650072007400690065007302000001ed000001df00000185000000a3fb000000120056006900650077007300200054006f006f02000001df000002110000018500000122fb000000200054006f006f006c002000500072006f0070006500720074006900650073003203000002880000011d000002210000017afb000000100044006900730070006c00610079007300000000270000041f000000ce00fffffffb0000002000730065006c0065006300740069006f006e00200062007500660066006500720200000138000000aa0000023a00000294fb00000014005700690064006500530074006500720065006f02000000e6000000d2000003ee0000030bfb0000000c004b0069006e0065006300740200000186000001060000030c00000261fb0000000e00630061006d004c00650066007400000000270000020a0000000000000000fb0000001000630061006d0052006900670068007400000002370000020a0000000000000000000000010000010f00000417fc0200000003fb0000001e0054006f006f006c002000500072006f00700065007200740069006500730100000041000000780000000000000000fb0000000a00560069006500770073000000002700000417000000ac00fffffffb0000001200530065006c0065006300740069006f006e010000025a000000b200000000000000000000000200000490000000a9fc0100000001fb0000000a00560069006500770073030000004e00000080000002e10000019700000003000004ae0000003efc0100000002fb0000000800540069006d00650000000000000004ae000002b800fffffffb0000000800540069006d00650100000000000004500000000000000000000004ae0000041f00000004000000040000000800000008fc0000000100000002000000010000000a0054006f006f006c00730100000000ffffffff0000000000000000
   Selection:
     collapsed: false
   Time:
@@ -304,4 +271,4 @@ Window Geometry:
     collapsed: true
   Width: 1198
   X: 0
-  Y: 777
+  Y: 769

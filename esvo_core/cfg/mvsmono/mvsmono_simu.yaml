@@ -1,0 +1,35 @@
+invDepth_min_range: 0.5
+invDepth_max_range: 5
+Denoising: False
+PROCESS_EVENT_NUM: 20000
+TS_HISTORY_LENGTH: 100
+mapping_rate_hz: 20
+# Publish result parameters
+bVisualizeGlobalPC: False
+visualizeGPC_interval: 3
+NumGPC_added_oper_refresh: 1000
+
+SAVE_RESULT: False
+PATH_TO_SAVE_RESULT: "/home/jjiao/ESVO_result/" # CHANGE THIS PATH
+Dataset_Name: "simu"
+Sequence_Name: "checkerboard_planar"
+EVENTS_SAVE_MAP: 5000000
+
+# EMVS Mapping
+opts_dim_x: 0
+opts_dim_y: 0
+opts_dim_z: 100
+opts_depth_map_kernal_size: 5 # Size of the Gaussian kernel used for adaptive thresholding"
+opts_depth_map_threshold_c: 7 # A value in [0, 255]. The smaller the noisier and more dense reconstruction"
+opts_depth_map_median_filter_size: 15 # Size of the median filter used to clean the depth map"
+opts_depth_map_contrast_threshold: 1 # Threshold of the contrast to remove outliers in the mask 
+opts_pc_radius_search: 0.05
+opts_pc_min_num_neighbors: 3
+opts_mapper_parallex: 5.0
+opts_mapper_PatchSize_X: 3
+opts_mapper_PatchSize_Y: 3
+opts_mapper_TS_score: 1.0
+KEYFRAME_MEANDEPTH_DIS: 1.0 # percentage
+EMVS_Init_event: 100000 #200000
+EMVS_Keyframe_event: 3000000 #200000
+stdVar_init: 0.01

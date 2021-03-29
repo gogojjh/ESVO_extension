@@ -1,5 +1,5 @@
-#ifndef ESVO_CORE_MONOTRACKING_H
-#define ESVO_CORE_MONOTRACKING_H
+#ifndef ESVO_CORE_MREP_TRACKING_H
+#define ESVO_CORE_MREP_TRACKING_H
 
 #include <nav_msgs/Path.h>
 
@@ -20,7 +20,6 @@
 #include <esvo_core/tools/utils.h>
 #include <esvo_core/tools/cayley.h>
 #include <esvo_core/tools/Visualization.h>
-#include <initial/InitialMotionEstimator.h>
 
 #include <opencv2/core/core.hpp>
 #include <opencv2/imgproc/imgproc.hpp>
@@ -35,9 +34,7 @@
 #include <pcl/point_types.h>
 #include <pcl_ros/point_cloud.h>
 
-// #define ESVO_CORE_MONO_TRACKING_DEBUG
 // #define ESVO_CORE_TRACKING_LOG
-// #define ESVO_CORE_SAVE_IMAGE
 
 namespace esvo_core
 {
@@ -48,49 +45,6 @@ namespace esvo_core
     WORKING
   };
 
-  // class PosePredictor
-  // {
-  // public:
-  //   PosePredictor()
-  //   {
-  //     T0_.setIdentity();
-  //     T1_.setIdentity();
-  //     T_pred_.setIdentity();
-  //     t0_ = ros::Time::now();
-  //     t1_ = ros::Time::now();
-  //   }
-
-  //   void reset()
-  //   {
-  //     T0_.setIdentity();
-  //     T1_.setIdentity();
-  //     T_pred_.setIdentity();
-  //     t0_ = ros::Time::now();
-  //     t1_ = ros::Time::now();
-  //   }
-
-  //   void predict(const ros::Time &t)
-  //   {
-  //     // Linear interpolation in SE(3)
-  //     const Eigen::Matrix4d T_relative = T0_.inverse() * T1_;
-  //     const double delta_t = (t - t0_).toSec() / (t1_ - t0_).toSec();
-  //     T_pred_ = T0_ * getLinearInterpolation(T_relative, delta_t);
-  //   }
-
-  //   Eigen::Matrix4d getLinearInterpolation(const Eigen::Matrix4d &T_relative, const double &delta_t) const
-  //   {
-  //     Eigen::Matrix3d R_relative = T_relative.topLeftCorner<3, 3>();
-  //     Eigen::Quaterniond q_relative(R_relative);
-  //     Eigen::Matrix4d T = Eigen::Matrix4d::Identity();
-  //     T.topLeftCorner<3, 3>() = q_relative.slerp(delta_t, q_relative).toRotationMatrix();
-  //     T.topRightCorner<3, 1>() = delta_t * T_relative.topRightCorner<3, 1>();
-  //     return T;
-  //   }
-
-  //   Eigen::Matrix4d T0_, T1_, T_pred_;
-  //   ros::Time t0_, t1_;
-  // };
-
   class Tracking
   {
   public:
@@ -99,9 +53,9 @@ namespace esvo_core
     virtual ~Tracking();
 
     // functions regarding tracking
-    void TrackingLoopTS();
-    void TrackingLoopEM();
-    void TrackingLoopTSEM();
+    void TrackingLoopTS();   // TS-based tracker
+    void TrackingLoopEM();   // EM-based tracker
+    void TrackingLoopTSEM(); // TS-based tracker as the principal one, with the degeneracy check and backup EM-based tracker 
     bool refDataTransferring();
     bool curDataTransferring(); // These two data transferring functions are decoupled because the data are not updated at the same frequency.
 
@@ -115,7 +69,6 @@ namespace esvo_core
     // results
     void publishPose(const ros::Time &t, Transformation &tr);
     void publishPath(const ros::Time &t, Transformation &tr);
-    // void saveTrajectory(const std::string &resultDir);
     void saveTrajectory(const std::string &resultDir,
                         const std::list<std::string> &lTimestamp_,
                         const std::list<Eigen::Matrix<double, 4, 4>, Eigen::aligned_allocator<Eigen::Matrix<double, 4, 4>>> &lPose_);
@@ -209,4 +162,4 @@ namespace esvo_core
   };
 } // namespace esvo_core
 
-#endif //ESVO_CORE_TRACKING_H
+#endif //ESVO_CORE_MREP_TRACKING_H

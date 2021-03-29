@@ -275,8 +275,6 @@ namespace EMVS
 					p_cam = xyz_rv.cast<double>();
 					dp.update_p_cam(p_cam);
 					dp.update(1.0 / xyz_rv.z(), stdVar_init * stdVar_init);
-					// dp.update(1.0 / xyz_rv.z(), static_cast<double>(variance_map.at<float>(y, x)));
-					// dp.update_confidence(1.0 / xyz_rv.z(), static_cast<double>(confidence_map.at<float>(y, x)));
 					dp.residual() = 0.0;
 					dp.updatePose(T_w_rv_);
 					dp.age() = 1;

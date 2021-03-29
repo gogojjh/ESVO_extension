@@ -11,6 +11,12 @@
 
 	<rosparam param="/use_sim_time">true</rosparam>
 
+	<node name="dvs_renderer" pkg="dvs_renderer" type="dvs_renderer" output="screen" required="false">
+		<remap from="events" to="/cam0/events" />
+		<remap from="image" to="/cam0/image_raw" />
+		<remap from="dvs_rendering" to="dvs_rendering" />
+	</node>
+
 	<!-- Time surfaces generation -->
 	<node name="TimeSurface_left" pkg="esvo_time_surface" type="esvo_time_surface">
 		<remap from="events" to="/cam0/events" />
@@ -44,7 +50,7 @@
 		<rosparam param="calibInfoDir" subst_value="true">$(arg calibInfoDirStr)</rosparam>
 		<rosparam command="load" file="$(find esvo_core)/cfg/mapping/mapping_simu.yaml" />
 	</node>
-
+	
 	<node name="Tracking" pkg="esvo_core" type="Tracking" output="screen" required="true">
 		<remap from="time_surface_left" to="/TS_left" />
 		<remap from="time_surface_right" to="/TS_right" />
@@ -63,16 +69,16 @@
 		<param name="Representation_Name" type="string" value="$(arg Representation_Name)" />
 		<param name="eventNum_EM" type="int" value="$(arg eventNum_EM)" />
 		<param name="kernelSize" type="int" value="$(arg kernelSize)" />
-	</node>
+	</node> 
 
 	<node name="TimeSurface_global_timer" pkg="esvo_time_surface" type="TimeSurface_global_timer" required="true" >
 		<remap from="events" to="/cam0/events" />
 		<!-- <param name="minimum_events" type="int" value="4000" /> -->
-		<param name="frequency_timer" type="int" value="100" /> 
+		<param name="frequency_timer" type="int" value="70" /> 
 	    <!-- <param name="minimum_frequency_timer" type="int" value="20" /> -->
 	</node>
 
 	<node pkg="rosbag" type="play" name="play" output="screen" required="true"
-		args="/Monster/dataset/event_camera/simu/$(arg Sequence_Name)_edited.bag -r 1.0 --clock">
+		args="/Monster/dataset/event_camera/simu/$(arg Sequence_Name)_edited.bag -r 0.7 --clock">
 	</node>
 </launch>
