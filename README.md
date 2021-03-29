@@ -12,7 +12,7 @@ This will launch one *esvo_time_surface nodes* (for the left event camera), and 
 
 Video: from top to bottom: raw image, confidence map, mask, depth map
 
-<a target="_blank"><img src="pict/MVSMONO_simu_office_planar.gif" alt="" width="420" height="300" /></a>
+<a target="_blank"><img src="./pict/MVSMONO_simu_office_planar.gif" alt="" width="420" height="300" /></a>
 
 ### 1.2 esvo_MonoMapping.cpp and esvo_MonoTracking.cpp
 We follow [EVO](http://www.cvlibs.net/projects/autonomous_vision_survey/literature/Rebecq2016RAL.pdf) to integrate the monocular mapper with the time surface-based tracker for the monocular event-based visual odometry. Preliminary results are provided. To launch the mapper, run
@@ -22,13 +22,13 @@ We follow [EVO](http://www.cvlibs.net/projects/autonomous_vision_survey/literatu
 ### 1.3 Tracking.cpp
 ESVO trackles the tracking problem using the time surface (TS), while EVO does it on the binary event map (EM). This module additionally implements the EM-basd tracker for a comparative evaluation. Complete experimental results will be published.
 
-Table: mean ATE [*cm*] of all tracker variations under 10 SLAM trials
+<!-- Table: mean ATE [*cm*] of all tracker variations under 10 SLAM trials
 
-<a target="_blank"><img src="pict/tracker_comparison.png" alt="" width="630" height="277.374" /></a>
+<a target="_blank"><img src="./pict/tracker_comparison.png" alt="" width="630" height="277.374" /></a> -->
 
 Video: from left to right: TS-based, EM-based, TSEM-based tracker.
 
-<a target="_blank"><img src="pict/Tracking_upenn_flying3.gif" alt="" width="630" height="314.48" /></a>
+<a target="_blank"><img src="./pict/Tracking_upenn_flying3.gif" alt="" width="630" height="314.48" /></a>
 
 ## 2. Simulated Datasets
 We use the event camera-based simulator: [ESIM](https://github.com/uzh-rpg/rpg_esim) to collect several simulated stereo event camera-based sequences. The stereo rig perform planar or 6DoF motion before a wall with different backgrounds: simple shapes, checkerboard, and office. These sequences can be used for algorithm verification. 
