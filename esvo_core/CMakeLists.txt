@@ -80,25 +80,6 @@ cs_add_executable(esvo_MVStereo src/esvo_MVStereoNode.cpp
 target_link_libraries(esvo_MVStereo ${PROJECT_NAME}_LIB 
     ${catkin_LIBRARIES} ${OpenCV_LIBRARIES} yaml-cpp)
 
-############################################
-#option(DEFINE_USE_INVERSE_DEPTH "Use linear spacing in inverse depth (if OFF, will use linear spacing in depth)" ON)
-#if(DEFINE_USE_INVERSE_DEPTH)
-#    add_definitions(-DUSE_INVERSE_DEPTH)
-#endif(DEFINE_USE_INVERSE_DEPTH)
-cs_add_library(emvs_lib src/emvs_core/MapperEMVS.cpp src/emvs_core/MedianFilter.cpp)
-
-########### Mapping experiments 
-cs_add_executable(esvo_MonoMapping src/esvo_MonoMappingNode.cpp
-    src/esvo_MonoMapping.cpp include/esvo_core/esvo_MonoMapping.h)
-target_link_libraries(esvo_MonoMapping ${PROJECT_NAME}_LIB emvs_lib 
-    ${catkin_LIBRARIES} ${OpenCV_LIBRARIES} yaml-cpp)
-
-# Node esvo_MVSMono (newly added in branch "mvs")
-cs_add_executable(esvo_MVSMono src/esvo_MVSMonoNode.cpp 
-  src/esvo_MVSMono.cpp include/esvo_core/esvo_MVSMono.h)
-target_link_libraries(esvo_MVSMono ${PROJECT_NAME}_LIB emvs_lib 
-    ${catkin_LIBRARIES} ${OpenCV_LIBRARIES} yaml-cpp)
-
 ########### Tracking with Multiple representations 
 cs_add_executable(Tracking src/TrackingNode.cpp
     src/Tracking.cpp include/esvo_core/Tracking.h)
