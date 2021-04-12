@@ -26,7 +26,7 @@
 	</node>
 
 	<!-- Calibration folder -->
-	<arg name="calibInfoDirStr" default="$(find esvo_core)/calib/rpg"/>
+	<arg name="calibInfoDirStr" default="$(find esvo_core)/calib/rpg_stereo"/>
 
 	<!-- Mapping node -->
 	<!-- launch-prefix="gdb -ex run -\-args" -->
@@ -36,12 +36,10 @@
 		<remap from="stamped_pose" to="/esvo_tracking/pose_pub" />
 		<remap from="events_left" to="/davis/left/events" />
 		<remap from="events_right" to="/davis/right/events" />
-
 		<rosparam param="dvs_frame_id">"dvs"</rosparam>
 		<rosparam param="world_frame_id">"map"</rosparam>
 		<rosparam param="calibInfoDir" subst_value="true">$(arg calibInfoDirStr)</rosparam>
-
-		<rosparam command="load" file="$(find esvo_core)/cfg/mapping/mapping_rpg.yaml" />
+		<rosparam command="load" file="$(find esvo_core)/cfg/monomapping/mapping_rpg.yaml" />
 	</node>
 
 	<!-- Tracking node -->
@@ -52,11 +50,9 @@
     <remap from="gt_pose" to="/optitrack/davis_stereo" />
     <remap from="events_left" to="/davis/left/events" />
     <remap from="pointcloud" to="/esvo_mapping/pointcloud_local" />
-
     <rosparam param="dvs_frame_id">"dvs"</rosparam>
     <rosparam param="world_frame_id">"map"</rosparam>
   	<rosparam param="calibInfoDir" subst_value="true">$(arg calibInfoDirStr)</rosparam>
-
     <rosparam command="load" file="$(find esvo_core)/cfg/tracking/tracking_rpg.yaml" />
 	</node>
 
