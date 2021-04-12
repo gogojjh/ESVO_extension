@@ -148,9 +148,9 @@ Visualization Manager:
       Enabled: true
       Invert Rainbow: true
       Max Color: 255; 255; 255
-      Max Intensity: 1.1049723625183105
+      Max Intensity: 1.0526314973831177
       Min Color: 0; 0; 0
-      Min Intensity: 0.8196721076965332
+      Min Intensity: 0.9216589331626892
       Name: LocalMap_mvs
       Position Transformer: XYZ
       Queue Size: 10
@@ -228,15 +228,15 @@ Visualization Manager:
         Swap Stereo Eyes: false
         Value: false
       Focal Point:
-        X: 0.26306450366973877
-        Y: 0.3772783577442169
+        X: 0.6787638068199158
+        Y: 0.3139740526676178
         Z: 0
       Focal Shape Fixed Size: true
       Focal Shape Size: 0.05000000074505806
       Invert Z Axis: false
       Name: Current View
       Near Clip Distance: 0.009999999776482582
-      Pitch: -1.2652021646499634
+      Pitch: -1.2397964000701904
       Target Frame: <Fixed Frame>
       Value: ThirdPersonFollower (rviz)
       Yaw: 4.688573837280273
