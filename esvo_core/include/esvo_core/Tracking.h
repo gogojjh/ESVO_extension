@@ -110,9 +110,6 @@ namespace esvo_core
     std::vector<std::unordered_map<std::string, double>> vTimeCost_;
     std::vector<std::unordered_map<std::string, double>> vLambda_;
 
-    Eigen::Quaterniond q_gt_s_;
-    Eigen::Vector3d t_gt_s_;
-
     // Time Surface sync policy
     typedef message_filters::sync_policies::ExactTime<sensor_msgs::Image, sensor_msgs::Image> ExactSyncPolicy;
     message_filters::Synchronizer<ExactSyncPolicy> TS_sync_;

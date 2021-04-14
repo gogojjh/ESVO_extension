@@ -31,6 +31,7 @@ set(HEADERS
  include/esvo_core/core/RegProblemSolverLM.h
  include/esvo_core/optimization/OptimizationFunctor.h
  include/esvo_core/container/CameraSystem.h
+ include/esvo_core/container/SensorSystem.h
  include/esvo_core/container/DepthPoint.h
  include/esvo_core/container/EventMatchPair.h
  include/esvo_core/container/SmartGrid.h
@@ -54,6 +55,7 @@ set(SOURCES
  src/core/RegProblemLM.cpp
  src/core/RegProblemSolverLM.cpp
  src/container/CameraSystem.cpp
+ src/container/SensorSystem.cpp
  src/container/DepthPoint.cpp
  src/container/ResidualItem.cpp
  src/tools/Visualization.cpp
@@ -84,6 +86,12 @@ target_link_libraries(esvo_MVStereo ${PROJECT_NAME}_LIB
 cs_add_executable(Tracking src/TrackingNode.cpp
     src/Tracking.cpp include/esvo_core/Tracking.h)
 target_link_libraries(Tracking ${PROJECT_NAME}_LIB
+    ${catkin_LIBRARIES} ${OpenCV_LIBRARIES} yaml-cpp)
+
+########### generate LiDAR depth map
+cs_add_executable(LiDARDepthMap src/LiDARDepthMapNode.cpp
+    src/LiDARDepthMap.cpp include/esvo_core/LiDARDepthMap.h)
+target_link_libraries(LiDARDepthMap ${PROJECT_NAME}_LIB
     ${catkin_LIBRARIES} ${OpenCV_LIBRARIES} yaml-cpp)
 
 #####################

@@ -54,8 +54,8 @@ def run_esvo(dataset, sequence, representation, eventnum, trials):
                         command = 'roslaunch esvo_core system_{}.launch Dataset_Name:={} Sequence_Name:={} Representation_Name:={} eventNum_EM:={} tracking_rate_hz:={}'\
                                 .format(ds, ds, seq, rep, en, tk_rate)
                         print('Testing Command: {}'.format(command))
-                        os.system(command + ' > /tmp/run_esvo_output')
-                        # os.system(command)
+                        # os.system(command + ' > /tmp/run_esvo_output')
+                        os.system(command)
                         if (trials > 1):
                             command = 'mv {}/{}/{}/traj/{}_traj_estimate.txt {}/{}/{}/traj/{}_traj_estimate{}.txt'\
                                 .format(dir_esvo_result, ds, seq, est_type, dir_esvo_result, ds, seq, est_type, tr - 1)
