@@ -30,6 +30,7 @@
 
 #include <pcl/point_types.h>
 #include <pcl/common/transforms.h>
+#include <pcl/filters/voxel_grid.h>
 #include <pcl_ros/point_cloud.h>
 
 // #define LIDAR_DEPTH_MAP_DEBUG
@@ -89,6 +90,9 @@ namespace esvo_core
         std::string calibInfoDir_;
         esvo_core::container::CameraSystem::Ptr camSysPtr_;
         esvo_core::container::SensorSystem::Ptr sensorSysPtr_;
+        pcl::VoxelGrid<pcl::PointXYZI> downSizeFilter_;
+        double camFOV_x_, camFOV_y_;
+        double FOV_ratio_X_, FOV_ratio_Y_;
 
         // inter-thread management
         std::mutex data_mutex_;
@@ -105,6 +109,8 @@ namespace esvo_core
         /**** offline parameters ***/
         size_t depthmap_rate_hz_;
         size_t CLOUD_HISTORY_LENGTH_, CLOUD_MAP_LENGTH_;
+        float CLOUD_RES_;
+        double KEYFRAME_th_dis_, KEYFRAME_th_ori_;
         bool bSaveDepthMap_;
         bool bVisualizeDepthMap_;
         std::string resultPath_;

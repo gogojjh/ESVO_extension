@@ -1,5 +1,10 @@
-CLOUD_HISTORY_LENGTH: 20
+CLOUD_HISTORY_LENGTH: 50
 CLOUD_MAP_LENGTH: 10
+CLOUD_RES: 0.1
+KEYFRAME_th_dis: 0.1     # m
+KEYFRAME_th_ori: 3       # deg
+FOV_ratio_X: 0.6
+FOV_ratio_Y: 0.8
 depthmap_rate_hz: 10
 SAVE_DEPTH_MAP: False
 PATH_TO_SAVE_DEPTH_MAP: "/home/jjiao/ESVO_result/" # CHANGE THIS PATH

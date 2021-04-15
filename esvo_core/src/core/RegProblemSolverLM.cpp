@@ -45,8 +45,8 @@ namespace esvo_core
     {
       if (cur->numEventsSinceLastObs_ < rpConfigPtr_->MIN_NUM_EVENTS_)
       {
-        LOG(INFO) << "resetRegProblem RESET fails for no enough events coming in.";
-        LOG(INFO) << "However, the system remains to work.";
+        // LOG(INFO) << "resetRegProblem RESET fails for no enough events coming in.";
+        // LOG(INFO) << "However, the system remains to work.";
       }
       if (ref->vPointXYZPtr_.size() < rpConfigPtr_->BATCH_SIZE_)
       {

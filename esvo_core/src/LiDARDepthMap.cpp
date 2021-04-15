@@ -21,6 +21,25 @@ namespace esvo_core
         world_frame_id_ = tools::param(pnh_, "world_frame_id", std::string("world"));
         CLOUD_HISTORY_LENGTH_ = tools::param(pnh_, "CLOUD_HISTORY_LENGTH", 20);
         CLOUD_MAP_LENGTH_ = tools::param(pnh_, "CLOUD_MAP_LENGTH", 10);
+        CLOUD_RES_ = tools::param(pnh_, "CLOUD_RES", 0.2);
+        downSizeFilter_.setLeafSize(CLOUD_RES_, CLOUD_RES_, CLOUD_RES_);
+        KEYFRAME_th_dis_ = tools::param(pnh_, "KEYFRAME_th_dis", 0.1);
+        KEYFRAME_th_ori_ = tools::param(pnh_, "KEYFRAME_th_ori", 3);
+
+        Eigen::Vector3d p0;
+        camSysPtr_->cam_left_ptr_->cam2World(Eigen::Vector2d(0.0, 0.0), 
+                                             1.0, 
+                                             p0);
+        Eigen::Vector3d p1;
+        camSysPtr_->cam_left_ptr_->cam2World(Eigen::Vector2d(camSysPtr_->cam_left_ptr_->width_, camSysPtr_->cam_left_ptr_->height_),
+                                             1.0, 
+                                             p1);
+        camFOV_x_ = atan2(p1(0) - p0(0), 1.0) / M_PI * 180.0;
+        camFOV_y_ = atan2(p1(1) - p0(1), 1.0) / M_PI * 180.0;
+        FOV_ratio_X_ = tools::param(pnh_, "FOV_ratio_X", 0.5);
+        FOV_ratio_Y_ = tools::param(pnh_, "FOV_ratio_Y", 0.5);
+        LOG(INFO) << "camFOV_x: " << camFOV_x_ << ", camFOV_y: " << camFOV_y_;
+        LOG(INFO) << "FOV_ratio_X: " << FOV_ratio_X_ << ", FOV_ratio_Y: " << FOV_ratio_Y_;
 
         /**** online parameters ***/
         depthmap_rate_hz_ = tools::param(pnh_, "depthmap_rate_hz", 10);
@@ -111,7 +130,7 @@ namespace esvo_core
                     for (const pcl::PointXYZI &point : *scp_it->first.second)
                     {
                         pcl::PointXYZI un_point;
-                        TransformToStart(point, un_point, scp_it->second);
+                        TransformToStart(point, un_point, scp_it->second); // linear interpolation according to time
                         cur_.depthMap_ptr_->push_back(un_point);
                     }
                 }
@@ -146,14 +165,43 @@ namespace esvo_core
         if (cloud_it == cloudHistory_.rend())
             return false;
         
+        if (!cur_.stampedCloudPose_.empty())
+        {
+            const Eigen::Matrix4d &T_w_pc0 = cur_.stampedCloudPose_.back().second;
+            Eigen::Quaterniond q_w_pc0(T_w_pc0.topLeftCorner<3, 3>());
+            Eigen::Quaterniond q_w_pc(T_w_pc.topLeftCorner<3, 3>());
+            double ang = q_w_pc0.angularDistance(q_w_pc) / M_PI * 180.0;
+            double dis = (T_w_pc0.topRightCorner<3, 1>() - T_w_pc.topRightCorner<3, 1>()).norm();
+            if (ang < KEYFRAME_th_ori_ && dis < KEYFRAME_th_dis_)
+                return false;
+        }
+
         cur_.t_ = cloudHistory_.back().first;
-        // transform LiDAR point cloud onto left davis frame
+
+        TicToc t_add_point;
+        // transform LiDAR point cloud onto left davis frame, and keep points within cameras' FOV
         PointCloudI::Ptr pcTrans_ptr(new PointCloudI());
-        pcl::transformPointCloud(*cloudHistory_.back().second, *pcTrans_ptr, sensorSysPtr_->T_left_davis_lidar_.cast<float>());
+        for (auto &p : *cloudHistory_.back().second)
+        {
+            Eigen::Vector3d point(p.x, p.y, p.z);
+            Eigen::Vector3d pointCam = sensorSysPtr_->T_left_davis_lidar_.topLeftCorner<3, 3>() * point + 
+                                       sensorSysPtr_->T_left_davis_lidar_.topRightCorner<3, 1>();
+            double ang_x = std::abs(atan2(pointCam(0), pointCam(2))) / M_PI * 180.0;
+            double ang_y = std::abs(atan2(pointCam(1), pointCam(2))) / M_PI * 180.0;
+            if (ang_x > camFOV_x_ * FOV_ratio_X_ || ang_y > camFOV_y_ * FOV_ratio_Y_)
+                continue;
+            auto pCam = p;
+            pCam.x = pointCam(0);
+            pCam.y = pointCam(1);
+            pCam.z = pointCam(2);
+            pcTrans_ptr->push_back(pCam);
+        }
+        
         RefPointCloudIPair refPointCloudIPair = std::make_pair(cur_.t_, pcTrans_ptr);
         while (cur_.stampedCloudPose_.size() >= CLOUD_MAP_LENGTH_) // default: 10
             cur_.stampedCloudPose_.pop_front();
         cur_.stampedCloudPose_.emplace_back(refPointCloudIPair, T_w_pc);
+        LOG_EVERY_N(INFO, 20) << t_add_point.toc() << "ms";
     }
 
     /********************** Callback functions *****************************/
@@ -163,6 +211,10 @@ namespace esvo_core
         PointCloudI::Ptr PC_ptr(new PointCloudI());
         pcl::fromROSMsg(*msg, *PC_ptr);
         cloudHistory_.emplace_back(msg->header.stamp, PC_ptr);
+        // PointCloudI::Ptr PC_ds_ptr(new PointCloudI());
+        // downSizeFilter_.setInputCloud(PC_ptr);
+        // downSizeFilter_.filter(*PC_ds_ptr);
+        // cloudHistory_.emplace_back(msg->header.stamp, PC_ds_ptr);
         while (cloudHistory_.size() > CLOUD_HISTORY_LENGTH_) // 20
             cloudHistory_.pop_front();
     }
