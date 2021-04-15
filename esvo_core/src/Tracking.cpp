@@ -490,7 +490,7 @@ namespace esvo_core
 					const size_t MAX_NUM_Event_INVOLVED = eventNum_EM_;
 					if (events_left_.size() > MAX_NUM_Event_INVOLVED && rpSolver_.evalDegeneracy(&ref_, &cur_, lambda))
 					{
-						LOG(INFO) << "Switch to EM-based representation with Events: " << MAX_NUM_Event_INVOLVED << "!";
+						// LOG(INFO) << "Switch to EM-based representation with Events: " << MAX_NUM_Event_INVOLVED << "!";
 						std::vector<dvs_msgs::Event *> vEventSubsetPtr;
 						vEventSubsetPtr.reserve(MAX_NUM_Event_INVOLVED);
 						auto ev_begin_it = events_left_.end() - MAX_NUM_Event_INVOLVED;

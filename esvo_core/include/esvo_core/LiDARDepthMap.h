@@ -32,8 +32,19 @@
 #include <pcl/common/transforms.h>
 #include <pcl_ros/point_cloud.h>
 
+// #define LIDAR_DEPTH_MAP_DEBUG
+// #define PUBLISH_PATH
+
 namespace esvo_core
 {
+    using namespace tools;
+    struct CurFrame
+    {
+        ros::Time t_;
+        PointCloudI::Ptr depthMap_ptr_;
+        std::deque<std::pair<RefPointCloudIPair, Eigen::Matrix4d>> stampedCloudPose_; // buffer for the latest pointclouds
+    };
+
     class LiDARDepthMap
     {
     public:
@@ -43,6 +54,7 @@ namespace esvo_core
 
         // functions regarding LiDARDepthMap
         void DepthMapLoop();
+        bool curDataTransferring();
 
         // topic callback functions
         void pointCloudCallback(const sensor_msgs::PointCloud2::ConstPtr &msg);
@@ -50,8 +62,8 @@ namespace esvo_core
         void gtPoseCallback(const geometry_msgs::PoseStampedConstPtr &msg);
 
         // publish results
-        void publishDepthMap(const ros::Time &t);
-        void saveDepthMap(const std::string &resultDir, const pcl::PointCloud<pcl::PointXYZI>::Ptr &pc_ptr);
+        void publishPointCloud(const ros::Time &t, const PointCloudI::Ptr &pc_ptr, const ros::Publisher &pc_pub);
+        void saveDepthMap(const std::string &resultDir, const PointCloudI::Ptr &pc_ptr);
         void reset();
 
     private:
@@ -62,6 +74,7 @@ namespace esvo_core
         ros::Subscriber cloud_sub_;
         ros::Subscriber gtPose_sub_, stampedPose_sub_;
         ros::Publisher pose_gt_pub_, path_gt_pub_;
+        ros::Publisher depthMap_pub_;
         image_transport::Publisher reprojDepthMap_pub_left_;
 
         // results
@@ -81,16 +94,17 @@ namespace esvo_core
         std::mutex data_mutex_;
 
         // online data
-        std::deque<std::pair<ros::Time, pcl::PointCloud<pcl::PointXYZI>::Ptr>> cloud_buf_;
+        CurFrame cur_;
+        std::deque<std::pair<ros::Time, PointCloudI::Ptr>> cloudHistory_;
         std::map<ros::Time, Eigen::Matrix4d> mAllPoses_, mAllGTPoses_; // save the historical poses for mapping
         std::vector<std::pair<ros::Time, Eigen::Matrix4d>> mVirtualPoses_;
-        esvo_core::tools::LinearTrajectory trajectory_;
+        LinearTrajectory trajectory_;
         Eigen::Matrix4d T_world_map_;
         std::shared_ptr<tf::Transformer> tf_;
 
         /**** offline parameters ***/
         size_t depthmap_rate_hz_;
-        size_t CLOUD_HISTORY_LENGTH_;
+        size_t CLOUD_HISTORY_LENGTH_, CLOUD_MAP_LENGTH_;
         bool bSaveDepthMap_;
         bool bVisualizeDepthMap_;
         std::string resultPath_;

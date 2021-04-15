@@ -12,7 +12,7 @@
 	<arg name="kernelSize" default="5" />
 
 	<!-- Time surfaces generation -->
-	<!-- <node name="TimeSurface_left" pkg="esvo_time_surface" type="esvo_time_surface">
+	<node name="TimeSurface_left" pkg="esvo_time_surface" type="esvo_time_surface">
 		<remap from="events" to="/davis/left/events" />
 		<remap from="image" to="/davis/left/image_raw" />
 		<remap from="camera_info" to="/davis/left/camera_info" />
@@ -20,26 +20,26 @@
 		<rosparam command="load" file="$(find esvo_core)/cfg/time_surface/ts_parameters.yaml" />
 	</node> -->
 
-	<!-- <node name="TimeSurface_right" pkg="esvo_time_surface" type="esvo_time_surface">
+	<node name="TimeSurface_right" pkg="esvo_time_surface" type="esvo_time_surface">
 		<remap from="events" to="/davis/right/events" />
 		<remap from="image" to="/davis/right/image_raw" />
 		<remap from="camera_info" to="/davis/right/camera_info" />
 		<remap from="time_surface" to="TS_right" />
 		<rosparam command="load" file="$(find esvo_core)/cfg/time_surface/ts_parameters.yaml" />
-	</node> -->
+	</node>
 
-	<!-- <node name="dvs_renderer" pkg="dvs_renderer" type="dvs_renderer" output="screen" required="false">
+	<node name="dvs_renderer" pkg="dvs_renderer" type="dvs_renderer" output="screen" required="false">
 		<remap from="events" to="/davis/left/events" />
 		<remap from="image" to="/davis/left/image_raw" />
 		<remap from="dvs_rendering" to="dvs_rendering" />
-	</node> -->
+	</node>
 
 	<!-- Calibration folder -->
 	<arg name="calibInfoDirStr" default="$(find esvo_core)/calib/upenn"/>
 
 	<!-- Mapping node -->
 	<!-- launch-prefix="gdb -ex run -\-args" -->
-	<!-- <node name="esvo_Mapping" pkg="esvo_core" type="esvo_Mapping" output="screen" required="true">
+	<node name="esvo_Mapping" pkg="esvo_core" type="esvo_Mapping" output="screen" required="true">
 		<remap from="time_surface_left" to="/TS_left" />
 		<remap from="time_surface_right" to="/TS_right" />
 		<remap from="stamped_pose" to="/esvo_tracking/pose_pub" />
@@ -51,6 +51,7 @@
 		<rosparam command="load" file="$(find esvo_core)/cfg/mapping/mapping_upenn.yaml" />
 	</node>
 
+	<!-- Tracking Node -->
 	<node name="Tracking" pkg="esvo_core" type="Tracking" output="screen" required="true" >
 		<remap from="time_surface_left" to="/TS_left" />
 		<remap from="time_surface_right" to="/TS_right" />
@@ -74,8 +75,9 @@
 	<node name="TimeSurface_global_timer" pkg="esvo_time_surface" type="TimeSurface_global_timer" required="true" >
 		<remap from="events" to="/davis/left/events" />
 		<param name="frequency_timer" type="int" value="100" /> 
-	</node> -->
+	</node>
 
+	<!-- LiDARDepthMap Node -->
 	<node name="LiDARDepthMap" pkg="esvo_core" type="LiDARDepthMap" required="true" output="screen">
 		<remap from="stamped_pose" to="/esvo_tracking/pose_pub" />
 		<remap from="gt_pose" to="/davis/left/pose" />

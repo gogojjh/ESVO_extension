@@ -38,6 +38,10 @@ namespace esvo_core
     typedef pcl::PointCloud<pcl::PointXYZ> PointCloud;
     using RefPointCloudMap = std::map<ros::Time, PointCloud::Ptr>;
 
+    typedef pcl::PointCloud<pcl::PointXYZI> PointCloudI;
+    using RefPointCloudIMap = std::map<ros::Time, PointCloudI::Ptr>;
+    using RefPointCloudIPair = std::pair<ros::Time, PointCloudI::Ptr>;
+
     using Transformation = kindr::minimal::QuatTransformation;
 
     inline static std::vector<dvs_msgs::Event *>::iterator EventVecPtr_lower_bound(
@@ -110,6 +114,25 @@ namespace esvo_core
           *p = '/';
         }
       mkdir(tmp, S_IRWXU);
+    }
+
+    // transform points
+    template <typename PointType>
+    inline void TransformToStart(const PointType &pi, PointType &po, const Eigen::Matrix4d &T)
+    {
+      if (!pcl::traits::has_field<PointType, pcl::fields::intensity>::value)
+      {
+        std::cerr << "[TransformToStart] Point does not have intensity field!" << std::endl;
+        exit(EXIT_FAILURE);
+      }
+      po = pi;
+      Eigen::Vector3d point(pi.x, pi.y, pi.z);
+      Eigen::Vector3d un_point = T.topLeftCorner<3, 3>() * point + T.topRightCorner<3, 1>();
+
+      po.x = un_point.x();
+      po.y = un_point.y();
+      po.z = un_point.z();
+      po.intensity = pi.intensity;
     }
 
   } // namespace tools
