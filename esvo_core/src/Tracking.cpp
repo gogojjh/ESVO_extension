@@ -50,6 +50,7 @@ namespace esvo_core
 		strSequence_ = tools::param(pnh_, "Sequence_Name", std::string("shapes_poster"));
 		strRep_ = tools::param(pnh_, "Representation_Name", std::string("TS"));
 		eventNum_EM_ = tools::param(pnh_, "eventNum_EM", 2000);
+		degenTh_ = tools::param(pnh_, "degenerate_TH", 100);
 
 		// online data callbacks
 		events_left_sub_ = nh_.subscribe("events_left", 10, &Tracking::eventsCallback, this);
@@ -488,7 +489,12 @@ namespace esvo_core
 				{
 					std::lock_guard<std::mutex> lock(data_mutex_);
 					const size_t MAX_NUM_Event_INVOLVED = eventNum_EM_;
-					if (events_left_.size() > MAX_NUM_Event_INVOLVED && rpSolver_.evalDegeneracy(&ref_, &cur_, lambda))
+					int DEGENERATE_THRESHOLD;
+					if (degenTh_ == 0)
+						DEGENERATE_THRESHOLD = 100;
+					else
+						DEGENERATE_THRESHOLD = degenTh_;
+					if (events_left_.size() > MAX_NUM_Event_INVOLVED && rpSolver_.evalDegeneracy(&ref_, &cur_, lambda, DEGENERATE_THRESHOLD))
 					{
 						LOG(INFO) << "Switch to EM-based representation with Events: " << MAX_NUM_Event_INVOLVED << "!";
 						std::vector<dvs_msgs::Event *> vEventSubsetPtr;
@@ -530,7 +536,6 @@ namespace esvo_core
 					}
 					t_evalDegeneracy = tt.toc();
 				}
-
 
 				tt.tic();
 				if (rpType_ == REG_NUMERICAL)
@@ -602,7 +607,10 @@ namespace esvo_core
 				LOG(INFO) << "pose size: " << lPose_.size();
 				LOG(INFO) << ", refPCMap_buf size(): " << refPCMap_buf_.size() << ", TS_buf.size(): " << TS_history_.size();
 #endif
-				saveTrajectory(resultPath_ + strDataset_ + "/" + strSequence_ + "/traj/" + strRep_ + "_traj_estimate.txt", lTimestamp_, lPose_);
+				if (degenTh_ != 0)
+					saveTrajectory(resultPath_ + strDataset_ + "/" + strSequence_ + "/traj/" + strRep_ + std::to_string(degenTh_) + "_traj_estimate.txt", lTimestamp_, lPose_);
+				else
+					saveTrajectory(resultPath_ + strDataset_ + "/" + strSequence_ + "/traj/" + strRep_ + "_traj_estimate.txt", lTimestamp_, lPose_);
 				saveTrajectory(resultPath_ + strDataset_ + "/" + strSequence_ + "/traj/" + "traj_gt.txt", lTimestamp_GT_, lPose_GT_);
 				saveTimeCost(resultPath_ + strDataset_ + "/" + strSequence_ + "/time/" + strRep_ + "_time.txt", vTimeCost_);
 				saveTimeCost(resultPath_ + strDataset_ + "/" + strSequence_ + "/traj/" + strRep_ + "_lambda.txt", vLambda_);

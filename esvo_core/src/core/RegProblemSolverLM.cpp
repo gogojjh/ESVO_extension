@@ -219,7 +219,7 @@ namespace esvo_core
       reprojMap_pub_ = reprojMap_pub;
     }
 
-    bool RegProblemSolverLM::evalDegeneracy(RefFrame *ref, CurFrame *cur, double &lambda)
+    bool RegProblemSolverLM::evalDegeneracy(RefFrame *ref, CurFrame *cur, double &lambda, const int &degenThreshold)
     {
       size_t numBatches;
       if (rpType_ == REG_NUMERICAL)
@@ -249,12 +249,12 @@ namespace esvo_core
         Eigen::Matrix<double, 6, 6> mat_V_f = esolver.eigenvectors().real(); // 6*6, column is the corresponding eigenvector
         Eigen::Matrix<double, 6, 6> mat_V_p = mat_V_f.transpose();
         Eigen::Matrix<double, 6, 6> mat_P;
-        const double eignThre = 100.0;
+        // const double eignThre = 100.0;
         // LOG(INFO) << "compute Degeneracy";
         lambda = std::max(mat_E(0, 0), lambda);
         for (size_t i = 0; i < 6; i++)
         {
-          if (mat_E(0, i) < eignThre)
+          if (mat_E(0, i) < degenThreshold)
           {
             // for (int j = 0; j < 6; j++)
             // {

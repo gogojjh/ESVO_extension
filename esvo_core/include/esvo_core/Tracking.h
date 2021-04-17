@@ -146,6 +146,7 @@ namespace esvo_core
     std::string resultPath_;
     std::string strDataset_, strSequence_, strRep_;
     size_t eventNum_EM_;
+    int degenTh_;
 
     Eigen::Matrix<double, 4, 4> T_world_cur_;
     Eigen::Matrix<double, 4, 4> T_world_map_;

@@ -7,15 +7,15 @@
 	<arg name="Sequence_Name" default="poster_planar" />
 	<arg name="Representation_Name" default="TS" />
 	<arg name="eventNum_EM" default="2000" />
-	<arg name="kernelSize" default="5" />
+	<arg name="degenerate_TH" default="0" />
 
 	<rosparam param="/use_sim_time">true</rosparam>
 
-	<node name="dvs_renderer" pkg="dvs_renderer" type="dvs_renderer" output="screen" required="false">
+	<!-- <node name="dvs_renderer" pkg="dvs_renderer" type="dvs_renderer" output="screen" required="false">
 		<remap from="events" to="/cam0/events" />
 		<remap from="image" to="/cam0/image_raw" />
 		<remap from="dvs_rendering" to="dvs_rendering" />
-	</node>
+	</node> -->
 
 	<!-- Time surfaces generation -->
 	<node name="TimeSurface_left" pkg="esvo_time_surface" type="esvo_time_surface">
@@ -68,7 +68,7 @@
 		<param name="Sequence_Name" type="string" value="$(arg Sequence_Name)" />
 		<param name="Representation_Name" type="string" value="$(arg Representation_Name)" />
 		<param name="eventNum_EM" type="int" value="$(arg eventNum_EM)" />
-		<param name="kernelSize" type="int" value="$(arg kernelSize)" />
+		<param name="degenerate_TH" type="int" value="$(arg degenerate_TH)" />
 	</node> 
 
 	<node name="TimeSurface_global_timer" pkg="esvo_time_surface" type="TimeSurface_global_timer" required="true" >
