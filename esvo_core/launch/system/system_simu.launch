@@ -79,6 +79,6 @@
 	</node>
 
 	<node pkg="rosbag" type="play" name="play" output="screen" required="true"
-		args="/Monster/dataset/event_camera/simu/$(arg Sequence_Name)_edited.bag -r 0.7 --clock">
+		args="/Monster/dataset/event_camera/simu/$(arg Sequence_Name)_edited.bag -r 1.0 --clock">
 	</node>
 </launch>

@@ -494,6 +494,7 @@ namespace esvo_core
 						DEGENERATE_THRESHOLD = 100;
 					else
 						DEGENERATE_THRESHOLD = degenTh_;
+					// LOG_EVERY_N(INFO, 100) << DEGENERATE_THRESHOLD;
 					if (events_left_.size() > MAX_NUM_Event_INVOLVED && rpSolver_.evalDegeneracy(&ref_, &cur_, lambda, DEGENERATE_THRESHOLD))
 					{
 						LOG(INFO) << "Switch to EM-based representation with Events: " << MAX_NUM_Event_INVOLVED << "!";

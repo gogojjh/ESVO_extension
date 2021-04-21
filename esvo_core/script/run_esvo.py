@@ -4,6 +4,10 @@
 # or
 # python script/run_esvo.py -dataset=rpg_stereo,upenn -sequence=rpg_desk,rpg_bin,rpg_box,indoor_flying1,indoor_flying3 \
 #     -representation=TS,EM,TSEM -eventnum=2000,3000,4000,5000 -trials=10 -program=eval
+# or
+# python script/run_esvo.py -dataset=simu,rpg_stereo,upenn -sequence=simu_office_planar,simu_poster_planar,simu_checkerboard_planar,\
+#     simu_office_6dof,simu_poster_6dof,simu_checkerboard_6dof,rpg_bin,rpg_box,rpg_desk,rpg_monitor,indoor_flying1,indoor_flying3 \
+#     -representation=TSEM -eventnum=4000 -deg_th=10,31,100,158,251,400 -trials=1 -program=abl_study_lambda
 import os
 import sys
 import argparse
@@ -238,11 +242,11 @@ if __name__ == '__main__':
                     abl_study_lambda(dataset, sequence, 'TSEM', eventnum, deg_th, trials)   
     elif (dataset != [] and sequence != [] and representation != [] and eventnum != [] and trials != None and program != []):
         for pro in program:
-            if (pro == 'run'):
+            if (pro == 'run_esvo'):
                 run_esvo(dataset, sequence, representation, eventnum, trials)
             elif (pro == 'eval'):
                 eval(dataset, sequence, representation, eventnum, trials)
-            elif (pro == 'load_result'):
+            elif (pro == 'load_results'):
                 load_results(dataset, sequence, representation, eventnum, trials)
             else:
                 print('{} wrong, please select proper programs!'.format(pro))
