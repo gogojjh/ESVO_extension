@@ -34,7 +34,9 @@
 #include <pcl_ros/point_cloud.h>
 
 // #define LIDAR_DEPTH_MAP_DEBUG
-// #define PUBLISH_PATH
+#define PUBLISH_PATH
+// #define INTERPOLATE_POINT
+const float SCAN_PERIOD = 0.1;
 
 namespace esvo_core
 {
@@ -42,7 +44,7 @@ namespace esvo_core
     struct CurFrame
     {
         ros::Time t_;
-        PointCloudI::Ptr depthMap_ptr_;
+        PointCloudI::Ptr depthMap_ptr_; // merged point cloud
         std::deque<std::pair<RefPointCloudIPair, Eigen::Matrix4d>> stampedCloudPose_; // buffer for the latest pointclouds
     };
 

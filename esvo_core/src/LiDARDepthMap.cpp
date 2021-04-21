@@ -114,14 +114,10 @@ namespace esvo_core
                     if (!curDataTransferring())
                     {
                         continue;
-                        r.sleep();
                     }
                 } 
                 else
-                {
                     continue;
-                    r.sleep();
-                }
 
                 cur_.depthMap_ptr_->clear();
                 auto scp_it = cur_.stampedCloudPose_.begin();
@@ -129,9 +125,9 @@ namespace esvo_core
                 {
                     for (const pcl::PointXYZI &point : *scp_it->first.second)
                     {
-                        pcl::PointXYZI un_point;
-                        TransformToStart(point, un_point, scp_it->second); // linear interpolation according to time
-                        cur_.depthMap_ptr_->push_back(un_point);
+                        pcl::PointXYZI pWorld;
+                        TransformPoint(point, pWorld, scp_it->second); // linear interpolation according to time
+                        cur_.depthMap_ptr_->push_back(pWorld);
                     }
                 }
 #ifdef LIDAR_DEPTH_MAP_DEBUG
@@ -139,32 +135,53 @@ namespace esvo_core
 #endif
                 publishPointCloud(cur_.t_, cur_.depthMap_ptr_, depthMap_pub_);
             }
+
+            // main program on depthMap
+
+            // depth association
+
+            r.sleep();
         } // while
 
     }
 
     bool LiDARDepthMap::curDataTransferring()
     {
-        if (cur_.t_.toSec() == cloudHistory_.back().first.toSec())
-            return false;
-
         auto cloud_it = cloudHistory_.rbegin();
-        Eigen::Matrix4d T_w_pc;
+        if (cur_.t_ == cloud_it->first)
+            return false;
+        cur_.t_ = cloud_it->first;
+
+        TicToc t_retrive_pose;
+        Eigen::Matrix4d T_w_pc, T_w_pc_tail;
         while (cloud_it != cloudHistory_.rend()) // append the latest pointcloud
         {
-            // if (trajectory_.getPoseAt(mAllGTPoses_, cloud_it->first, T_w_pc)) // check if poses are ready
-            // {
-            //     break;
-            // }
+#ifdef PUBLISH_PATH
+            if (trajectory_.getPoseAt(mAllGTPoses_, cloud_it->first, T_w_pc)) // check if poses are ready
+            {
+                break;
+            }
+            if (trajectory_.getPoseAt(mAllGTPoses_, ros::Time(cloud_it->first.toSec() + SCAN_PERIOD), T_w_pc_tail))
+            {
+                break;
+            }
+#else
             if (trajectory_.getPoseAt(mAllPoses_, cloud_it->first, T_w_pc)) // check if poses are ready
             {
                 break;
             }
+            if (trajectory_.getPoseAt(mAllPoses_, ros::Time(cloud_it->first.toSec() + SCAN_PERIOD), T_w_pc_tail))
+            {
+                break;
+            }
+#endif
             cloud_it++;
         }
+        LOG_EVERY_N(INFO, 20) << t_retrive_pose.toc() << "ms";
         if (cloud_it == cloudHistory_.rend())
             return false;
         
+        // add keyframe pointcloud
         if (!cur_.stampedCloudPose_.empty())
         {
             const Eigen::Matrix4d &T_w_pc0 = cur_.stampedCloudPose_.back().second;
@@ -176,27 +193,75 @@ namespace esvo_core
                 return false;
         }
 
-        cur_.t_ = cloudHistory_.back().first;
-
         TicToc t_add_point;
+        PointCloudI::Ptr laserCloud = cloudHistory_.back().second;
+
+#ifdef INTERPOLATE_POINT
+        // calculate the timestamp of each point
+        Eigen::Matrix4d T_pc_rlt = T_w_pc.inverse() * T_w_pc_tail;
+        float startOri = -atan2(laserCloud->points[0].y, laserCloud->points[0].x);
+        float endOri = -atan2(laserCloud->points.back().y, laserCloud->points.back().x) + 2 * M_PI;
+        if (endOri - startOri > 3 * M_PI)
+        {
+            endOri -= 2 * M_PI;
+        }
+        else if (endOri - startOri < M_PI)
+        {
+            endOri += 2 * M_PI;
+        }
+        bool halfPassed = false;
+        for (pcl::PointXYZI &point : *laserCloud)
+        {
+            float ori = -atan2(point.y, point.x);
+            if (!halfPassed)
+            {
+                if (ori < startOri - M_PI / 2)
+                {
+                    ori += 2 * M_PI;
+                }
+                else if (ori > startOri + M_PI * 3 / 2)
+                {
+                    ori -= 2 * M_PI;
+                }
+
+                if (ori - startOri > M_PI)
+                {
+                    halfPassed = true;
+                }
+            }
+            else
+            {
+                ori += 2 * M_PI;
+                if (ori < endOri - M_PI * 3 / 2)
+                {
+                    ori += 2 * M_PI;
+                }
+                else if (ori > endOri + M_PI / 2)
+                {
+                    ori -= 2 * M_PI;
+                }
+            }
+            double delta_t = static_cast<double>((ori - startOri) / (endOri - startOri));
+            point.intensity = delta_t;
+            Eigen::Matrix4d T_pc_point = trajectory_.getLinearInterpolation(T_pc_rlt, delta_t);
+            TransformPoint(point, point, T_pc_point);
+        }
+#endif
+
         // transform LiDAR point cloud onto left davis frame, and keep points within cameras' FOV
         PointCloudI::Ptr pcTrans_ptr(new PointCloudI());
-        for (auto &p : *cloudHistory_.back().second)
+        for (const pcl::PointXYZI &point : *laserCloud)
         {
-            Eigen::Vector3d point(p.x, p.y, p.z);
-            Eigen::Vector3d pointCam = sensorSysPtr_->T_left_davis_lidar_.topLeftCorner<3, 3>() * point + 
-                                       sensorSysPtr_->T_left_davis_lidar_.topRightCorner<3, 1>();
-            double ang_x = std::abs(atan2(pointCam(0), pointCam(2))) / M_PI * 180.0;
-            double ang_y = std::abs(atan2(pointCam(1), pointCam(2))) / M_PI * 180.0;
+            pcl::PointXYZI pCam;
+            TransformPoint(point, pCam, sensorSysPtr_->T_left_davis_lidar_);
+            double ang_x = static_cast<double>(std::abs(atan2(pCam.x, pCam.z)) / M_PI * 180.0);
+            double ang_y = static_cast<double>(std::abs(atan2(pCam.y, pCam.z)) / M_PI * 180.0);
             if (ang_x > camFOV_x_ * FOV_ratio_X_ || ang_y > camFOV_y_ * FOV_ratio_Y_)
                 continue;
-            auto pCam = p;
-            pCam.x = pointCam(0);
-            pCam.y = pointCam(1);
-            pCam.z = pointCam(2);
             pcTrans_ptr->push_back(pCam);
         }
         
+        // update current historical poses
         RefPointCloudIPair refPointCloudIPair = std::make_pair(cur_.t_, pcTrans_ptr);
         while (cur_.stampedCloudPose_.size() >= CLOUD_MAP_LENGTH_) // default: 10
             cur_.stampedCloudPose_.pop_front();
@@ -233,8 +298,8 @@ namespace esvo_core
                                                            ps_msg->pose.position.y,
                                                            ps_msg->pose.position.z);
         mAllPoses_.emplace(ps_msg->header.stamp, T_map_cam);
-        static constexpr size_t MAX_POSE_LENGTH = 10000; // the buffer size
-        if (mAllPoses_.size() > 20000)
+        static constexpr size_t MAX_POSE_LENGTH = 1000; // the buffer size
+        if (mAllPoses_.size() > 2000)
         {
             size_t removeCnt = 0;
             for (auto it_pose = mAllPoses_.begin(); it_pose != mAllPoses_.end();)
@@ -289,8 +354,8 @@ namespace esvo_core
         Eigen::Vector3d t_map_cam = T_map_cam.topRightCorner<3, 1>();
 
         mAllGTPoses_.emplace(ps_msg->header.stamp, T_map_cam);
-        static constexpr size_t MAX_POSE_LENGTH = 10000; // the buffer size
-        if (mAllGTPoses_.size() > 20000)
+        static constexpr size_t MAX_POSE_LENGTH = 1000; // the buffer size
+        if (mAllGTPoses_.size() > 2000)
         {
             size_t removeCnt = 0;
             for (auto it_pose = mAllGTPoses_.begin(); it_pose != mAllGTPoses_.end();)
@@ -397,7 +462,7 @@ namespace esvo_core
     }
 
     void LiDARDepthMap::saveDepthMap(const std::string &resultDir,
-                                    const PointCloudI::Ptr &pc_ptr)
+                                     const PointCloudI::Ptr &pc_ptr)
 
     {
     #ifdef ESVO_CORE_TRACKING_LOG

@@ -118,11 +118,11 @@ namespace esvo_core
 
     // transform points
     template <typename PointType>
-    inline void TransformToStart(const PointType &pi, PointType &po, const Eigen::Matrix4d &T)
+    inline void TransformPoint(const PointType pi, PointType &po, const Eigen::Matrix4d &T)
     {
       if (!pcl::traits::has_field<PointType, pcl::fields::intensity>::value)
       {
-        std::cerr << "[TransformToStart] Point does not have intensity field!" << std::endl;
+        std::cerr << "[TransformPoint] Point does not have intensity field!" << std::endl;
         exit(EXIT_FAILURE);
       }
       po = pi;
