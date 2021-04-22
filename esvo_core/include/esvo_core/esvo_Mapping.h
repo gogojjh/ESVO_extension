@@ -59,10 +59,10 @@ namespace esvo_core
     // callback functions
     void stampedPoseCallback(const geometry_msgs::PoseStampedConstPtr &ps_msg);
     void eventsCallback(const dvs_msgs::EventArray::ConstPtr &msg, EventQueue &EQ);
-    void timeSurfaceCallback(
-        const sensor_msgs::ImageConstPtr &time_surface_left,
-        const sensor_msgs::ImageConstPtr &time_surface_right);
+    void timeSurfaceCallback(const sensor_msgs::ImageConstPtr &time_surface_left,
+                             const sensor_msgs::ImageConstPtr &time_surface_right);
     void onlineParameterChangeCallback(DVS_MappingStereoConfig &config, uint32_t level);
+    void lidarDepthMapCallback(const sensor_msgs::PointCloud2::ConstPtr &msg);
 
     // utils
     bool getPoseAt(const ros::Time &t, Transformation &Tr, const std::string &source_frame);
@@ -112,6 +112,7 @@ namespace esvo_core
     ros::Subscriber events_left_sub_, events_right_sub_;
     ros::Subscriber stampedPose_sub_;
     message_filters::Subscriber<sensor_msgs::Image> TS_left_sub_, TS_right_sub_;
+    ros::Subscriber lidarDepthMap_sub_;
 
     // Publishers
     ros::Publisher pc_pub_, gpc_pub_;
@@ -135,6 +136,7 @@ namespace esvo_core
     // online data
     EventQueue events_left_, events_right_;
     TimeSurfaceHistory TS_history_;
+    LiDARDepthMapHistory lidarDM_history_;
     StampedTimeSurfaceObs TS_obs_;
     StampTransformationMap st_map_;
     std::shared_ptr<tf::Transformer> tf_;
@@ -185,6 +187,7 @@ namespace esvo_core
     // module parameters
     size_t PROCESS_EVENT_NUM_;
     size_t TS_HISTORY_LENGTH_;
+    size_t LIDAR_DM_HISTORY_LENGTH_;
     size_t mapping_rate_hz_;
     // options
     bool changed_frame_rate_;

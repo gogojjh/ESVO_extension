@@ -94,6 +94,13 @@
 		args="/Monster/dataset/event_camera/upenn_stereo_ral/$(arg Sequence_Name)_edited.bag -r 1.0 --clock">
 	</node>
 
+    <!-- publish static tf -->
+    <!-- x y z yaw pitch roll -->
+    <!-- x y z qx qy qz qw -->
+    <!-- <include file="$(find rviz_car_model)/launch/default.launch" /> -->
+    <node name="static_tf_from_dvs_to_lidar" pkg="tf" type="static_transform_publisher"
+        args="0.037 -0.086 -0.129 0.495 -0.483 0.511 0.510 dvs velodyne 100" /> 
+
 	<!-- Visualization -->
 	<!-- <node pkg="rqt_gui" type="rqt_gui" name="rqt_gui"
 		args="-perspective-file $(find esvo_core)/esvo_system.perspective" />

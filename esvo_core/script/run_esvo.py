@@ -148,13 +148,11 @@ if __name__ == '__main__':
     print('Program: {}'.format(program))
     if (dataset != [] and sequence != [] and representation != [] and eventnum != [] and trials != None and program != []):
         for pro in program:
-            if (pro == 'run'):
+            if (pro == 'run_esvo'):
                 run_esvo(dataset, sequence, representation, eventnum, trials)
             elif (pro == 'eval'):
                 eval(dataset, sequence, representation, eventnum, trials)
-            elif (pro == 'load_result'):
+            elif (pro == 'load_results'):
                 load_results(dataset, sequence, representation, eventnum, trials)
             else:
                 print('{} wrong, please select proper programs!'.format(pro))
-
-

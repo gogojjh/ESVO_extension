@@ -84,6 +84,7 @@ namespace esvo_core
     // module parameters
     PROCESS_EVENT_NUM_ = tools::param(pnh_, "PROCESS_EVENT_NUM", 500);
     TS_HISTORY_LENGTH_ = tools::param(pnh_, "TS_HISTORY_LENGTH", 100);
+    LIDAR_DM_HISTORY_LENGTH_ = tools::param(pnh_, "LIDAR_DM_HISTORY_LENGTH", 20);
     mapping_rate_hz_ = tools::param(pnh_, "mapping_rate_hz", 20);
     // Event Block Matching (BM) parameters
     BM_half_slice_thickness_ = tools::param(pnh_, "BM_half_slice_thickness", 0.001);
@@ -132,8 +133,10 @@ namespace esvo_core
     // callback functions
     events_left_sub_ = nh_.subscribe<dvs_msgs::EventArray>("events_left", 0, boost::bind(&esvo_Mapping::eventsCallback, this, _1, boost::ref(events_left_)));
     events_right_sub_ = nh_.subscribe<dvs_msgs::EventArray>("events_right", 0, boost::bind(&esvo_Mapping::eventsCallback, this, _1, boost::ref(events_right_)));
-    stampedPose_sub_ = nh_.subscribe("stamped_pose", 0, &esvo_Mapping::stampedPoseCallback, this);
     TS_sync_.registerCallback(boost::bind(&esvo_Mapping::timeSurfaceCallback, this, _1, _2));
+    lidarDepthMap_sub_ = nh_.subscribe("/lidardepthmap/point_cloud", 0, &esvo_Mapping::lidarDepthMapCallback, this);
+
+    stampedPose_sub_ = nh_.subscribe("stamped_pose", 0, &esvo_Mapping::stampedPoseCallback, this);
     // TF
     tf_ = std::make_shared<tf::Transformer>(true, ros::Duration(100.0));
 
@@ -673,9 +676,8 @@ namespace esvo_core
     }
   }
 
-  void esvo_Mapping::eventsCallback(
-      const dvs_msgs::EventArray::ConstPtr &msg,
-      EventQueue &EQ)
+  void esvo_Mapping::eventsCallback(const dvs_msgs::EventArray::ConstPtr &msg,
+                                    EventQueue &EQ)
   {
     std::lock_guard<std::mutex> lock(data_mutex_);
 
@@ -709,8 +711,7 @@ namespace esvo_core
     clearEventQueue(EQ);
   }
 
-  void
-  esvo_Mapping::clearEventQueue(EventQueue &EQ)
+  void esvo_Mapping::clearEventQueue(EventQueue &EQ)
   {
     static constexpr size_t MAX_EVENT_QUEUE_LENGTH = 3000000;
     if (EQ.size() > MAX_EVENT_QUEUE_LENGTH)
@@ -720,9 +721,8 @@ namespace esvo_core
     }
   }
 
-  void esvo_Mapping::timeSurfaceCallback(
-      const sensor_msgs::ImageConstPtr &time_surface_left,
-      const sensor_msgs::ImageConstPtr &time_surface_right)
+  void esvo_Mapping::timeSurfaceCallback(const sensor_msgs::ImageConstPtr &time_surface_left,
+                                         const sensor_msgs::ImageConstPtr &time_surface_right)
   {
     std::lock_guard<std::mutex> lock(data_mutex_);
     // check time-stamp inconsistency
@@ -768,6 +768,20 @@ namespace esvo_core
     }
   }
 
+  void esvo_Mapping::lidarDepthMapCallback(const sensor_msgs::PointCloud2::ConstPtr &msg)
+  {
+    std::lock_guard<std::mutex> lock(data_mutex_);
+    PointCloudI::Ptr PC_ptr(new PointCloudI());
+    pcl::fromROSMsg(*msg, *PC_ptr);
+    LOG_EVERY_N(INFO, 20) << PC_ptr->size();
+    lidarDM_history_.emplace(msg->header.stamp, PC_ptr);
+    while (lidarDM_history_.size() > LIDAR_DM_HISTORY_LENGTH_) // 20
+    {
+      auto it = lidarDM_history_.begin();
+      lidarDM_history_.erase(it);
+    }
+  }
+
   void esvo_Mapping::reset()
   {
     // mutual-thread communication with MappingThread.
@@ -781,6 +795,7 @@ namespace esvo_core
     events_left_.clear();
     events_right_.clear();
     TS_history_.clear();
+    lidarDM_history_.clear();
     tf_->clear();
     pc_->clear();
     pc_near_->clear();

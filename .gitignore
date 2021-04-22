@@ -1,4 +1,6 @@
 doxgen_generated
 
 esvo_core/test/test_angleaxis.cpp
-
+esvo_core/test/
+esvo_core/*rviz
+esvo_core/*perspective           

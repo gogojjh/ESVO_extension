@@ -182,6 +182,7 @@ namespace esvo_core
 
     using TimeSurfaceHistory = std::map<ros::Time, TimeSurfaceObservation, ROSTimeCmp>;
     using StampedTimeSurfaceObs = std::pair<ros::Time, TimeSurfaceObservation>;
+    using LiDARDepthMapHistory = std::map<ros::Time, PointCloudI::Ptr, ROSTimeCmp>;
 
     inline static TimeSurfaceHistory::iterator TSHistory_lower_bound(TimeSurfaceHistory &ts_history, ros::Time &t)
     {
