@@ -39,7 +39,19 @@
 
 	<!-- Mapping node -->
 	<!-- launch-prefix="gdb -ex run -\-args" -->
-	<node name="esvo_Mapping" pkg="esvo_core" type="esvo_Mapping" output="screen" required="true">
+	<!-- <node name="esvo_Mapping" pkg="esvo_core" type="esvo_Mapping" output="screen" required="true">
+		<remap from="time_surface_left" to="/TS_left" />
+		<remap from="time_surface_right" to="/TS_right" />
+		<remap from="stamped_pose" to="/esvo_tracking/pose_pub" />
+		<remap from="events_left" to="/davis/left/events" />
+		<remap from="events_right" to="/davis/right/events" />
+		<rosparam param="dvs_frame_id">"dvs"</rosparam>
+		<rosparam param="world_frame_id">"map"</rosparam>
+		<rosparam param="calibInfoDir" subst_value="true">$(arg calibInfoDirStr)</rosparam>
+		<rosparam command="load" file="$(find esvo_core)/cfg/mapping/mapping_upenn.yaml" />
+	</node> -->
+
+	<node name="esvo_Mapping_DM" pkg="esvo_core" type="esvo_Mapping_DM" output="screen" required="true">
 		<remap from="time_surface_left" to="/TS_left" />
 		<remap from="time_surface_right" to="/TS_right" />
 		<remap from="stamped_pose" to="/esvo_tracking/pose_pub" />

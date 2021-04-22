@@ -17,7 +17,6 @@ NumGPC_added_oper_refresh: 3000
 visualize_range: 5.0
 PROCESS_EVENT_NUM: 1000
 TS_HISTORY_LENGTH: 100
-LIDAR_DM_HISTORY_LENGTH: 20
 INIT_SGM_DP_NUM_THRESHOLD: 500
 mapping_rate_hz: 20
 # DepthProblemConfig
@@ -34,3 +33,6 @@ BM_max_disparity: 40
 BM_step: 1
 BM_ZNCC_Threshold: 0.1
 BM_bUpDownConfiguration: False
+# LiDAR DEPTH MAP parameters
+LIDAR_DM_HISTORY_LENGTH: 20
+Z_LIDAR_DM: 10.0

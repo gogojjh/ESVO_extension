@@ -26,6 +26,9 @@
 #include <pcl/point_types.h>
 #include <pcl_ros/point_cloud.h>
 
+// esvo_core::Transformation tr;
+// Eigen::Matrix4d T = tr.getTransformationMatrix();
+
 using namespace std;
 namespace esvo_core
 {

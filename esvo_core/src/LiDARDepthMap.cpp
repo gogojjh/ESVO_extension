@@ -120,27 +120,32 @@ namespace esvo_core
                 } 
                 else
                     continue;
-
-                PointCloudI::Ptr tmpCloud(new PointCloudI());
-                auto scp_it = cur_.stampedCloudPose_.begin();
-                for (; scp_it != cur_.stampedCloudPose_.end(); scp_it++)
-                {
-                    for (const pcl::PointXYZI &point : *scp_it->first.second)
-                    {
-                        pcl::PointXYZI pWorld;
-                        TransformPoint(point, pWorld, scp_it->second); // linear interpolation according to time
-                        tmpCloud->push_back(pWorld);
-                    }
-                }
-                cur_.depthMap_ptr_->clear();
-                downSizeFilter_.setInputCloud(tmpCloud);
-                downSizeFilter_.setLeafSize(0.05f, 0.05f, 0.05f);
-                downSizeFilter_.filter(*cur_.depthMap_ptr_);
-#ifdef LIDAR_DEPTH_MAP_DEBUG
-                LOG_EVERY_N(INFO, 20) << "Size of depth map: " << cur_.depthMap_ptr_->size();
-#endif
-                publishPointCloud(cur_.t_, cur_.depthMap_ptr_, depthMap_pub_);
             }
+            if (cur_.stampedCloudPose_.empty())
+                continue;
+
+            PointCloudI::Ptr tmpCloud(new PointCloudI());
+            tmpCloud->reserve(cur_.stampedCloudPose_.front().first.second->size() * cur_.stampedCloudPose_.size());
+            auto scp_it = cur_.stampedCloudPose_.begin();
+            for (; scp_it != cur_.stampedCloudPose_.end(); scp_it++)
+            {
+                for (const pcl::PointXYZI &point : *scp_it->first.second)
+                {
+                    pcl::PointXYZI pWorld;
+                    TransformPoint(point, pWorld, scp_it->second); // linear interpolation according to time
+                    tmpCloud->push_back(pWorld);
+                }
+            }
+            cur_.depthMap_ptr_->clear();
+            downSizeFilter_.setInputCloud(tmpCloud);
+            downSizeFilter_.setLeafSize(0.05f, 0.05f, 0.05f);
+            downSizeFilter_.filter(*cur_.depthMap_ptr_);
+#ifdef LIDAR_DEPTH_MAP_DEBUG
+            LOG_EVERY_N(INFO, 20) << "Size of depth map: " << cur_.depthMap_ptr_->size();
+#endif
+            if (cur_.depthMap_ptr_->size() > 10)
+                publishPointCloud(cur_.t_, cur_.depthMap_ptr_, depthMap_pub_);
+
             r.sleep();
         } // while
 
@@ -253,6 +258,7 @@ namespace esvo_core
 
         // transform LiDAR point cloud onto left davis frame, and keep points within cameras' FOV
         PointCloudI::Ptr pcTrans_ptr(new PointCloudI());
+        pcTrans_ptr->reserve(laserCloud->size());
         for (const pcl::PointXYZI &point : *laserCloud)
         {
             double pointDis = static_cast<double>(sqrt(point.x * point.x + point.y * point.y + point.z * point.z));

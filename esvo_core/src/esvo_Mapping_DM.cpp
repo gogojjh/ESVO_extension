@@ -1,4 +1,4 @@
-#include <esvo_core/esvo_Mapping.h>
+#include <esvo_core/esvo_Mapping_DM.h>
 #include <esvo_core/DVS_MappingStereoConfig.h>
 #include <esvo_core/tools/params_helper.h>
 
@@ -84,7 +84,6 @@ namespace esvo_core
     // module parameters
     PROCESS_EVENT_NUM_ = tools::param(pnh_, "PROCESS_EVENT_NUM", 500);
     TS_HISTORY_LENGTH_ = tools::param(pnh_, "TS_HISTORY_LENGTH", 100);
-    LIDAR_DM_HISTORY_LENGTH_ = tools::param(pnh_, "LIDAR_DM_HISTORY_LENGTH", 20);
     mapping_rate_hz_ = tools::param(pnh_, "mapping_rate_hz", 20);
     // Event Block Matching (BM) parameters
     BM_half_slice_thickness_ = tools::param(pnh_, "BM_half_slice_thickness", 0.001);
@@ -95,6 +94,10 @@ namespace esvo_core
     BM_step_ = tools::param(pnh_, "BM_step", 1);
     BM_ZNCC_Threshold_ = tools::param(pnh_, "BM_ZNCC_Threshold", 0.1);
     BM_bUpDownConfiguration_ = tools::param(pnh_, "BM_bUpDownConfiguration", false);
+    // LiDAR Depth Map (DM) parameters
+    LIDAR_DM_HISTORY_LENGTH_ = tools::param(pnh_, "LIDAR_DM_HISTORY_LENGTH", 20);
+    Z_LIDAR_DM_ = tools::param(pnh_, "Z_LIDAR_DM", 10.0);
+    kdTree_.reset(new pcl::KdTreeFLANN<pcl::PointXYZI>());
 
     // SGM parameters (Used by Initialization)
     num_disparities_ = 16 * 3;
@@ -227,13 +230,18 @@ namespace esvo_core
           continue;
         }
 
-        // add by jjiao: retrive LiDAR Depth Map
-        // {
-        //   std::lock_guard<std::mutex> lock(data_mutex_);
-        //   LiDARDepthMapTransferring();
-          // if (lidarDM_obs_.second->empty())
-          //   LOG(INFO) << "lidar DM is empty, cannot not enhance depth";
-        // }
+        {
+          std::lock_guard<std::mutex> lock(data_mutex_);
+          LiDARDepthMapTransferring();
+          if (lidarDM_obs_.second->empty())
+          {
+            LOG(INFO) << "lidar depth map is empty, cannot not enhance depth";
+          }
+          // else
+          // {
+          //   DepthAssociation();
+          // }
+        }
 
         // Do initialization (State Machine)
         if (ESVO_System_Status_ == "INITIALIZATION" || ESVO_System_Status_ == "RESET")
@@ -297,13 +305,12 @@ namespace esvo_core
       // Draw one mask image for denoising.
       cv::Mat denoising_mask;
       createDenoisingMask(vALLEventsPtr_left_, denoising_mask,
-                          camSysPtr_->cam_left_ptr_->height_, camSysPtr_->cam_left_ptr_->width_);
-
+                          camSysPtr_->cam_left_ptr_->height_, 
+                          camSysPtr_->cam_left_ptr_->width_);
       // Extract denoised events (appear on edges likely).
       vDenoisedEventsPtr_left_.clear();
-      extractDenoisedEvents(vCloseEventsPtr_left_, vDenoisedEventsPtr_left_, denoising_mask, PROCESS_EVENT_NUM_);
+      extractDenoisedEvents(vALLEventsPtr_left_, vDenoisedEventsPtr_left_, denoising_mask, PROCESS_EVENT_NUM_);
       totalNumCount_ = vDenoisedEventsPtr_left_.size();
-
       t_BM_denoising = tt_mapping.toc();
     }
     else
@@ -311,10 +318,13 @@ namespace esvo_core
       vDenoisedEventsPtr_left_.clear();
       vDenoisedEventsPtr_left_.reserve(PROCESS_EVENT_NUM_);
       vDenoisedEventsPtr_left_.insert(
-          vDenoisedEventsPtr_left_.end(), vCloseEventsPtr_left_.begin(),
-          vCloseEventsPtr_left_.begin() + min(vCloseEventsPtr_left_.size(), PROCESS_EVENT_NUM_));
+          vDenoisedEventsPtr_left_.end(), vALLEventsPtr_left_.begin(),
+          vALLEventsPtr_left_.begin() + min(vALLEventsPtr_left_.size(), PROCESS_EVENT_NUM_));
     }
     // LOG(INFO) << "Denosing succeeds";
+
+    // LiDAR-enhanced depth map
+    // DepthAssociation(vDenoisedEventsPtr_left_, lidarDM_obs_.second);
 
     // block matching
     tt_mapping.tic();
@@ -462,7 +472,7 @@ namespace esvo_core
     // get the event map (binary mask)
     cv::Mat edgeMap;
     std::vector<std::pair<size_t, size_t>> vEdgeletCoordinates;
-    createEdgeMask(vEventsPtr_left_SGM_, camSysPtr_->cam_left_ptr_,
+    createEdgeMask(vALLEventsPtr_left_, camSysPtr_->cam_left_ptr_,
                    edgeMap, vEdgeletCoordinates, true, 0);
 
     // Apply logical "AND" operation and transfer "disparity" to "invDepth".
@@ -556,16 +566,16 @@ namespace esvo_core
     // SGM
     if (ESVO_System_Status_ == "INITIALIZATION")
     {
-      vEventsPtr_left_SGM_.clear();
+      vALLEventsPtr_left_.clear();
       ros::Time t_end = TS_obs_.first;
       ros::Time t_begin(std::max(0.0, t_end.toSec() - 2 * BM_half_slice_thickness_)); // 2ms
       auto ev_end_it = tools::EventBuffer_lower_bound(events_left_, t_end);
       auto ev_begin_it = tools::EventBuffer_lower_bound(events_left_, t_begin);
       const size_t MAX_NUM_Event_INVOLVED = 30000;
-      vEventsPtr_left_SGM_.reserve(MAX_NUM_Event_INVOLVED);
-      while (ev_end_it != ev_begin_it && vEventsPtr_left_SGM_.size() <= PROCESS_EVENT_NUM_)
+      vALLEventsPtr_left_.reserve(MAX_NUM_Event_INVOLVED);
+      while (ev_end_it != ev_begin_it && vALLEventsPtr_left_.size() <= PROCESS_EVENT_NUM_)
       {
-        vEventsPtr_left_SGM_.push_back(ev_end_it._M_cur);
+        vALLEventsPtr_left_.push_back(ev_end_it._M_cur);
         ev_end_it--;
       }
     }
@@ -575,7 +585,7 @@ namespace esvo_core
     {
       // copy all involved events' pointers
       vALLEventsPtr_left_.clear();   // Used to generate denoising mask (only used to deal with flicker induced by VICON.)
-      vCloseEventsPtr_left_.clear(); // Will be denoised using the mask above.
+      // vCloseEventsPtr_left_.clear(); // Will be denoised using the mask above.
 
       // load allEvent
       ros::Time t_end = TS_obs_.first;
@@ -584,14 +594,15 @@ namespace esvo_core
       auto ev_begin_it = tools::EventBuffer_lower_bound(events_left_, t_begin);
       const size_t MAX_NUM_Event_INVOLVED = 10000;
       vALLEventsPtr_left_.reserve(MAX_NUM_Event_INVOLVED);
-      vCloseEventsPtr_left_.reserve(MAX_NUM_Event_INVOLVED);
+      // vCloseEventsPtr_left_.reserve(MAX_NUM_Event_INVOLVED);
       while (ev_end_it != ev_begin_it && vALLEventsPtr_left_.size() < MAX_NUM_Event_INVOLVED)
       {
         vALLEventsPtr_left_.push_back(ev_end_it._M_cur);
-        vCloseEventsPtr_left_.push_back(ev_end_it._M_cur);
+        // vCloseEventsPtr_left_.push_back(ev_end_it._M_cur);
         ev_end_it--;
       }
-      totalNumCount_ = vCloseEventsPtr_left_.size();
+      totalNumCount_ = vALLEventsPtr_left_.size();
+      // totalNumCount_ = vCloseEventsPtr_left_.size();
 #ifdef ESVO_CORE_MAPPING_DEBUG
       LOG(INFO) << "Data Transferring (vALLEventsPtr_left_): " << vALLEventsPtr_left_.size();
       LOG(INFO) << "Data Transforming (vCloseEventsPtr_left_): " << vCloseEventsPtr_left_.size();
@@ -646,13 +657,13 @@ namespace esvo_core
           Eigen::Matrix4d T_w_depthMap = tr.getTransformationMatrix();
           Eigen::Matrix4d T_obs_depthMap = T_w_obs.inverse() * T_w_depthMap;
           lidarDM_obs_.first = it_end->first;
-          // LOG(INFO) << TS_obs_.first << " >= " << it_end->first << "?\n" << T_obs_depthMap;
           for (const pcl::PointXYZI &point : *it_end->second)
           {
             pcl::PointXYZI pObs;
             TransformPoint(point, pObs, T_obs_depthMap);
             lidarDM_obs_.second->push_back(pObs);
           }
+          // LOG(INFO) << TS_obs_.first << " >= " << it_end->first << "?\n" << T_obs_depthMap;
         }
         else if (ESVO_System_Status_ == "WORKING")
         {
@@ -661,13 +672,13 @@ namespace esvo_core
             Eigen::Matrix4d T_w_depthMap = tr.getTransformationMatrix();
             Eigen::Matrix4d T_obs_depthMap = T_w_obs.inverse() * T_w_depthMap;
             lidarDM_obs_.first = it_end->first;
-            // LOG(INFO) << TS_obs_.first << " >= " << it_end->first << "?\n" << T_obs_depthMap;
             for (const pcl::PointXYZI &point : *it_end->second)
             {
               pcl::PointXYZI pObs;
               TransformPoint(point, pObs, T_obs_depthMap);
               lidarDM_obs_.second->push_back(pObs);
             }
+            // LOG(INFO) << TS_obs_.first << " >= " << it_end->first << "?\n" << T_obs_depthMap;
           }
         }
       }
@@ -678,9 +689,130 @@ namespace esvo_core
     if (lidarDM_obs_.second->empty())
       return false;
 
+    for (pcl::PointXYZI &point : *lidarDM_obs_.second)
+    {
+      point.intensity = point.z;
+      point.x *= Z_LIDAR_DM_ / point.z;
+      point.y *= Z_LIDAR_DM_ / point.z;
+      point.z = Z_LIDAR_DM_;
+    }
     return true;
   }
 
+  void esvo_Mapping::DepthAssociation(std::vector<dvs_msgs::Event *> &pvEvent, 
+                                      const PointCloudI::Ptr &pc_ptr)
+  {
+    // visualize depthMap
+    kdTree_->setInputCloud(pc_ptr);
+    std::vector<int> pointSearchInd;
+    std::vector<float> pointSearchSqrDis;
+    
+    auto it_tmp = pvEvent.begin();
+    while (it_tmp != pvEvent.end())
+    {
+      Eigen::Vector2d pImg;
+      pImg = camSysPtr_->cam_left_ptr_->getRectifiedUndistortedCoordinate((*it_tmp)->x, (*it_tmp)->y);
+      Eigen::Vector3d pNormal; // project image points onto the normalized image plane
+      camSysPtr_->cam_left_ptr_->cam2World(pImg, 1.0 / Z_LIDAR_DM_, pNormal);
+      it_tmp++;
+      double depthComp;
+
+      pcl::PointXYZI ips; // used to find near points
+      ips.x = pNormal.x();
+      ips.y = pNormal.y();
+      ips.z = pNormal.z();
+      kdTree_->radiusSearch(ips, 3, pointSearchInd, pointSearchSqrDis);
+      if (pointSearchSqrDis[0] < 0.5 && pointSearchInd.size() == 3)
+      {
+        double minDepth, maxDepth;
+        pcl::PointXYZI depthPoint;
+        depthPoint = pc_ptr->points[pointSearchInd[0]];
+        double x1 = depthPoint.x * depthPoint.intensity / 10;
+        double y1 = depthPoint.y * depthPoint.intensity / 10;
+        double z1 = depthPoint.intensity;
+        Eigen::Vector3d pa(x1, y1, z1);
+        minDepth = z1;
+        maxDepth = z1;
+
+        depthPoint = pc_ptr->points[pointSearchInd[1]];
+        double x2 = depthPoint.x * depthPoint.intensity / 10;
+        double y2 = depthPoint.y * depthPoint.intensity / 10;
+        double z2 = depthPoint.intensity;
+        Eigen::Vector3d pb(x2, y2, z2);
+        minDepth = (z2 < minDepth) ? z2 : minDepth;
+        maxDepth = (z2 > maxDepth) ? z2 : maxDepth;
+
+        depthPoint = pc_ptr->points[pointSearchInd[2]];
+        double x3 = depthPoint.x * depthPoint.intensity / 10;
+        double y3 = depthPoint.y * depthPoint.intensity / 10;
+        double z3 = depthPoint.intensity;
+        Eigen::Vector3d pc(x3, y3, z3);
+        minDepth = (z3 < minDepth) ? z3 : minDepth;
+        maxDepth = (z3 > maxDepth) ? z3 : maxDepth;
+
+        Eigen::Vector3d n = (pa - pb).cross(pa - pc);
+        double u = pNormal.x() / pNormal.z();
+        double v = pNormal.y() / pNormal.z();
+        double nu = n.x() * x1 + n.y() * y1 + n.z() * z1;
+        double de = n.x() * u + n.y() * v + n.z();
+        depthComp = nu / de;
+
+        // check if depth is valid
+        if (maxDepth - minDepth > 2.0)
+        {
+          depthComp = 0.0;          
+        }
+        else if (depthComp - maxDepth > 0.2)
+        {
+          depthComp = maxDepth;
+        }
+        else if (depthComp - minDepth < -0.2)
+        {
+          depthComp = minDepth;
+        }
+      } // if
+      else
+      {
+        depthComp = 0.0;
+      }
+
+      if (depthComp > 0.1)
+      {
+        LOG(INFO) << "Have associated depth";
+      }
+      else
+      {
+        LOG(INFO) << "No associated depth";
+      }
+    } // while
+  }
+
+  // return the pose of the left event cam at time t.
+  bool esvo_Mapping::getPoseAt(const ros::Time &t,
+                               esvo_core::Transformation &Tr, // T_world_virtual
+                               const std::string &source_frame)
+  {
+    std::string *err_msg = new std::string();
+    if (!tf_->canTransform(world_frame_id_, source_frame, t, err_msg))
+    {
+#ifdef ESVO_CORE_MAPPING_LOG
+      LOG(WARNING) << t.toNSec() << " : " << *err_msg;
+#endif
+      delete err_msg;
+      return false;
+    }
+    else
+    {
+      tf::StampedTransform st;
+      tf_->lookupTransform(world_frame_id_, source_frame, t, st);
+      tf::transformTFToKindr(st, &Tr);
+      return true;
+    }
+  }
+
+  /****************************************************************
+   ** callback functions
+   ****************************************************************/ 
   void esvo_Mapping::stampedPoseCallback(const geometry_msgs::PoseStampedConstPtr &ps_msg)
   {
     std::lock_guard<std::mutex> lock(data_mutex_);
@@ -716,30 +848,6 @@ namespace esvo_core
             ps_msg->pose.position.z));
     tf::StampedTransform st(tf, ps_msg->header.stamp, ps_msg->header.frame_id, dvs_frame_id_.c_str());
     tf_->setTransform(st);
-  }
-
-  // return the pose of the left event cam at time t.
-  bool esvo_Mapping::getPoseAt(
-      const ros::Time &t,
-      esvo_core::Transformation &Tr, // T_world_virtual
-      const std::string &source_frame)
-  {
-    std::string *err_msg = new std::string();
-    if (!tf_->canTransform(world_frame_id_, source_frame, t, err_msg))
-    {
-#ifdef ESVO_CORE_MAPPING_LOG
-      LOG(WARNING) << t.toNSec() << " : " << *err_msg;
-#endif
-      delete err_msg;
-      return false;
-    }
-    else
-    {
-      tf::StampedTransform st;
-      tf_->lookupTransform(world_frame_id_, source_frame, t, st);
-      tf::transformTFToKindr(st, &Tr);
-      return true;
-    }
   }
 
   void esvo_Mapping::eventsCallback(const dvs_msgs::EventArray::ConstPtr &msg,

@@ -77,10 +77,14 @@ void esvo_core::core::EventBM::createMatchProblem(
     vpDisparitySearchBound_.push_back(std::make_pair(min_disparity_, max_disparity_));
 }
 
-bool esvo_core::core::EventBM::match_an_event(
-    dvs_msgs::Event *pEvent,
-    std::pair<size_t, size_t> &pDisparityBound,
-    esvo_core::core::EventMatchPair &emPair)
+/**
+ * @brief: The main process for block matching on each event
+ * @input: pEvent, pDisparityBound
+ * @output: emPair: Block matching result
+ **/
+bool esvo_core::core::EventBM::match_an_event(dvs_msgs::Event *pEvent,
+                                              std::pair<size_t, size_t> &pDisparityBound,
+                                              esvo_core::core::EventMatchPair &emPair)
 {
   size_t lowDisparity = pDisparityBound.first;
   size_t upDisparity = pDisparityBound.second;
@@ -273,8 +277,7 @@ bool esvo_core::core::EventBM::isValidPatch(
   return true;
 }
 
-void esvo_core::core::EventBM::match_all_HyperThread(
-    vector<EventMatchPair> &vEMP)
+void esvo_core::core::EventBM::match_all_HyperThread(vector<EventMatchPair> &vEMP)
 {
   std::vector<EventBM::Job> jobs(NUM_THREAD_);
   for (size_t i = 0; i < NUM_THREAD_; i++)
@@ -285,6 +288,7 @@ void esvo_core::core::EventBM::match_all_HyperThread(
     jobs[i].pvEventMatchPair_ = std::make_shared<std::vector<EventMatchPair>>();
   }
 
+  // multiple threads for block matching
   std::vector<std::thread> threads;
   threads.reserve(NUM_THREAD_);
   for (size_t i = 0; i < NUM_THREAD_; i++)
@@ -295,6 +299,7 @@ void esvo_core::core::EventBM::match_all_HyperThread(
       thread.join();
   }
 
+  // retrive results computed from multiple threads
   size_t numPoints = 0;
   for (size_t i = 0; i < NUM_THREAD_; i++)
     numPoints += jobs[i].pvEventMatchPair_->size();
@@ -304,8 +309,7 @@ void esvo_core::core::EventBM::match_all_HyperThread(
     vEMP.insert(vEMP.end(), jobs[i].pvEventMatchPair_->begin(), jobs[i].pvEventMatchPair_->end());
 }
 
-void esvo_core::core::EventBM::match(
-    EventBM::Job &job)
+void esvo_core::core::EventBM::match(EventBM::Job &job)
 {
   size_t i_thread = job.i_thread_;
   size_t totalNumEvents = job.pvEventPtr_->size();

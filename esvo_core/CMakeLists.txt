@@ -70,6 +70,12 @@ cs_add_executable(esvo_Mapping src/esvo_MappingNode.cpp
 target_link_libraries(esvo_Mapping ${PROJECT_NAME}_LIB
    ${catkin_LIBRARIES} ${OpenCV_LIBRARIES} yaml-cpp)
 
+# Node esvo_Mapping_DM (with the aid of LiDARDepthMap)
+cs_add_executable(esvo_Mapping_DM src/esvo_MappingNode_DM.cpp
+   src/esvo_Mapping_DM.cpp include/esvo_core/esvo_Mapping_DM.h)
+target_link_libraries(esvo_Mapping_DM ${PROJECT_NAME}_LIB
+   ${catkin_LIBRARIES} ${OpenCV_LIBRARIES} yaml-cpp)
+
 # Node esvo_Tracking
 cs_add_executable(esvo_Tracking src/esvo_TrackingNode.cpp
    src/esvo_Tracking.cpp include/esvo_core/esvo_Tracking.h)
