@@ -105,11 +105,13 @@ namespace esvo_core
       inline void setTransformation(Transformation &tr)
       {
         tr_ = tr;
+        T_w_obs_ = tr.getTransformationMatrix();
       }
 
       inline void setTransformation(Eigen::Matrix4d &T_w_obs)
       {
         T_w_obs_ = T_w_obs;
+        // tr_ = Transformation(T_w_obs);
       }
 
       Eigen::Matrix4d getTransformation()
@@ -182,7 +184,9 @@ namespace esvo_core
 
     using TimeSurfaceHistory = std::map<ros::Time, TimeSurfaceObservation, ROSTimeCmp>;
     using StampedTimeSurfaceObs = std::pair<ros::Time, TimeSurfaceObservation>;
+    
     using LiDARDepthMapHistory = std::map<ros::Time, PointCloudI::Ptr, ROSTimeCmp>;
+    using StampedLiDARDepthMap = std::pair<ros::Time, PointCloudI::Ptr>;
 
     inline static TimeSurfaceHistory::iterator TSHistory_lower_bound(TimeSurfaceHistory &ts_history, ros::Time &t)
     {

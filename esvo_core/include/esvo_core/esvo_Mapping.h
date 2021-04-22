@@ -55,6 +55,7 @@ namespace esvo_core
     void MappingAtTime(const ros::Time &t);
     bool InitializationAtTime(const ros::Time &t);
     bool dataTransferring();
+    bool LiDARDepthMapTransferring();
 
     // callback functions
     void stampedPoseCallback(const geometry_msgs::PoseStampedConstPtr &ps_msg);
@@ -136,8 +137,9 @@ namespace esvo_core
     // online data
     EventQueue events_left_, events_right_;
     TimeSurfaceHistory TS_history_;
-    LiDARDepthMapHistory lidarDM_history_;
     StampedTimeSurfaceObs TS_obs_;
+    LiDARDepthMapHistory lidarDM_history_;
+    StampedLiDARDepthMap lidarDM_obs_;
     StampTransformationMap st_map_;
     std::shared_ptr<tf::Transformer> tf_;
     size_t TS_id_;

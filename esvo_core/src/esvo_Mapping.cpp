@@ -227,6 +227,13 @@ namespace esvo_core
           continue;
         }
 
+        {
+          std::lock_guard<std::mutex> lock(data_mutex_);
+          LiDARDepthMapTransferring();
+          // if (lidarDM_obs_.second->empty())
+          //   LOG(INFO) << "lidar DM is empty, cannot not enhance depth";
+        }
+
         // Do initialization (State Machine)
         if (ESVO_System_Status_ == "INITIALIZATION" || ESVO_System_Status_ == "RESET")
         {
@@ -612,6 +619,64 @@ namespace esvo_core
       LOG(INFO) << "Data Transferring (stampTransformation map): " << st_map_.size();
 #endif
     }
+    return true;
+  }
+
+  /**
+   * @brief: retrive the latest depth map and transform depth map onto obs frame
+   **/
+  bool esvo_Mapping::LiDARDepthMapTransferring()
+  {
+    lidarDM_obs_ = std::make_pair(ros::Time(), PointCloudI::Ptr(new PointCloudI()));
+    Eigen::Matrix4d T_w_obs = TS_obs_.second.tr_.getTransformationMatrix();
+    if (lidarDM_history_.empty())
+      return false;
+
+    auto it_end = lidarDM_history_.rbegin();
+    auto it_begin = lidarDM_history_.rend();
+    while (lidarDM_obs_.second->empty())
+    {
+      if (it_end->first.toSec() < TS_obs_.first.toSec()) // ensure the depth map occurs before TS
+      {
+        Transformation tr;
+        if (ESVO_System_Status_ == "INITIALIZATION" || ESVO_System_Status_ == "RESET")
+        {
+          tr.setIdentity();
+          Eigen::Matrix4d T_w_depthMap = tr.getTransformationMatrix();
+          Eigen::Matrix4d T_obs_depthMap = T_w_obs.inverse() * T_w_depthMap;
+          lidarDM_obs_.first = it_end->first;
+          // LOG(INFO) << TS_obs_.first << " >= " << it_end->first << "?\n" << T_obs_depthMap;
+          for (const pcl::PointXYZI &point : *it_end->second)
+          {
+            pcl::PointXYZI pObs;
+            TransformPoint(point, pObs, T_obs_depthMap);
+            lidarDM_obs_.second->push_back(pObs);
+          }
+        }
+        else if (ESVO_System_Status_ == "WORKING")
+        {
+          if (getPoseAt(it_end->first, tr, dvs_frame_id_))
+          {
+            Eigen::Matrix4d T_w_depthMap = tr.getTransformationMatrix();
+            Eigen::Matrix4d T_obs_depthMap = T_w_obs.inverse() * T_w_depthMap;
+            lidarDM_obs_.first = it_end->first;
+            // LOG(INFO) << TS_obs_.first << " >= " << it_end->first << "?\n" << T_obs_depthMap;
+            for (const pcl::PointXYZI &point : *it_end->second)
+            {
+              pcl::PointXYZI pObs;
+              TransformPoint(point, pObs, T_obs_depthMap);
+              lidarDM_obs_.second->push_back(pObs);
+            }
+          }
+        }
+      }
+      if (it_end->first == it_begin->first)
+        break;
+      it_end++;
+    }
+    if (lidarDM_obs_.second->empty())
+      return false;
+
     return true;
   }
 
