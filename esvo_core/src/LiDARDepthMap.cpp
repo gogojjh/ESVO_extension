@@ -25,6 +25,8 @@ namespace esvo_core
         downSizeFilter_.setLeafSize(CLOUD_RES_, CLOUD_RES_, CLOUD_RES_);
         KEYFRAME_th_dis_ = tools::param(pnh_, "KEYFRAME_th_dis", 0.1);
         KEYFRAME_th_ori_ = tools::param(pnh_, "KEYFRAME_th_ori", 3);
+        MIN_LASER_dis_ = tools::param(pnh_, "MIN_LASER_dis", 0.5);
+        MAX_LASER_dis_ = tools::param(pnh_, "MAX_LASER_dis", 20);
 
         Eigen::Vector3d p0;
         camSysPtr_->cam_left_ptr_->cam2World(Eigen::Vector2d(0.0, 0.0), 
@@ -119,7 +121,7 @@ namespace esvo_core
                 else
                     continue;
 
-                cur_.depthMap_ptr_->clear();
+                PointCloudI::Ptr tmpCloud(new PointCloudI());
                 auto scp_it = cur_.stampedCloudPose_.begin();
                 for (; scp_it != cur_.stampedCloudPose_.end(); scp_it++)
                 {
@@ -127,19 +129,18 @@ namespace esvo_core
                     {
                         pcl::PointXYZI pWorld;
                         TransformPoint(point, pWorld, scp_it->second); // linear interpolation according to time
-                        cur_.depthMap_ptr_->push_back(pWorld);
+                        tmpCloud->push_back(pWorld);
                     }
                 }
+                cur_.depthMap_ptr_->clear();
+                downSizeFilter_.setInputCloud(tmpCloud);
+                downSizeFilter_.setLeafSize(0.05f, 0.05f, 0.05f);
+                downSizeFilter_.filter(*cur_.depthMap_ptr_);
 #ifdef LIDAR_DEPTH_MAP_DEBUG
-                LOG_EVERY_N(INFO, 100) << "Size of depth map: " << cur_.depthMap_ptr_->size();
+                LOG_EVERY_N(INFO, 20) << "Size of depth map: " << cur_.depthMap_ptr_->size();
 #endif
                 publishPointCloud(cur_.t_, cur_.depthMap_ptr_, depthMap_pub_);
             }
-
-            // main program on depthMap
-
-            // depth association
-
             r.sleep();
         } // while
 
@@ -177,7 +178,9 @@ namespace esvo_core
 #endif
             cloud_it++;
         }
-        LOG_EVERY_N(INFO, 20) << t_retrive_pose.toc() << "ms";
+#ifdef LIDAR_DEPTH_MAP_DEBUG
+        LOG_EVERY_N(INFO, 50) << "retrive pose costs: " << t_retrive_pose.toc() << "ms";
+#endif
         if (cloud_it == cloudHistory_.rend())
             return false;
         
@@ -252,6 +255,9 @@ namespace esvo_core
         PointCloudI::Ptr pcTrans_ptr(new PointCloudI());
         for (const pcl::PointXYZI &point : *laserCloud)
         {
+            double pointDis = static_cast<double>(sqrt(point.x * point.x + point.y * point.y + point.z * point.z));
+            if (pointDis < MIN_LASER_dis_ || pointDis > MAX_LASER_dis_)
+                continue;
             pcl::PointXYZI pCam;
             TransformPoint(point, pCam, sensorSysPtr_->T_left_davis_lidar_);
             double ang_x = static_cast<double>(std::abs(atan2(pCam.x, pCam.z)) / M_PI * 180.0);
@@ -266,7 +272,10 @@ namespace esvo_core
         while (cur_.stampedCloudPose_.size() >= CLOUD_MAP_LENGTH_) // default: 10
             cur_.stampedCloudPose_.pop_front();
         cur_.stampedCloudPose_.emplace_back(refPointCloudIPair, T_w_pc);
+#ifdef LIDAR_DEPTH_MAP_DEBUG
         LOG_EVERY_N(INFO, 20) << t_add_point.toc() << "ms";
+#endif
+        return true;
     }
 
     /********************** Callback functions *****************************/
@@ -276,10 +285,6 @@ namespace esvo_core
         PointCloudI::Ptr PC_ptr(new PointCloudI());
         pcl::fromROSMsg(*msg, *PC_ptr);
         cloudHistory_.emplace_back(msg->header.stamp, PC_ptr);
-        // PointCloudI::Ptr PC_ds_ptr(new PointCloudI());
-        // downSizeFilter_.setInputCloud(PC_ptr);
-        // downSizeFilter_.filter(*PC_ds_ptr);
-        // cloudHistory_.emplace_back(msg->header.stamp, PC_ds_ptr);
         while (cloudHistory_.size() > CLOUD_HISTORY_LENGTH_) // 20
             cloudHistory_.pop_front();
     }
@@ -310,24 +315,25 @@ namespace esvo_core
                     break;
             }
         }
-
 #ifdef PUBLISH_PATH
-        // add pose to tf
-        tf::Transform tf(
-            tf::Quaternion(
-                ps_msg->pose.orientation.x,
-                ps_msg->pose.orientation.y,
-                ps_msg->pose.orientation.z,
-                ps_msg->pose.orientation.w),
-            tf::Vector3(
-                ps_msg->pose.position.x,
-                ps_msg->pose.position.y,
-                ps_msg->pose.position.z));
-        tf::StampedTransform st(tf, ps_msg->header.stamp, ps_msg->header.frame_id, dvs_frame_id_.c_str());
-        tf_->setTransform(st);
-        // broadcast the tf such that the nav_path messages can find the valid fixed frame "map".
-        static tf::TransformBroadcaster br;
-        br.sendTransform(st);
+        {
+            // add dvs pose to tf
+            tf::Transform tf(
+                tf::Quaternion(
+                    ps_msg->pose.orientation.x,
+                    ps_msg->pose.orientation.y,
+                    ps_msg->pose.orientation.z,
+                    ps_msg->pose.orientation.w),
+                tf::Vector3(
+                    ps_msg->pose.position.x,
+                    ps_msg->pose.position.y,
+                    ps_msg->pose.position.z));
+            tf::StampedTransform st(tf, ps_msg->header.stamp, ps_msg->header.frame_id, dvs_frame_id_.c_str());
+            tf_->setTransform(st);
+            // broadcast the tf such that the nav_path messages can find the valid fixed frame "map".
+            static tf::TransformBroadcaster br;
+            br.sendTransform(st);
+        }
 #endif
     }
 

@@ -33,9 +33,9 @@
 #include <pcl/filters/voxel_grid.h>
 #include <pcl_ros/point_cloud.h>
 
-// #define LIDAR_DEPTH_MAP_DEBUG
-#define PUBLISH_PATH
+#define LIDAR_DEPTH_MAP_DEBUG
 // #define INTERPOLATE_POINT
+// #define PUBLISH_PATH
 const float SCAN_PERIOD = 0.1;
 
 namespace esvo_core
@@ -113,6 +113,7 @@ namespace esvo_core
         size_t CLOUD_HISTORY_LENGTH_, CLOUD_MAP_LENGTH_;
         float CLOUD_RES_;
         double KEYFRAME_th_dis_, KEYFRAME_th_ori_;
+        double MIN_LASER_dis_, MAX_LASER_dis_;
         bool bSaveDepthMap_;
         bool bVisualizeDepthMap_;
         std::string resultPath_;
