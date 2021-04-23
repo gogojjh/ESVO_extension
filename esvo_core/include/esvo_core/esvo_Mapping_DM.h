@@ -85,6 +85,8 @@ namespace esvo_core
         ros::Time &t);
     void publishProjLiDARObs(
         const PointCloudI::Ptr &pc_ptr,
+        const std::vector<dvs_msgs::Event *> &pvEvent,
+        const std::vector<double> &vEventDepth,
         const ros::Time &t);
 
     void publishImage(
@@ -234,7 +236,7 @@ namespace esvo_core
     /******************** For test & debug ********************/
     /**********************************************************/
     image_transport::Publisher invDepthMap_pub_, stdVarMap_pub_, ageMap_pub_, costMap_pub_;
-    image_transport::Publisher lidarObsMap_pub_;
+    image_transport::Publisher lidarObsMap_pub_, eventDepthMap_pub_;
 
     // For counting the total number of fusion
     size_t TotalNumFusion_;
