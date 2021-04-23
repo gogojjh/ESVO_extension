@@ -59,7 +59,7 @@ namespace esvo_core
     
     bool dataTransferring();
     bool LiDARDepthMapTransferring();
-    void DepthAssociation(std::vector<dvs_msgs::Event *> &pvEvent, const PointCloudI::Ptr &pc_ptr);
+    void DepthAssociation(const std::vector<dvs_msgs::Event *> &pvEvent, std::vector<double> &vEventDepth, const PointCloudI::Ptr &pc_ptr);
 
     // callback functions
     void stampedPoseCallback(const geometry_msgs::PoseStampedConstPtr &ps_msg);
@@ -83,6 +83,10 @@ namespace esvo_core
         DepthMap::Ptr &depthMapPtr,
         Transformation &tr,
         ros::Time &t);
+    void publishProjLiDARObs(
+        const PointCloudI::Ptr &pc_ptr,
+        const ros::Time &t);
+
     void publishImage(
         const cv::Mat &image,
         const ros::Time &t,
@@ -142,8 +146,8 @@ namespace esvo_core
     EventQueue events_left_, events_right_;
     TimeSurfaceHistory TS_history_;
     StampedTimeSurfaceObs TS_obs_;
-    LiDARDepthMapHistory lidarDM_history_;
-    StampedLiDARDepthMap lidarDM_obs_;
+    LiDARDepthMapHistory lidarDM_history_; // in the world frame
+    StampedLiDARDepthMap lidarDM_obs_; // normalized points in the obs frame
     StampTransformationMap st_map_;
     std::shared_ptr<tf::Transformer> tf_;
     size_t TS_id_;
@@ -230,6 +234,7 @@ namespace esvo_core
     /******************** For test & debug ********************/
     /**********************************************************/
     image_transport::Publisher invDepthMap_pub_, stdVarMap_pub_, ageMap_pub_, costMap_pub_;
+    image_transport::Publisher lidarObsMap_pub_;
 
     // For counting the total number of fusion
     size_t TotalNumFusion_;

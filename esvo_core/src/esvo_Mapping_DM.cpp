@@ -148,6 +148,7 @@ namespace esvo_core
     stdVarMap_pub_ = it_.advertise("Standard_Variance_Map", 1);
     ageMap_pub_ = it_.advertise("Age_Map", 1);
     costMap_pub_ = it_.advertise("cost_map", 1);
+    lidarObsMap_pub_ = it_.advertise("lidar_Obs_Map", 1);
     pc_pub_ = nh_.advertise<PointCloud>("/esvo_mapping/pointcloud_local", 1);
     if (bVisualizeGlobalPC_)
     {
@@ -324,7 +325,8 @@ namespace esvo_core
     // LOG(INFO) << "Denosing succeeds";
 
     // LiDAR-enhanced depth map
-    // DepthAssociation(vDenoisedEventsPtr_left_, lidarDM_obs_.second);
+    // std::vector<double> vEventsDepth;
+    // DepthAssociation(vDenoisedEventsPtr_left_, vEventsDepth, lidarDM_obs_.second);
 
     // block matching
     tt_mapping.tic();
@@ -422,6 +424,10 @@ namespace esvo_core
     std::thread tPublishMappingResult(&esvo_Mapping::publishMappingResults, this,
                                       depthFramePtr_->dMap_, depthFramePtr_->T_world_frame_, t);
     tPublishMappingResult.detach();
+
+    std::thread tPublishProjLiDARObs(&esvo_Mapping::publishProjLiDARObs, this,
+                                     lidarDM_obs_.second, t);
+    tPublishProjLiDARObs.detach();
 
 #ifdef ESVO_CORE_MAPPING_LOG
     LOG(INFO) << "\n";
@@ -654,13 +660,11 @@ namespace esvo_core
         if (ESVO_System_Status_ == "INITIALIZATION" || ESVO_System_Status_ == "RESET")
         {
           tr.setIdentity();
-          Eigen::Matrix4d T_w_depthMap = tr.getTransformationMatrix();
-          Eigen::Matrix4d T_obs_depthMap = T_w_obs.inverse() * T_w_depthMap;
           lidarDM_obs_.first = it_end->first;
           for (const pcl::PointXYZI &point : *it_end->second)
           {
             pcl::PointXYZI pObs;
-            TransformPoint(point, pObs, T_obs_depthMap);
+            TransformPoint(point, pObs, T_w_obs.inverse());
             lidarDM_obs_.second->push_back(pObs);
           }
           // LOG(INFO) << TS_obs_.first << " >= " << it_end->first << "?\n" << T_obs_depthMap;
@@ -669,13 +673,11 @@ namespace esvo_core
         {
           if (getPoseAt(it_end->first, tr, dvs_frame_id_))
           {
-            Eigen::Matrix4d T_w_depthMap = tr.getTransformationMatrix();
-            Eigen::Matrix4d T_obs_depthMap = T_w_obs.inverse() * T_w_depthMap;
             lidarDM_obs_.first = it_end->first;
             for (const pcl::PointXYZI &point : *it_end->second)
             {
               pcl::PointXYZI pObs;
-              TransformPoint(point, pObs, T_obs_depthMap);
+              TransformPoint(point, pObs, T_w_obs.inverse());
               lidarDM_obs_.second->push_back(pObs);
             }
             // LOG(INFO) << TS_obs_.first << " >= " << it_end->first << "?\n" << T_obs_depthMap;
@@ -699,14 +701,18 @@ namespace esvo_core
     return true;
   }
 
-  void esvo_Mapping::DepthAssociation(std::vector<dvs_msgs::Event *> &pvEvent, 
+  void esvo_Mapping::DepthAssociation(const std::vector<dvs_msgs::Event *> &pvEvent, 
+                                      std::vector<double> &vEventDepth,
                                       const PointCloudI::Ptr &pc_ptr)
   {
+    vEventDepth.clear();
+    vEventDepth.resize(pvEvent.size());
+
     // visualize depthMap
     kdTree_->setInputCloud(pc_ptr);
     std::vector<int> pointSearchInd;
     std::vector<float> pointSearchSqrDis;
-    
+
     auto it_tmp = pvEvent.begin();
     while (it_tmp != pvEvent.end())
     {
@@ -714,7 +720,6 @@ namespace esvo_core
       pImg = camSysPtr_->cam_left_ptr_->getRectifiedUndistortedCoordinate((*it_tmp)->x, (*it_tmp)->y);
       Eigen::Vector3d pNormal; // project image points onto the normalized image plane
       camSysPtr_->cam_left_ptr_->cam2World(pImg, 1.0 / Z_LIDAR_DM_, pNormal);
-      it_tmp++;
       double depthComp;
 
       pcl::PointXYZI ips; // used to find near points
@@ -727,24 +732,24 @@ namespace esvo_core
         double minDepth, maxDepth;
         pcl::PointXYZI depthPoint;
         depthPoint = pc_ptr->points[pointSearchInd[0]];
-        double x1 = depthPoint.x * depthPoint.intensity / 10;
-        double y1 = depthPoint.y * depthPoint.intensity / 10;
+        double x1 = depthPoint.x * depthPoint.intensity / depthPoint.z; // recover the practical coordinates
+        double y1 = depthPoint.y * depthPoint.intensity / depthPoint.z;
         double z1 = depthPoint.intensity;
         Eigen::Vector3d pa(x1, y1, z1);
         minDepth = z1;
         maxDepth = z1;
 
         depthPoint = pc_ptr->points[pointSearchInd[1]];
-        double x2 = depthPoint.x * depthPoint.intensity / 10;
-        double y2 = depthPoint.y * depthPoint.intensity / 10;
+        double x2 = depthPoint.x * depthPoint.intensity / depthPoint.z;
+        double y2 = depthPoint.y * depthPoint.intensity / depthPoint.z;
         double z2 = depthPoint.intensity;
         Eigen::Vector3d pb(x2, y2, z2);
         minDepth = (z2 < minDepth) ? z2 : minDepth;
         maxDepth = (z2 > maxDepth) ? z2 : maxDepth;
 
         depthPoint = pc_ptr->points[pointSearchInd[2]];
-        double x3 = depthPoint.x * depthPoint.intensity / 10;
-        double y3 = depthPoint.y * depthPoint.intensity / 10;
+        double x3 = depthPoint.x * depthPoint.intensity / depthPoint.z;
+        double y3 = depthPoint.y * depthPoint.intensity / depthPoint.z;
         double z3 = depthPoint.intensity;
         Eigen::Vector3d pc(x3, y3, z3);
         minDepth = (z3 < minDepth) ? z3 : minDepth;
@@ -776,6 +781,7 @@ namespace esvo_core
         depthComp = 0.0;
       }
 
+      // depth validation
       if (depthComp > 0.1)
       {
         LOG(INFO) << "Have associated depth";
@@ -784,6 +790,8 @@ namespace esvo_core
       {
         LOG(INFO) << "No associated depth";
       }
+      vEventDepth[it_tmp - pvEvent.begin()] = depthComp;
+      it_tmp++;
     } // while
   }
 
@@ -1061,10 +1069,9 @@ namespace esvo_core
     }
   }
 
-  void esvo_Mapping::publishMappingResults(
-      DepthMap::Ptr depthMapPtr,
-      Transformation tr,
-      ros::Time t)
+  void esvo_Mapping::publishMappingResults(DepthMap::Ptr depthMapPtr,
+                                           Transformation tr,
+                                           ros::Time t)
   {
     cv::Mat invDepthImage, stdVarImage, ageImage, costImage, eventImage, confidenceMap;
 
@@ -1107,10 +1114,9 @@ namespace esvo_core
     }
   }
 
-  void esvo_Mapping::publishPointCloud(
-      DepthMap::Ptr &depthMapPtr,
-      Transformation &tr,
-      ros::Time &t)
+  void esvo_Mapping::publishPointCloud(DepthMap::Ptr &depthMapPtr,
+                                       Transformation &tr,
+                                       ros::Time &t)
   {
     sensor_msgs::PointCloud2::Ptr pc_to_publish(new sensor_msgs::PointCloud2);
     Eigen::Matrix<double, 4, 4> T_world_result = tr.getTransformationMatrix();
@@ -1173,6 +1179,28 @@ namespace esvo_core
         t_last_pub_pc_ = t.toSec();
       }
     }
+  }
+
+  void esvo_Mapping::publishProjLiDARObs(const PointCloudI::Ptr &pc_ptr, const ros::Time &t)
+  {
+    size_t height = camSysPtr_->cam_left_ptr_->height_;
+    size_t width = camSysPtr_->cam_left_ptr_->width_;
+    cv::Mat lidarObsImage = cv::Mat(cv::Size(width, height), CV_8UC3, cv::Scalar(0));
+    // cv::cvtColor(lidarObsImage, lidarObsImage, CV_GRAY2BGR);
+    for (const pcl::PointXYZI &point : *pc_ptr)
+    {
+      double x = point.x / point.z * point.intensity;
+      double y = point.y / point.z * point.intensity;
+      double z = point.intensity;
+      Eigen::Vector3d pCam(x, y, z);
+      Eigen::Vector2d pCoor;
+      camSysPtr_->cam_left_ptr_->world2Cam(pCam, pCoor);
+      if (pCoor.x() < 0 || pCoor.x() >= width || pCoor.y() < 0 || pCoor.y() >= height)
+        continue;
+      visualizor_.DrawPoint(1.0 / pCam.z(), invDepth_max_range_, invDepth_min_range_,
+                            pCoor, lidarObsImage);
+    }
+    publishImage(lidarObsImage, t, lidarObsMap_pub_);
   }
 
   void

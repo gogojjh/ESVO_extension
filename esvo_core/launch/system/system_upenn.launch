@@ -81,7 +81,6 @@
 		<param name="Sequence_Name" type="string" value="$(arg Sequence_Name)" />
 		<param name="Representation_Name" type="string" value="$(arg Representation_Name)" />
 		<param name="eventNum_EM" type="int" value="$(arg eventNum_EM)" />
-		<param name="kernelSize" type="int" value="$(arg kernelSize)" />
 	</node>
 
 	<node name="TimeSurface_global_timer" pkg="esvo_time_surface" type="TimeSurface_global_timer" required="true" >

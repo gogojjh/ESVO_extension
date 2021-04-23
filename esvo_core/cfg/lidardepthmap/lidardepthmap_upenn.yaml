@@ -5,8 +5,8 @@ KEYFRAME_th_dis: 0.1     # m
 KEYFRAME_th_ori: 3       # deg
 MIN_LASER_dis: 0.1
 MAX_LASER_dis: 20.0
-FOV_ratio_X: 0.6
-FOV_ratio_Y: 0.8
+FOV_ratio_X: 0.7
+FOV_ratio_Y: 0.9
 depthmap_rate_hz: 10
 SAVE_DEPTH_MAP: False
 PATH_TO_SAVE_DEPTH_MAP: "/home/jjiao/ESVO_result/" # CHANGE THIS PATH

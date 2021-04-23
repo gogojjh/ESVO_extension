@@ -140,6 +140,7 @@ namespace esvo_core
             downSizeFilter_.setInputCloud(tmpCloud);
             downSizeFilter_.setLeafSize(0.05f, 0.05f, 0.05f);
             downSizeFilter_.filter(*cur_.depthMap_ptr_);
+            cur_.depthMap_ptr_->header.frame_id = world_frame_id_;
 #ifdef LIDAR_DEPTH_MAP_DEBUG
             LOG_EVERY_N(INFO, 20) << "Size of depth map: " << cur_.depthMap_ptr_->size();
 #endif
@@ -444,7 +445,6 @@ namespace esvo_core
         {
             pcl::toROSMsg(*pc_ptr, *pc_to_publish);
             pc_to_publish->header.stamp = t;
-            pc_to_publish->header.frame_id = world_frame_id_.c_str();
             pc_pub.publish(pc_to_publish);
         }
 

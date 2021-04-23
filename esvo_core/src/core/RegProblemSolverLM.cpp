@@ -249,7 +249,7 @@ namespace esvo_core
         Eigen::Matrix<double, 6, 6> mat_V_f = esolver.eigenvectors().real(); // 6*6, column is the corresponding eigenvector
         Eigen::Matrix<double, 6, 6> mat_V_p = mat_V_f.transpose();
         Eigen::Matrix<double, 6, 6> mat_P;
-        const double eignThre = 100.0;
+        const double eignThre = 31.0;
         // LOG(INFO) << "compute Degeneracy";
         lambda = std::max(mat_E(0, 0), lambda);
         for (size_t i = 0; i < 6; i++)
