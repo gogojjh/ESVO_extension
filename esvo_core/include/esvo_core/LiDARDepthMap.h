@@ -33,7 +33,7 @@
 #include <pcl/filters/voxel_grid.h>
 #include <pcl_ros/point_cloud.h>
 
-#define LIDAR_DEPTH_MAP_DEBUG
+// #define LIDAR_DEPTH_MAP_DEBUG
 // #define INTERPOLATE_POINT
 // #define PUBLISH_PATH
 const float SCAN_PERIOD = 0.1;

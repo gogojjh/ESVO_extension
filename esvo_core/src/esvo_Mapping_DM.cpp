@@ -239,10 +239,6 @@ namespace esvo_core
           {
             LOG(INFO) << "lidar depth map is empty, cannot not enhance depth";
           }
-          // else
-          // {
-          //   DepthAssociation();
-          // }
         }
 
         // Do initialization (State Machine)
@@ -325,20 +321,42 @@ namespace esvo_core
     }
     // LOG(INFO) << "Denosing succeeds";
 
-    // LiDAR-enhanced depth map
+    /**************************************************************/
+    /**  undistort events and associate events with LiDAR map *****/
+    /**************************************************************/
+    std::vector<EventDepth> vED;
+    vED.reserve(vDenoisedEventsPtr_left_.size());
+    for (auto it_tmp = vDenoisedEventsPtr_left_.begin(); it_tmp != vDenoisedEventsPtr_left_.end(); it_tmp++)
+    {
+      EventDepth ed;
+      ed.x_raw_ = Eigen::Vector2d(static_cast<double>((*it_tmp)->x), static_cast<double>((*it_tmp)->y));
+      ed.x_rect_ = camSysPtr_->cam_left_ptr_->getRectifiedUndistortedCoordinate((*it_tmp)->x, (*it_tmp)->y);
+      ed.t_ = (*it_tmp)->ts;
+      auto st_map_iter = tools::StampTransformationMap_lower_bound(st_map_, ed.t_);
+      if (st_map_iter == st_map_.end())
+        continue;
+      ed.status_ = 0;
+      ed.trans_ = st_map_iter->second;
+      ed.depth_ = 0.0;
+      ed.cost_ = 0.0;
+      vED.emplace_back(ed);
+    }
+
     if (!lidarDM_obs_.second->empty())
     {
       TicToc t_depth_asso;
-      std::vector<double> vEventsDepth;
-      DepthAssociation(vDenoisedEventsPtr_left_, vEventsDepth, lidarDM_obs_.second);
+      DepthAssociation(lidarDM_obs_.second, vED);
+      // std::vector<DepthPoint> vdp;
+      // dpSolver_.depthValidation(&vEventsDepth, &TS_obs_, vdp);
       std::thread tPublishProjLiDARObs(&esvo_Mapping::publishProjLiDARObs, this,
-                                       lidarDM_obs_.second, vDenoisedEventsPtr_left_, vEventsDepth, t);
+                                       lidarDM_obs_.second, vED, t);
       tPublishProjLiDARObs.detach();
-      // publishProjLiDARObs(lidarDM_obs_.second, vDenoisedEventsPtr_left_, vEventsDepth, t);
-      LOG_EVERY_N(INFO, 20) << "Associate depth costs: " << t_depth_asso.toc() << "ms";
+      LOG_EVERY_N(INFO, 50) << "Associate depth costs: " << t_depth_asso.toc() << "ms";
     }
 
-    // block matching
+    /**************************************************************/
+    /*************  Block matching ********************************/
+    /**************************************************************/
     tt_mapping.tic();
     ebm_.createMatchProblem(&TS_obs_, &st_map_, &vDenoisedEventsPtr_left_); // epipolar search with the smallest temporal residual
     ebm_.match_all_HyperThread(vEMP);
@@ -349,7 +367,10 @@ namespace esvo_core
     t_BM = tt_mapping.toc();
     t_overall_count += t_BM_denoising;
     t_overall_count += t_BM;
-    // LOG(INFO) << "Block matching succeeds";
+#ifdef ESVO_CORE_MAPPING_DEBUG
+    LOG_EVENT_N(INFO, 20) << "Block matching succeeds";
+    LOG_EVENT_N(INFO, 20) << "Block matching costs: " << t_BM << "ms"; // 4-10ms
+#endif
 
     /**************************************************************/
     /*************  Nonlinear Optimization & Fusion ***************/
@@ -358,7 +379,6 @@ namespace esvo_core
     double t_solve, t_fusion, t_regularization;
     t_solve = t_fusion = t_regularization = 0;
     size_t numFusionCount = 0; // To count the total number of fusion (in terms of fusion between two estimates, i.e. a priori and a propagated one).
-
     tt_mapping.tic();
 
     // Nonlinear opitmization
@@ -711,24 +731,17 @@ namespace esvo_core
     return true;
   }
 
-  void esvo_Mapping::DepthAssociation(const std::vector<dvs_msgs::Event *> &pvEvent, 
-                                      std::vector<double> &vEventDepth,
-                                      const PointCloudI::Ptr &pc_ptr)
+  void esvo_Mapping::DepthAssociation(const PointCloudI::Ptr &pc_ptr,
+                                      std::vector<EventDepth> &vEventDepth)
   {
-    vEventDepth.clear();
-    vEventDepth.resize(pvEvent.size());
-
     // visualize depthMap
     kdTree_->setInputCloud(pc_ptr);
     std::vector<int> pointSearchInd;
     std::vector<float> pointSearchSqrDis;
-
-    for (size_t i = 0; i < pvEvent.size(); i++)
+    for (size_t i = 0; i < vEventDepth.size(); i++)
     {
-      Eigen::Vector2d pImg;
-      pImg = camSysPtr_->cam_left_ptr_->getRectifiedUndistortedCoordinate(pvEvent[i]->x, pvEvent[i]->y);
       Eigen::Vector3d pNormal; // project image points onto the normalized image plane
-      camSysPtr_->cam_left_ptr_->cam2World(pImg, 1.0 / Z_LIDAR_DM_, pNormal);
+      camSysPtr_->cam_left_ptr_->cam2World(vEventDepth[i].x_rect_, 1.0 / Z_LIDAR_DM_, pNormal);
       double depthComp;
 
       pcl::PointXYZI ips; // used to find near points
@@ -794,12 +807,15 @@ namespace esvo_core
       if (depthComp > 0.1)
       {
         // LOG(INFO) << "Have associated depth";
+        vEventDepth[i].depth_ = depthComp;
+        vEventDepth[i].status_ = 1;
       }
       else
       {
         // LOG(INFO) << "No associated depth";
+        vEventDepth[i].depth_ = 0.0;
+        vEventDepth[i].status_ = 0;
       }
-      vEventDepth[i] = depthComp;
     } // while
   }
 
@@ -963,7 +979,7 @@ namespace esvo_core
     std::lock_guard<std::mutex> lock(data_mutex_);
     PointCloudI::Ptr PC_ptr(new PointCloudI());
     pcl::fromROSMsg(*msg, *PC_ptr);
-    LOG_EVERY_N(INFO, 20) << PC_ptr->size();
+    LOG_EVERY_N(INFO, 20) << "Size of input LiDAR depth map: " << PC_ptr->size();
     lidarDM_history_.emplace(msg->header.stamp, PC_ptr);
     while (lidarDM_history_.size() > LIDAR_DM_HISTORY_LENGTH_) // 20
     {
@@ -1190,8 +1206,7 @@ namespace esvo_core
   }
 
   void esvo_Mapping::publishProjLiDARObs(const PointCloudI::Ptr &pc_ptr,
-                                         const std::vector<dvs_msgs::Event *> &pvEvent,
-                                         const std::vector<double> &vEventDepth,
+                                         const std::vector<EventDepth> &vEventDepth,
                                          const ros::Time &t)
   {
     size_t height = camSysPtr_->cam_left_ptr_->height_;
@@ -1213,24 +1228,24 @@ namespace esvo_core
     publishImage(lidarObsImage, t, lidarObsMap_pub_);
 
     // visualize event Map w/wo associated depth
-    CHECK_EQ(pvEvent.size(), vEventDepth.size());
     cv::Mat eventDepthMap = cv::Mat(cv::Size(width, height), CV_8UC3, cv::Scalar(0));
-    for (size_t i = 0; i < pvEvent.size(); i++)
+    cv::Mat mask = cv::Mat(cv::Size(width, height), CV_64FC1, cv::Scalar(0.0));
+    for (size_t i = 0; i < vEventDepth.size(); i++)
     {
-      Eigen::Vector2d pImg;
-      pImg = camSysPtr_->cam_left_ptr_->getRectifiedUndistortedCoordinate(pvEvent[i]->x, pvEvent[i]->y);
+      const Eigen::Vector2d &pImg = vEventDepth[i].x_rect_;
       if (pImg.x() < 0 || pImg.x() >= width || pImg.y() < 0 || pImg.y() >= height)
         continue;
-      if (vEventDepth[i] < 0.1)
+      if (vEventDepth[i].status_ == 0) // depth_ = 0
       {
-        // visualizor_.DrawPoint(invDepth_max_range_, invDepth_max_range_, invDepth_min_range_,
-        //                       pImg, eventDepthMap);
-      }
-      else
-      {
-        visualizor_.DrawPoint(1.0 / vEventDepth[i], invDepth_max_range_, invDepth_min_range_,
+        visualizor_.DrawPoint(invDepth_max_range_, invDepth_max_range_, invDepth_min_range_,
                               pImg, eventDepthMap);
+        continue;
       }
+      // repeated depth due to stacking LiDAR frame
+      if (mask.at<double>(pImg.y(), pImg.x()) > 1.0 / vEventDepth[i].depth_) 
+        continue;
+      visualizor_.DrawPoint(1.0 / vEventDepth[i].depth_, invDepth_max_range_, invDepth_min_range_,
+                            pImg, eventDepthMap);
     }
     publishImage(eventDepthMap, t, eventDepthMap_pub_);
   }

@@ -13,6 +13,7 @@
 #include <esvo_core/container/CameraSystem.h>
 #include <esvo_core/container/DepthMap.h>
 #include <esvo_core/container/EventMatchPair.h>
+#include <esvo_core/container/EventDepth.h>
 #include <esvo_core/core/DepthFusion.h>
 #include <esvo_core/core/DepthRegularization.h>
 #include <esvo_core/core/DepthProblem.h>
@@ -59,7 +60,7 @@ namespace esvo_core
     
     bool dataTransferring();
     bool LiDARDepthMapTransferring();
-    void DepthAssociation(const std::vector<dvs_msgs::Event *> &pvEvent, std::vector<double> &vEventDepth, const PointCloudI::Ptr &pc_ptr);
+    void DepthAssociation(const PointCloudI::Ptr &pc_ptr, std::vector<EventDepth> &vEventDepth);
 
     // callback functions
     void stampedPoseCallback(const geometry_msgs::PoseStampedConstPtr &ps_msg);
@@ -85,8 +86,7 @@ namespace esvo_core
         ros::Time &t);
     void publishProjLiDARObs(
         const PointCloudI::Ptr &pc_ptr,
-        const std::vector<dvs_msgs::Event *> &pvEvent,
-        const std::vector<double> &vEventDepth,
+        const std::vector<EventDepth> &vEventDepth,
         const ros::Time &t);
 
     void publishImage(
