@@ -6,6 +6,7 @@
 #include <esvo_core/container/CameraSystem.h>
 #include <esvo_core/container/DepthMap.h>
 #include <esvo_core/container/EventMatchPair.h>
+#include <esvo_core/container/EventDepth.h>
 
 namespace esvo_core
 {

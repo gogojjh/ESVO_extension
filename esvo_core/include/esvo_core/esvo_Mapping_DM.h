@@ -60,7 +60,11 @@ namespace esvo_core
     
     bool dataTransferring();
     bool LiDARDepthMapTransferring();
-    void DepthAssociation(const PointCloudI::Ptr &pc_ptr, std::vector<EventDepth> &vEventDepth);
+    void DepthAssociation(const PointCloudI::Ptr &pc_ptr,
+                          std::vector<EventDepth> &vEventDepth);
+    void DepthValidation(StampedTimeSurfaceObs *pStampedTsObs,
+                         std::vector<EventDepth> *pvEventDepth,
+                         std::vector<size_t> *pvIdxValidDepth);
 
     // callback functions
     void stampedPoseCallback(const geometry_msgs::PoseStampedConstPtr &ps_msg);

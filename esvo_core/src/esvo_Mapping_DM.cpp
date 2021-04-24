@@ -342,16 +342,24 @@ namespace esvo_core
       vED.emplace_back(ed);
     }
 
+    std::vector<size_t> indicesValidDepth;
+    indicesValidDepth.reserve(vED.size());
     if (!lidarDM_obs_.second->empty())
     {
-      TicToc t_depth_asso;
+      TicToc t_obtain_lidar_depth;
       DepthAssociation(lidarDM_obs_.second, vED);
-      // std::vector<DepthPoint> vdp;
-      // dpSolver_.depthValidation(&vEventsDepth, &TS_obs_, vdp);
+      double t_depth_asso = t_obtain_lidar_depth.toc();
+      LOG_EVERY_N(INFO, 50) << "Associate depth costs: " << t_depth_asso << "ms";
+
+      t_obtain_lidar_depth.tic();
+      DepthValidation(&TS_obs_, &vED, &indicesValidDepth);
+      double t_depth_valid = t_obtain_lidar_depth.toc();
+      LOG_EVERY_N(INFO, 50) << "Validate depth costs: " << t_depth_valid << "ms";
+      LOG_EVERY_N(INFO, 50) << "Size of input eventDepth: " << vED.size() << "; size of valide depth: " << indicesValidDepth.size();
+
       std::thread tPublishProjLiDARObs(&esvo_Mapping::publishProjLiDARObs, this,
                                        lidarDM_obs_.second, vED, t);
       tPublishProjLiDARObs.detach();
-      LOG_EVERY_N(INFO, 50) << "Associate depth costs: " << t_depth_asso.toc() << "ms";
     }
 
     /**************************************************************/
@@ -454,10 +462,6 @@ namespace esvo_core
     std::thread tPublishMappingResult(&esvo_Mapping::publishMappingResults, this,
                                       depthFramePtr_->dMap_, depthFramePtr_->T_world_frame_, t);
     tPublishMappingResult.detach();
-
-    // std::thread tPublishProjLiDARObs(&esvo_Mapping::publishProjLiDARObs, this,
-    //                                  lidarDM_obs_.second, vDenoisedEventsPtr_left_, vEventsDepth, t);
-    // tPublishProjLiDARObs.detach();
 
 #ifdef ESVO_CORE_MAPPING_LOG
     LOG(INFO) << "\n";
@@ -817,6 +821,54 @@ namespace esvo_core
         vEventDepth[i].status_ = 0;
       }
     } // while
+  }
+
+  void esvo_Mapping::DepthValidation(StampedTimeSurfaceObs *pStampedTsObs, 
+                                     std::vector<EventDepth> *pvEventDepth,
+                                     std::vector<size_t> *pvIdxValidDepth)
+  {
+    Eigen::Matrix4d T_left_world = pStampedTsObs->second.tr_.inverse().getTransformationMatrix();
+    DepthProblem depthProblem(dpConfigPtr_, camSysPtr_);
+    for (size_t i = 0; i < pvEventDepth->size(); i++)
+    {
+      if ((*pvEventDepth)[i].status_ == 0)
+        continue;
+      Eigen::Vector2d coor = (*pvEventDepth)[i].x_rect_;
+      Eigen::Matrix4d T_world_virtual = (*pvEventDepth)[i].trans_.getTransformationMatrix();
+      Eigen::Matrix4d T_left_virtual = T_left_world * T_world_virtual;
+      double invDepth = 1.0 / (*pvEventDepth)[i].depth_;
+
+      Eigen::Vector2d x1_s, x2_s;
+      // check if the project points are in the timesurface, if not, give large residuals
+      if (!depthProblem.warping(coor, invDepth, T_left_virtual.block<3, 4>(0, 0), x1_s, x2_s))
+      {
+        (*pvEventDepth)[i].status_ = 0;
+        (*pvEventDepth)[i].depth_ = 0.0;
+        continue;
+      }
+
+      Eigen::MatrixXd tau1, tau2;
+      if (!depthProblem.patchInterpolation(pStampedTsObs->second.TS_left_, x1_s, tau1) 
+       || !depthProblem.patchInterpolation(pStampedTsObs->second.TS_right_, x2_s, tau2))
+      {
+        (*pvEventDepth)[i].status_ = 0;
+        (*pvEventDepth)[i].depth_ = 0.0;
+        continue;
+      }
+
+      size_t wx = dpConfigPtr_->patchSize_X_;
+      size_t wy = dpConfigPtr_->patchSize_Y_;
+      double costSqured = 0.0;
+      for (size_t y = 0; y < wy; y++)
+      {
+        for (size_t x = 0; x < wx; x++)
+        {
+          costSqured += pow(tau1(y, x) - tau2(y, x), 2.0);
+        }
+      }
+      (*pvEventDepth)[i].cost_ = sqrt(costSqured);
+      pvIdxValidDepth->push_back(i);
+    }
   }
 
   // return the pose of the left event cam at time t.
@@ -1230,22 +1282,28 @@ namespace esvo_core
     // visualize event Map w/wo associated depth
     cv::Mat eventDepthMap = cv::Mat(cv::Size(width, height), CV_8UC3, cv::Scalar(0));
     cv::Mat mask = cv::Mat(cv::Size(width, height), CV_64FC1, cv::Scalar(0.0));
-    for (size_t i = 0; i < vEventDepth.size(); i++)
+    for (auto it_ed = vEventDepth.begin(); it_ed != vEventDepth.end(); it_ed++)
     {
-      const Eigen::Vector2d &pImg = vEventDepth[i].x_rect_;
+      const Eigen::Vector2d &pImg = it_ed->x_rect_;
       if (pImg.x() < 0 || pImg.x() >= width || pImg.y() < 0 || pImg.y() >= height)
         continue;
-      if (vEventDepth[i].status_ == 0) // depth_ = 0
+      if (it_ed->status_ == 0) // depth_ = 0
       {
-        visualizor_.DrawPoint(invDepth_max_range_, invDepth_max_range_, invDepth_min_range_,
-                              pImg, eventDepthMap);
+        visualizor_.DrawPoint(invDepth_max_range_,
+                              invDepth_max_range_,
+                              invDepth_min_range_,
+                              pImg,
+                              eventDepthMap);
         continue;
       }
       // repeated depth due to stacking LiDAR frame
-      if (mask.at<double>(pImg.y(), pImg.x()) > 1.0 / vEventDepth[i].depth_) 
+      if (mask.at<double>(pImg.y(), pImg.x()) > 1.0 / it_ed->depth_)
         continue;
-      visualizor_.DrawPoint(1.0 / vEventDepth[i].depth_, invDepth_max_range_, invDepth_min_range_,
-                            pImg, eventDepthMap);
+      visualizor_.DrawPoint(1.0 / it_ed->depth_,
+                            invDepth_max_range_,
+                            invDepth_min_range_,
+                            pImg,
+                            eventDepthMap);
     }
     publishImage(eventDepthMap, t, eventDepthMap_pub_);
   }
