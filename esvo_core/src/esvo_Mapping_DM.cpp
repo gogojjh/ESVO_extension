@@ -338,7 +338,7 @@ namespace esvo_core
       ed.status_ = 0;
       ed.trans_ = st_map_iter->second;
       ed.depth_ = 0.0;
-      ed.cost_ = 0.0;
+      ed.cost_ = 1e6;
       vED.emplace_back(ed);
     }
 
@@ -356,10 +356,30 @@ namespace esvo_core
       double t_depth_valid = t_obtain_lidar_depth.toc();
       LOG_EVERY_N(INFO, 50) << "Validate depth costs: " << t_depth_valid << "ms";
       LOG_EVERY_N(INFO, 50) << "Size of input eventDepth: " << vED.size() << "; size of valide depth: " << indicesValidDepth.size();
-
       std::thread tPublishProjLiDARObs(&esvo_Mapping::publishProjLiDARObs, this,
                                        lidarDM_obs_.second, vED, t);
       tPublishProjLiDARObs.detach();
+
+      cv::Mat TS_left_mat, TS_right_mat;
+      cv::eigen2cv(TS_obs_.second.TS_left_, TS_left_mat);
+      TS_left_mat.convertTo(TS_left_mat, CV_8UC1);
+      cv::eigen2cv(TS_obs_.second.TS_right_, TS_right_mat);
+      TS_right_mat.convertTo(TS_right_mat, CV_8UC1);
+      cv::imwrite("/tmp/TS_left.png", TS_left_mat);
+      cv::imwrite("/tmp/TS_right.png", TS_right_mat);
+      std::ofstream f;
+      f.open("/tmp/vED.txt", std::ofstream::out);
+      f << "x_rec, x_TS_left, x_TS_right, depth, cost" << std::endl;
+      f << std::fixed;
+      for (auto it_idx = indicesValidDepth.begin(); it_idx != indicesValidDepth.end(); it_idx++)
+      {
+        f << std::setprecision(5)
+          << vED[*it_idx].x_rect_.x() << " " << vED[*it_idx].x_rect_.y() << " "
+          << vED[*it_idx].x_TS_left_.x() << " " << vED[*it_idx].x_TS_left_.y() << " "
+          << vED[*it_idx].x_TS_right_.x() << " " << vED[*it_idx].x_TS_right_.y() << " "
+          << vED[*it_idx].depth_ << " " << vED[*it_idx].cost_ << std::endl;
+      }
+      f.close();
     }
 
     /**************************************************************/
@@ -866,7 +886,9 @@ namespace esvo_core
           costSqured += pow(tau1(y, x) - tau2(y, x), 2.0);
         }
       }
-      (*pvEventDepth)[i].cost_ = sqrt(costSqured);
+      (*pvEventDepth)[i].cost_ = costSqured;
+      (*pvEventDepth)[i].x_TS_left_ = x1_s;
+      (*pvEventDepth)[i].x_TS_right_ = x2_s;
       pvIdxValidDepth->push_back(i);
     }
   }

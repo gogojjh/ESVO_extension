@@ -21,8 +21,10 @@ struct EventDepth
 
   // raw event coordinate
   Eigen::Vector2d x_raw_;
-  // rectified_event coordinate (left, right)
+  // rectified_event coordinate (left)
   Eigen::Vector2d x_rect_;
+  // projected_event coordinate on TS (left, right)
+  Eigen::Vector2d x_TS_left_, x_TS_right_;
   // timestamp
   ros::Time t_;
   // pose of virtual view (T_world_virtual)
