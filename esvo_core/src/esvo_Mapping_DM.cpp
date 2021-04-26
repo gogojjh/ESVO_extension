@@ -393,72 +393,116 @@ namespace esvo_core
 #endif
     }
 
-    std::vector<EventDepth *> vpEventWithDepth, vpEventWODepth;
-    vpEventWithDepth.reserve(vED.size());
-    vpEventWODepth.reserve(vED.size());
+    std::vector<EventDepth *> vpEventWithRegDepth, vpEventWORegDepth;
+    vpEventWithRegDepth.reserve(vED.size());
+    vpEventWORegDepth.reserve(vED.size());
     for (auto it_ed = vED.begin(); it_ed != vED.end(); it_ed++)
     {
-      vpEventWODepth.push_back(&(*it_ed));
-      // switch (it_ed->status_)
-      // {
-      //   case 0:
-      //     vpEventWODepth.push_back(&(*it_ed));
-      //     break;
-      //   case 1:
-      //     vpEventWithDepth.push_back(&(*it_ed));
-      //     break;
-      //   default:
-      //     break;
-      // }
+      // vpEventWORegDepth.push_back(&(*it_ed));
+      switch (it_ed->status_)
+      {
+        case 0:
+          vpEventWORegDepth.push_back(&(*it_ed));
+          break;
+        case 1:
+          vpEventWithRegDepth.push_back(&(*it_ed));
+          break;
+        default:
+          break;
+      }
     }
     LOG_EVERY_N(INFO, 50) << "Total events: " << vED.size() 
-                          << ", associated depth: " << vpEventWithDepth.size() 
-                          << ", no depth: " << vpEventWODepth.size();
+                          << "; Associated depth: " << vpEventWithRegDepth.size() 
+                          << "; No depth: " << vpEventWORegDepth.size();
 
+    std::vector<DepthPoint> vdp;
+    // generate vdpReg
     /**************************************************************/
-    /*************  Block matching ********************************/
+    /*************  For events with registrated depth *************/
     /**************************************************************/
-    tt_mapping.tic();
-    // ebm_.createMatchProblem(&TS_obs_, &st_map_, &vDenoisedEventsPtr_left_); // epipolar search with the smallest temporal residual
-    ebm_.createMatchProblem(&TS_obs_, &vpEventWODepth);
-    ebm_.match_all_HyperThread(vEMP);
-    // ebm_.match_all_SingleThread(vEMP);
-#ifdef ESVO_CORE_MAPPING_DEBUG
-    LOG(INFO) << "++++ Block Matching (BM) generates " << vEMP.size() << " candidates.";
-#endif
-    t_BM = tt_mapping.toc();
-    t_overall_count += t_BM_denoising;
-    t_overall_count += t_BM;
-#ifdef ESVO_CORE_MAPPING_DEBUG
-    LOG_EVENT_N(INFO, 20) << "Block matching succeeds";
-    LOG_EVENT_N(INFO, 20) << "Block matching costs: " << t_BM << "ms"; // 4-10ms
-#endif
+    // vpEventWithRegDepth
+    std::vector<DepthPoint> vdpReg;
+    {
+      vdpReg.reserve(vpEventWithRegDepth.size());
+      for (auto it_ed = vpEventWithRegDepth.begin(); it_ed != vpEventWithRegDepth.end(); it_ed++)
+      {
+        Eigen::Vector2d coor = (*it_ed)->x_rect_;
+        DepthPoint dp(std::floor(coor(1)), std::floor(coor(0)));
+        dp.update_x(coor);
+        double invDepth = 1.0 / (*it_ed)->depth_;
+        Eigen::Vector3d p_cam;
+        camSysPtr_->cam_left_ptr_->cam2World(coor, invDepth, p_cam);
+        dp.update_p_cam(p_cam);
 
+        // handcraft Student's t distribution on LiDAR points (approximate to Gaussian distribution)
+        // double scale2 = 0.09 * 0.09;
+        // double variance = 0.1 * 0.1;
+        // double nu = 10.0;
+        // dp.update_studentT(invDepth, scale2, variance, nu); 
+        double variance = 0.1 * 0.1;
+        dp.update(invDepth, variance);
+        Eigen::Matrix4d T_world_virtual = (*it_ed)->trans_.getTransformationMatrix();
+        dp.updatePose(T_world_virtual);
+        vdpReg.push_back(dp);
+      }
+    }
+    vdp.insert(vdp.begin(), vdpReg.begin(), vdpReg.end());
+
+    // generate vdpWOReg
     /**************************************************************/
-    /*************  Nonlinear Optimization & Fusion ***************/
+    /*************  For events without registrated depth **********/
     /**************************************************************/
+    // vpEventWORegDepth
+    std::vector<DepthPoint> vdpWOReg;
     double t_optimization = 0;
     double t_solve, t_fusion, t_regularization;
     t_solve = t_fusion = t_regularization = 0;
     size_t numFusionCount = 0; // To count the total number of fusion (in terms of fusion between two estimates, i.e. a priori and a propagated one).
-    tt_mapping.tic();
-
-    // Nonlinear opitmization
-    std::vector<DepthPoint> vdp;
-    vdp.reserve(vEMP.size());
-    dpSolver_.solve(&vEMP, &TS_obs_, vdp); // hyper-thread version
+    {
+      /**************************************************************/
+      /*************  Block matching ********************************/
+      /**************************************************************/
+      tt_mapping.tic();
+      ebm_.createMatchProblem(&TS_obs_, &vpEventWORegDepth); // epipolar search with the smallest temporal residual
+      ebm_.match_all_HyperThread(vEMP);
+      // ebm_.match_all_SingleThread(vEMP);
 #ifdef ESVO_CORE_MAPPING_DEBUG
-    LOG(INFO) << "Nonlinear optimization returns: " << vdp.size() << " estimates.";
+      LOG(INFO) << "++++ Block Matching (BM) generates " << vEMP.size() << " candidates.";
 #endif
-    // culling points by checking its std, cost, inverse depth
-    dpSolver_.pointCulling(vdp, stdVar_vis_threshold_, cost_vis_threshold_,
-                           invDepth_min_range_, invDepth_max_range_); 
+      t_BM = tt_mapping.toc();
+      t_overall_count += t_BM_denoising;
+      t_overall_count += t_BM;
 #ifdef ESVO_CORE_MAPPING_DEBUG
-    LOG(INFO) << "After culling, vdp.size: " << vdp.size();
+      LOG_EVENT_N(INFO, 20) << "Block matching succeeds";
+      LOG_EVENT_N(INFO, 20) << "Block matching costs: " << t_BM << "ms"; // 4-10ms
 #endif
-    t_solve = tt_mapping.toc();
-    // LOG(INFO) << "Nonliner optimization succeeds";
 
+      /**************************************************************/
+      /*************  Nonlinear Optimization ************************/
+      /**************************************************************/
+      tt_mapping.tic();
+
+      // Nonlinear opitmization
+      vdpWOReg.reserve(vEMP.size());
+      dpSolver_.solve(&vEMP, &TS_obs_, vdpWOReg); // hyper-thread version
+#ifdef ESVO_CORE_MAPPING_DEBUG
+      LOG(INFO) << "Nonlinear optimization returns: " << vdpWOReg.size() << " estimates.";
+#endif
+      // culling points by checking its std, cost, inverse depth
+      dpSolver_.pointCulling(vdpWOReg, stdVar_vis_threshold_, cost_vis_threshold_,
+                             invDepth_min_range_, invDepth_max_range_);
+#ifdef ESVO_CORE_MAPPING_DEBUG
+      LOG(INFO) << "After culling, vdpWOReg.size: " << vdpWOReg.size();
+#endif
+      t_solve = tt_mapping.toc();
+      // LOG(INFO) << "Nonliner optimization succeeds";
+    }
+    vdp.insert(vdp.begin(), vdpWOReg.begin(), vdpWOReg.end());
+    LOG_EVERY_N(INFO, 50) << "Total depth point size: " << vdp.size();
+
+    /**************************************************************/
+    /*************  Fusion ****************************************/
+    /**************************************************************/
     // Fusion (strategy 1: const number of point)
     if (FusionStrategy_ == "CONST_POINTS")
     {
@@ -501,7 +545,9 @@ namespace esvo_core
     depthFramePtr_->dMap_->clean(pow(stdVar_vis_threshold_, 2), age_vis_threshold_, invDepth_max_range_, invDepth_min_range_);
     t_fusion = tt_mapping.toc();
 
-    // regularization
+    /**************************************************************/
+    /*************  Regularization ********************************/
+    /**************************************************************/ 
     if (bRegularization_)
     {
       tt_mapping.tic();
@@ -512,7 +558,9 @@ namespace esvo_core
     t_optimization = t_solve + t_fusion + t_regularization;
     t_overall_count += t_optimization;
 
-    // publish results
+    /**************************************************************/
+    /*************  Publish Results *******************************/
+    /**************************************************************/
     std::thread tPublishMappingResult(&esvo_Mapping::publishMappingResults, this,
                                       depthFramePtr_->dMap_, depthFramePtr_->T_world_frame_, t);
     tPublishMappingResult.detach();
