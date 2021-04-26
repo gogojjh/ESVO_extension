@@ -342,8 +342,8 @@ namespace esvo_core
       vED.emplace_back(ed);
     }
 
-    std::vector<size_t> indicesValidDepth;
-    indicesValidDepth.reserve(vED.size());
+    // std::vector<size_t> indicesValidDepth;
+    // indicesValidDepth.reserve(vED.size());
     if (!lidarDM_obs_.second->empty())
     {
       TicToc t_obtain_lidar_depth;
@@ -351,15 +351,16 @@ namespace esvo_core
       double t_depth_asso = t_obtain_lidar_depth.toc();
       LOG_EVERY_N(INFO, 50) << "Associate depth costs: " << t_depth_asso << "ms";
 
-      t_obtain_lidar_depth.tic();
-      DepthValidation(&TS_obs_, &vED, &indicesValidDepth);
-      double t_depth_valid = t_obtain_lidar_depth.toc();
-      LOG_EVERY_N(INFO, 50) << "Validate depth costs: " << t_depth_valid << "ms";
-      LOG_EVERY_N(INFO, 50) << "Size of input eventDepth: " << vED.size() << "; size of valide depth: " << indicesValidDepth.size();
+      // Note: the spatio-temporal residue may not be minimum due the inequality of measurement
+      // t_obtain_lidar_depth.tic();
+      // DepthValidation(&TS_obs_, &vED, &indicesValidDepth);
+      // double t_depth_valid = t_obtain_lidar_depth.toc();
+      // LOG_EVERY_N(INFO, 50) << "Validate depth costs: " << t_depth_valid << "ms";
+      // LOG_EVERY_N(INFO, 50) << "Size of input eventDepth: " << vED.size() << "; size of valid depth: " << indicesValidDepth.size();
       std::thread tPublishProjLiDARObs(&esvo_Mapping::publishProjLiDARObs, this,
                                        lidarDM_obs_.second, vED, t);
       tPublishProjLiDARObs.detach();
-
+#ifdef ESVO_SAVE_DEPTH_RESULT
       cv::Mat TS_left_mat, TS_right_mat;
       cv::eigen2cv(TS_obs_.second.TS_left_, TS_left_mat);
       TS_left_mat.convertTo(TS_left_mat, CV_8UC1);
@@ -369,24 +370,57 @@ namespace esvo_core
       cv::imwrite("/tmp/TS_right.png", TS_right_mat);
       std::ofstream f;
       f.open("/tmp/vED.txt", std::ofstream::out);
-      f << "x_rec, x_TS_left, x_TS_right, depth, cost" << std::endl;
+      // f << "x_rec, x_TS_left, x_TS_right, depth, cost" << std::endl;
+      f << "x_rec, x_TS_left, depth" << std::endl;
       f << std::fixed;
-      for (auto it_idx = indicesValidDepth.begin(); it_idx != indicesValidDepth.end(); it_idx++)
+      // for (auto it_idx = indicesValidDepth.begin(); it_idx != indicesValidDepth.end(); it_idx++)
+      // {
+      //   f << std::setprecision(5)
+      //     << vED[*it_idx].x_rect_.x() << " " << vED[*it_idx].x_rect_.y() << " "
+      //     << vED[*it_idx].x_TS_left_.x() << " " << vED[*it_idx].x_TS_left_.y() << " "
+      //     << vED[*it_idx].x_TS_right_.x() << " " << vED[*it_idx].x_TS_right_.y() << " "
+      //     << vED[*it_idx].depth_ << " " << vED[*it_idx].cost_ << std::endl;
+      // }
+      for (auto it_ed = vED.begin(); it_ed != vED.end(); it_ed++)
       {
         f << std::setprecision(5)
-          << vED[*it_idx].x_rect_.x() << " " << vED[*it_idx].x_rect_.y() << " "
-          << vED[*it_idx].x_TS_left_.x() << " " << vED[*it_idx].x_TS_left_.y() << " "
-          << vED[*it_idx].x_TS_right_.x() << " " << vED[*it_idx].x_TS_right_.y() << " "
-          << vED[*it_idx].depth_ << " " << vED[*it_idx].cost_ << std::endl;
+          << it_ed->x_rect_.x() << " " << it_ed->x_rect_.y() << " "
+          << it_ed->x_TS_left_.x() << " " << it_ed->x_TS_left_.y() << " "
+          // << it_ed->x_TS_right_.x() << " " << it_ed->x_TS_right_.y() << " "
+          << it_ed->depth_ << std::endl;
       }
       f.close();
+#endif
     }
+
+    std::vector<EventDepth *> vpEventWithDepth, vpEventWODepth;
+    vpEventWithDepth.reserve(vED.size());
+    vpEventWODepth.reserve(vED.size());
+    for (auto it_ed = vED.begin(); it_ed != vED.end(); it_ed++)
+    {
+      vpEventWODepth.push_back(&(*it_ed));
+      // switch (it_ed->status_)
+      // {
+      //   case 0:
+      //     vpEventWODepth.push_back(&(*it_ed));
+      //     break;
+      //   case 1:
+      //     vpEventWithDepth.push_back(&(*it_ed));
+      //     break;
+      //   default:
+      //     break;
+      // }
+    }
+    LOG_EVERY_N(INFO, 50) << "Total events: " << vED.size() 
+                          << ", associated depth: " << vpEventWithDepth.size() 
+                          << ", no depth: " << vpEventWODepth.size();
 
     /**************************************************************/
     /*************  Block matching ********************************/
     /**************************************************************/
     tt_mapping.tic();
-    ebm_.createMatchProblem(&TS_obs_, &st_map_, &vDenoisedEventsPtr_left_); // epipolar search with the smallest temporal residual
+    // ebm_.createMatchProblem(&TS_obs_, &st_map_, &vDenoisedEventsPtr_left_); // epipolar search with the smallest temporal residual
+    ebm_.createMatchProblem(&TS_obs_, &vpEventWODepth);
     ebm_.match_all_HyperThread(vEMP);
     // ebm_.match_all_SingleThread(vEMP);
 #ifdef ESVO_CORE_MAPPING_DEBUG

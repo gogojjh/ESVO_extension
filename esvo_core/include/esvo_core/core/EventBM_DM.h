@@ -6,6 +6,7 @@
 #include <esvo_core/container/CameraSystem.h>
 #include <esvo_core/container/DepthMap.h>
 #include <esvo_core/container/EventMatchPair.h>
+#include <esvo_core/container/EventDepth.h>
 
 namespace esvo_core
 {
@@ -19,9 +20,9 @@ class EventBM
   {
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
     size_t i_thread_;
-    std::vector<dvs_msgs::Event*>* pvEventPtr_;
-    std::vector<std::pair<size_t, size_t> >* pvpDisparitySearchBound_;
-    std::shared_ptr<std::vector<EventMatchPair> > pvEventMatchPair_;
+    std::vector<EventDepth *> *pvEventPtr_;
+    std::vector<std::pair<size_t, size_t>> *pvpDisparitySearchBound_;
+    std::shared_ptr<std::vector<EventMatchPair>> pvEventMatchPair_;
   };
 public:
   EventBM(
@@ -46,15 +47,12 @@ public:
     double ZNCC_Threshold,
     bool bDonwUpConfiguration);
 
-  void createMatchProblem(
-    StampedTimeSurfaceObs * pStampedTsObs,
-    StampTransformationMap * pSt_map,
-    std::vector<dvs_msgs::Event *>* pvEventsPtr);
+  void createMatchProblem(StampedTimeSurfaceObs *pStampedTsObs,
+                          std::vector<EventDepth *> *pvEventsPtr);
 
-  bool match_an_event(
-    dvs_msgs::Event *pEvent,
-    std::pair<size_t, size_t>& pDisparityBound,
-    EventMatchPair &emPair);
+  bool match_an_event(EventDepth *pEvent,
+                      std::pair<size_t, size_t> &pDisparityBound,
+                      EventMatchPair &emPair);
 
   void match_all_SingleThread(std::vector<EventMatchPair> &vEMP);
   void match_all_HyperThread(std::vector<EventMatchPair> &vEMP);
@@ -70,8 +68,7 @@ private:
 private:
   CameraSystem::Ptr camSysPtr_;
   StampedTimeSurfaceObs* pStampedTsObs_;
-  StampTransformationMap * pSt_map_;
-  std::vector<dvs_msgs::Event*> vEventsPtr_;
+  std::vector<EventDepth *> vEventsPtr_;
   std::vector<std::pair<size_t, size_t> > vpDisparitySearchBound_;
   Sobel sb_;
 

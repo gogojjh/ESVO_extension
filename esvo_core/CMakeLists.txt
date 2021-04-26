@@ -25,7 +25,8 @@ set(HEADERS
  include/esvo_core/core/DepthRegularization.h
  include/esvo_core/core/DepthProblem.h
  include/esvo_core/core/DepthProblemSolver.h
- include/esvo_core/core/EventBM.h
+#  include/esvo_core/core/EventBM.h
+ include/esvo_core/core/EventBM_DM.h
  include/esvo_core/core/EventMatcher.h
  include/esvo_core/core/RegProblemLM.h
  include/esvo_core/core/RegProblemSolverLM.h
@@ -50,7 +51,8 @@ set(SOURCES
  src/core/DepthRegularization.cpp
  src/core/DepthProblem.cpp
  src/core/DepthProblemSolver.cpp
- src/core/EventBM.cpp
+#  src/core/EventBM.cpp
+ src/core/EventBM_DM.cpp
  src/core/EventMatcher.cpp
  src/core/RegProblemLM.cpp
  src/core/RegProblemSolverLM.cpp
@@ -65,10 +67,10 @@ set(SOURCES
 cs_add_library(${PROJECT_NAME}_LIB ${SOURCES} ${HEADERS})
 
 # Node esvo_Mapping
-cs_add_executable(esvo_Mapping src/esvo_MappingNode.cpp
-   src/esvo_Mapping.cpp include/esvo_core/esvo_Mapping.h)
-target_link_libraries(esvo_Mapping ${PROJECT_NAME}_LIB
-   ${catkin_LIBRARIES} ${OpenCV_LIBRARIES} yaml-cpp)
+# cs_add_executable(esvo_Mapping src/esvo_MappingNode.cpp
+#    src/esvo_Mapping.cpp include/esvo_core/esvo_Mapping.h)
+# target_link_libraries(esvo_Mapping ${PROJECT_NAME}_LIB
+#    ${catkin_LIBRARIES} ${OpenCV_LIBRARIES} yaml-cpp)
 
 # Node esvo_Mapping_DM (with the aid of LiDARDepthMap)
 cs_add_executable(esvo_Mapping_DM src/esvo_MappingNode_DM.cpp
@@ -77,16 +79,16 @@ target_link_libraries(esvo_Mapping_DM ${PROJECT_NAME}_LIB
    ${catkin_LIBRARIES} ${OpenCV_LIBRARIES} yaml-cpp)
 
 # Node esvo_Tracking
-cs_add_executable(esvo_Tracking src/esvo_TrackingNode.cpp
-   src/esvo_Tracking.cpp include/esvo_core/esvo_Tracking.h)
-target_link_libraries(esvo_Tracking ${PROJECT_NAME}_LIB
-   ${catkin_LIBRARIES} ${OpenCV_LIBRARIES} yaml-cpp)
+# cs_add_executable(esvo_Tracking src/esvo_TrackingNode.cpp
+#    src/esvo_Tracking.cpp include/esvo_core/esvo_Tracking.h)
+# target_link_libraries(esvo_Tracking ${PROJECT_NAME}_LIB
+#    ${catkin_LIBRARIES} ${OpenCV_LIBRARIES} yaml-cpp)
 
 # Node esvo_MVS (newly added in branch "mvs")
-cs_add_executable(esvo_MVStereo src/esvo_MVStereoNode.cpp
-    src/esvo_MVStereo.cpp include/esvo_core/esvo_MVStereo.h)
-target_link_libraries(esvo_MVStereo ${PROJECT_NAME}_LIB 
-    ${catkin_LIBRARIES} ${OpenCV_LIBRARIES} yaml-cpp)
+# cs_add_executable(esvo_MVStereo src/esvo_MVStereoNode.cpp
+#     src/esvo_MVStereo.cpp include/esvo_core/esvo_MVStereo.h)
+# target_link_libraries(esvo_MVStereo ${PROJECT_NAME}_LIB 
+#     ${catkin_LIBRARIES} ${OpenCV_LIBRARIES} yaml-cpp)
 
 ########### Tracking with Multiple representations 
 cs_add_executable(Tracking src/TrackingNode.cpp
