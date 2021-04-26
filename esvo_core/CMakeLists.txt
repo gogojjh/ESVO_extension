@@ -90,6 +90,12 @@ target_link_libraries(esvo_Mapping_DM ${PROJECT_NAME}_LIB
 # target_link_libraries(esvo_MVStereo ${PROJECT_NAME}_LIB 
 #     ${catkin_LIBRARIES} ${OpenCV_LIBRARIES} yaml-cpp)
 
+# Node esvo_MVS_DM (newly added in branch "mvs")
+cs_add_executable(esvo_MVStereo_DM src/esvo_MVStereoNode_DM.cpp
+    src/esvo_MVStereo_DM.cpp include/esvo_core/esvo_MVStereo_DM.h)
+target_link_libraries(esvo_MVStereo_DM ${PROJECT_NAME}_LIB 
+    ${catkin_LIBRARIES} ${OpenCV_LIBRARIES} yaml-cpp)
+
 ########### Tracking with Multiple representations 
 cs_add_executable(Tracking src/TrackingNode.cpp
     src/Tracking.cpp include/esvo_core/Tracking.h)

@@ -398,7 +398,9 @@ namespace esvo_core
     vpEventWORegDepth.reserve(vED.size());
     for (auto it_ed = vED.begin(); it_ed != vED.end(); it_ed++)
     {
-      // vpEventWORegDepth.push_back(&(*it_ed));
+#ifdef ESVO_DEPTH_PURE_EVENT
+      vpEventWORegDepth.push_back(&(*it_ed));
+#else
       switch (it_ed->status_)
       {
         case 0:
@@ -410,13 +412,13 @@ namespace esvo_core
         default:
           break;
       }
+#endif
     }
     LOG_EVERY_N(INFO, 50) << "Total events: " << vED.size() 
                           << "; Associated depth: " << vpEventWithRegDepth.size() 
                           << "; No depth: " << vpEventWORegDepth.size();
 
     std::vector<DepthPoint> vdp;
-    // generate vdpReg
     /**************************************************************/
     /*************  For events with registrated depth *************/
     /**************************************************************/
@@ -435,12 +437,12 @@ namespace esvo_core
         dp.update_p_cam(p_cam);
 
         // handcraft Student's t distribution on LiDAR points (approximate to Gaussian distribution)
-        // double scale2 = 0.09 * 0.09;
-        // double variance = 0.1 * 0.1;
-        // double nu = 10.0;
-        // dp.update_studentT(invDepth, scale2, variance, nu); 
-        double variance = 0.1 * 0.1;
-        dp.update(invDepth, variance);
+        double scale2 = 0.09 * 0.09;
+        double variance = 0.01 * 0.01;
+        double nu = 10.0;
+        dp.update_studentT(invDepth, scale2, variance, nu); 
+        // double variance = 0.0001;
+        // dp.update(invDepth, variance);
         Eigen::Matrix4d T_world_virtual = (*it_ed)->trans_.getTransformationMatrix();
         dp.updatePose(T_world_virtual);
         vdpReg.push_back(dp);
@@ -448,7 +450,6 @@ namespace esvo_core
     }
     vdp.insert(vdp.begin(), vdpReg.begin(), vdpReg.end());
 
-    // generate vdpWOReg
     /**************************************************************/
     /*************  For events without registrated depth **********/
     /**************************************************************/

@@ -18,7 +18,6 @@
 #include <esvo_core/core/DepthRegularization.h>
 #include <esvo_core/core/DepthProblem.h>
 #include <esvo_core/core/DepthProblemSolver.h>
-// #include <esvo_core/core/EventBM.h>
 #include <esvo_core/core/EventBM_DM.h>
 #include <esvo_core/tools/utils.h>
 #include <esvo_core/tools/Visualization.h>
@@ -43,6 +42,7 @@
 
 // #define ESVO_CORE_MAPPING_DEBUG
 // #define ESVO_SAVE_DEPTH_RESULT
+#define ESVO_DEPTH_PURE_EVENT
 
 namespace esvo_core
 {
